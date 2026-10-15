@@ -141,7 +141,7 @@ func TestListingSkipsLockAndShowsReadme(t *testing.T) {
 	}
 }
 
-// Each source line of a doc is its own paragraph; -nobreaks joins them.
+// Each source line of a doc is its own paragraph; without the filter they join.
 func TestLinesAreParagraphs(t *testing.T) {
 	needPandoc(t)
 	for _, lines := range []bool{true, false} {
@@ -225,6 +225,59 @@ func TestStopRefusesOtherSites(t *testing.T) {
 	}
 }
 
+// Delete lock on the index returns to the index while other trees remain;
+// the last tree's button ends on the stopped page.
+func TestIndexDeleteReturns(t *testing.T) {
+	s, tr, dir := serveTree(t, false)
+	tr.prefix, tr.label = "/notes/", "~/notes"
+	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other", "")
+	var got []*tree
+	s.stop = func(ts []*tree) {
+		got = ts
+		for _, t := range ts {
+			s.remove(t)
+		}
+	}
+	post := func(form string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/_mdserve/stop", strings.NewReader(form))
+		req.Host = "127.31.1.1:8080"
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		s.handler().ServeHTTP(rec, req)
+		return rec
+	}
+	rec := post("tree=%2Fnotes%2F&from=index")
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" || len(got) != 1 || got[0] != tr {
+		t.Errorf("first delete: status %d location %q stopped %d", rec.Code, rec.Header().Get("Location"), len(got))
+	}
+	rec = post("tree=%2Fother%2F&from=index")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Stopped serving ~/other") {
+		t.Errorf("last delete: status %d: %s", rec.Code, rec.Body.String())
+	}
+	// The server closes as this page leaves, so the page carries its style.
+	if body := rec.Body.String(); !strings.Contains(body, "<style>") || strings.Contains(body, "/_mdserve/style.css") {
+		t.Errorf("stopped page links its stylesheet instead of carrying it")
+	}
+}
+
+// The fonts come from mdserve, cached for a year; nothing else leaves the
+// font directory.
+func TestFonts(t *testing.T) {
+	s, _, _ := serveTree(t, false)
+	rec := get(s.handler(), "/_mdserve/fonts/STIXTwoText-Regular.otf")
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "font/otf" || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") || rec.Body.Len() < 1000 {
+		t.Errorf("font: status %d type %q cache %q size %d", rec.Code, rec.Header().Get("Content-Type"), rec.Header().Get("Cache-Control"), rec.Body.Len())
+	}
+	for _, p := range []string{"/_mdserve/fonts/STIXTwoText-OFL.txt", "/_mdserve/fonts/..%2Fstyle.css", "/_mdserve/fonts/nope.otf"} {
+		if rec := get(s.handler(), p); rec.Code == http.StatusOK {
+			t.Errorf("%s: status 200, want 404", p)
+		}
+	}
+	if csp := rec.Header().Get("Content-Security-Policy"); strings.Contains(csp, "googleapis") || strings.Contains(csp, "gstatic") {
+		t.Errorf("CSP still allows Google: %s", csp)
+	}
+}
+
 func TestMount(t *testing.T) {
 	for dir, want := range map[string][2]string{
 		"/home/u":               {"/", "~"},
@@ -254,23 +307,27 @@ func TestPrefixedTree(t *testing.T) {
 		t.Errorf("path outside the prefix: status %d, want 404", rec.Code)
 	}
 	body := get(h, "/scratch/my%20docs/a/b.go").Body.String()
-	if !strings.Contains(body, `<a href="/scratch/my%20docs/">~/scratch/my docs</a> / <a href="/scratch/my%20docs/a/">a</a> / b.go`) {
+	if !strings.Contains(body, `<a href="/scratch/my%20docs/" title="~/scratch/my docs">my docs</a> / <a href="/scratch/my%20docs/a/">a</a> / b.go`) {
 		t.Errorf("breadcrumbs lack the prefix: %s", body)
 	}
 }
 
-// The index at / links every served tree and offers to stop them all.
+// The index at / lists every served tree with a button that deletes its
+// lock, and offers to stop them all.
 func TestIndexListsTrees(t *testing.T) {
 	s, tr, dir := serveTree(t, false)
 	tr.prefix, tr.label = "/notes/", "~/notes"
 	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other", "")
 	rec := get(s.handler(), "/")
 	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, `<a href="/notes/">~/notes</a>`) || !strings.Contains(body, `<a href="/other/">~/other</a>`) {
+	if rec.Code != http.StatusOK || !strings.Contains(body, `<a href="/notes/" title="">~/notes</a>`) || !strings.Contains(body, `<a href="/other/" title="">~/other</a>`) {
 		t.Errorf("status %d, index lacks the trees: %s", rec.Code, body)
 	}
-	if !strings.Contains(body, "Stop server") || strings.Contains(body, `name="tree"`) {
+	if !strings.Contains(body, `<button class="kill">Kill server</button>`) {
 		t.Errorf("index lacks the button that stops every tree: %s", body)
+	}
+	if !strings.Contains(body, `name="tree" value="/notes/"><input type="hidden" name="from" value="index"><button>Delete lock</button>`) {
+		t.Errorf("index lacks a Delete lock button per tree: %s", body)
 	}
 	if rec := get(s.handler(), "/elsewhere/"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "~/notes") {
 		t.Errorf("path outside every tree: status %d, want 404 with the index", rec.Code)
@@ -285,7 +342,7 @@ func TestNestedTreeWins(t *testing.T) {
 	if body != "package a\n\nfunc F() {}\n" {
 		t.Errorf("nested tree served %q", body)
 	}
-	if body := get(s.handler(), "/a/").Body.String(); !strings.Contains(body, "<nav>inner</nav>") {
+	if body := get(s.handler(), "/a/").Body.String(); !strings.Contains(body, `<nav><a href="/">index</a> / <span title="inner">inner</span></nav>`) {
 		t.Errorf("nested tree lost its label: %s", body)
 	}
 }

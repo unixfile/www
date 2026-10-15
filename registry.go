@@ -31,12 +31,19 @@ func stateDir() (string, error) {
 	return filepath.Join(home, ".local", "state"), nil
 }
 
-func openRegistry(ep netip.AddrPort) (*registry, error) {
+func registryDir(ep netip.AddrPort) (string, error) {
 	base, err := stateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "mdserve", endpointName(ep)), nil
+}
+
+func openRegistry(ep netip.AddrPort) (*registry, error) {
+	dir, err := registryDir(ep)
 	if err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(base, "mdserve", endpointName(ep))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -97,7 +104,11 @@ func (r *registry) add(lockPath string) (string, os.FileInfo, error) {
 
 // links maps every link in the registry to the lock path it names.
 func (r *registry) links() (map[string]string, error) {
-	entries, err := os.ReadDir(r.dir)
+	return readLinks(r.dir)
+}
+
+func readLinks(dir string) (map[string]string, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +117,7 @@ func (r *registry) links() (map[string]string, error) {
 		if e.Type()&fs.ModeSymlink == 0 {
 			continue
 		}
-		link := filepath.Join(r.dir, e.Name())
+		link := filepath.Join(dir, e.Name())
 		if target, err := os.Readlink(link); err == nil {
 			m[link] = target
 		}

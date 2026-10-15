@@ -3,13 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
-	_ "embed"
+	"embed"
 	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 )
 
@@ -30,6 +32,13 @@ var layoutHTML string
 //go:embed assets/lines.lua
 var linesLua []byte
 
+// fontFS holds STIX Two Text, which the stylesheet takes from the machine
+// when installed and from here otherwise. A changed font needs a new file
+// name, since browsers keep these for a year.
+//
+//go:embed assets/fonts/*.otf
+var fontFS embed.FS
+
 var layout = template.Must(template.New("layout").Parse(layoutHTML))
 
 // maxCode caps the size of a file shown as a code page; larger files go raw.
@@ -38,8 +47,8 @@ const maxCode = 1 << 20
 // csp forbids every script. Pandoc passes raw HTML through, and a README
 // in a cloned repo must not run code on this origin.
 const csp = "default-src 'none'; img-src 'self' data:; media-src 'self'; " +
-	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-	"font-src https://fonts.gstatic.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+	"style-src 'self' 'unsafe-inline'; font-src 'self'; " +
+	"form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
 // server answers for every tree served on one endpoint. A request goes to
 // the tree with the longest prefix of its path.
@@ -47,6 +56,68 @@ type server struct {
 	mu    sync.RWMutex
 	trees []*tree
 	stop  func([]*tree) // withdraws trees; set by the hub
+	about about
+}
+
+// about describes the server for its index: where it listens, since when,
+// and the binary it runs, so the index can tell when a rebuild has left it
+// behind. Tests leave it zero.
+type about struct {
+	ep      netip.AddrPort
+	started time.Time
+	exe     string
+	exeInfo os.FileInfo
+}
+
+func newAbout(ep netip.AddrPort) about {
+	a := about{ep: ep, started: time.Now()}
+	if exe, err := os.Executable(); err == nil {
+		if info, err := os.Stat(exe); err == nil {
+			a.exe, a.exeInfo = exe, info
+		}
+	}
+	return a
+}
+
+// stale reports whether the binary on disk is no longer the one running.
+func (a about) stale() bool {
+	if a.exeInfo == nil {
+		return false
+	}
+	info, err := os.Stat(a.exe)
+	return err != nil || !os.SameFile(info, a.exeInfo) || !info.ModTime().Equal(a.exeInfo.ModTime())
+}
+
+// restartCmd is the command that moves this server's trees to the new
+// binary; a server off the user's default address needs -a.
+func (a about) restartCmd() string {
+	if def, err := endpointFor("", os.Getuid()); err == nil && def == a.ep {
+		return "mdserve --restart"
+	}
+	return "mdserve --restart -a " + a.ep.String()
+}
+
+// status is the index header's account of the server's age.
+func (a about) status() string {
+	if a.started.IsZero() {
+		return ""
+	}
+	s := "up since " + clock(a.started)
+	if a.exeInfo != nil {
+		s += ", built " + clock(a.exeInfo.ModTime())
+	}
+	return s
+}
+
+// clock gives the time of day, with the date when it is not today.
+func clock(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	if y, m, d := t.Date(); y == time.Now().Year() && m == time.Now().Month() && d == time.Now().Day() {
+		return t.Format("15:04")
+	}
+	return t.Format("Jan 2 15:04")
 }
 
 func newServer() *server {
@@ -61,8 +132,8 @@ type tree struct {
 	fsys     fs.FS
 	root     *os.Root
 	filter   string      // path of lines.lua, or "" to join lines as standard Markdown does
-	lock     *lock       // nil under -nolock
-	link     string      // registry link, "" under -nolock
+	lock     *lock       // nil only in tests
+	link     string      // registry link
 	linkInfo os.FileInfo // the link this server knows, to tell it from a new join
 	wd       int         // inotify watch on dir, or -1
 }
@@ -163,6 +234,16 @@ func (s *server) handler() http.Handler {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		w.Write(styleCSS)
 	})
+	mux.HandleFunc("GET /_mdserve/fonts/{name}", func(w http.ResponseWriter, r *http.Request) {
+		b, err := fontFS.ReadFile("assets/fonts/" + path.Base(r.PathValue("name")))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "font/otf")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		w.Write(b)
+	})
 	mux.HandleFunc("POST /_mdserve/stop", s.handleStop)
 	mux.HandleFunc("GET /", s.handlePath)
 	return guard(mux)
@@ -234,26 +315,37 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "stop must come from an mdserve page", http.StatusForbidden)
 		return
 	}
-	trees, label, what := s.list(), "mdserve", "mdserve stopped"
+	trees, crumbs, what := s.list(), []crumb{{Label: "mdserve"}}, "Stopped mdserve"
 	if prefix := r.PostFormValue("tree"); prefix != "" {
 		t := s.byPrefix(prefix)
 		if t == nil {
 			s.serveIndex(w, http.StatusNotFound, "Not served: "+prefix)
 			return
 		}
-		trees, label, what = []*tree{t}, t.label, "mdserve stopped serving "+t.label
-	}
-	if slices.ContainsFunc(trees, func(t *tree) bool { return t.lock != nil }) {
-		what += " and removed its lockfile"
-		if len(trees) > 1 {
-			what += "s"
+		trees, crumbs, what = []*tree{t}, []crumb{t.rootCrumb()}, "Stopped serving "+t.label
+		// While other trees remain the server lives on: a button on the
+		// index returns there, and a tree's page links it.
+		if len(s.list()) > 1 {
+			if r.PostFormValue("from") == "index" {
+				s.stop(trees)
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+			crumbs = []crumb{indexCrumb, t.rootCrumb()}
 		}
 	}
+	what += " and removed its lockfile"
+	if len(trees) > 1 {
+		what += "s"
+	}
 	render(w, http.StatusOK, page{
-		Title:   "mdserve stopped",
-		Crumbs:  []crumb{{Label: label}},
-		Kind:    "stopped",
-		Body:    template.HTML("<p>" + template.HTMLEscapeString(what) + ". This tab can be closed.</p>"),
+		Title:  "mdserve stopped",
+		Crumbs: crumbs,
+		Kind:   "stopped",
+		// The server may close its listener before the browser asks for
+		// the stylesheet, so the page carries it.
+		Style:   template.CSS(styleCSS),
+		Body:    template.HTML("<p class=\"mdserve\">" + template.HTMLEscapeString(what) + ". Close this tab.</p>"),
 		Stopped: true,
 	})
 	// stop only withdraws; the hub shuts down on its own goroutine, since
@@ -293,24 +385,62 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// serveIndex lists the served trees, at / and for paths outside them all.
+// serveIndex lists the locks this server holds, each with its tree and a
+// button that deletes it, then the trees on other addresses, which only
+// their own server may stop. It answers at / and for paths outside every
+// tree.
 func (s *server) serveIndex(w http.ResponseWriter, status int, msg string) {
+	esc := template.HTMLEscapeString
 	var body strings.Builder
 	if msg != "" {
-		body.WriteString("<pre class=\"error\">" + template.HTMLEscapeString(msg) + "</pre>\n")
+		body.WriteString("<pre class=\"error\">" + esc(msg) + "</pre>\n")
+	}
+	if s.about.stale() {
+		body.WriteString("<p class=\"mdserve warn\">The binary changed after this server started. Run <code>" + esc(s.about.restartCmd()) + "</code>.</p>\n")
 	}
 	trees := s.list()
 	if len(trees) == 0 {
-		body.WriteString("<p>No tree is served.</p>\n")
+		body.WriteString("<p class=\"mdserve\">No tree is served.</p>\n")
 	} else {
-		body.WriteString("<ul class=\"listing\">\n")
+		body.WriteString("<table class=\"locks mdserve\">\n")
 		for _, t := range trees {
-			fmt.Fprintf(&body, "<li><a href=\"%s\">%s</a></li>\n",
-				template.HTMLEscapeString(t.prefixURL()), template.HTMLEscapeString(t.label))
+			lockPath, since := "", ""
+			if t.lock != nil {
+				lockPath, since = t.lock.path, "since "+clock(t.lock.info.ModTime())
+			}
+			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">%s</span></td>"+
+				"<td><form method=\"post\" action=\"/_mdserve/stop\"><input type=\"hidden\" name=\"tree\" value=\"%s\">"+
+				"<input type=\"hidden\" name=\"from\" value=\"index\"><button>Delete lock</button></form></td></tr>\n",
+				esc(t.prefixURL()), esc(lockPath), esc(t.label), since, esc(t.prefix))
 		}
-		body.WriteString("</ul>\n")
+		body.WriteString("</table>\n")
 	}
-	render(w, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "mdserve"}}, Kind: "dir", Body: template.HTML(body.String())})
+	if others := s.otherTrees(); len(others) > 0 {
+		body.WriteString("<h2 class=\"mdserve\">Other addresses</h2>\n<table class=\"locks mdserve\">\n")
+		for _, t := range others {
+			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">since %s</span></td></tr>\n",
+				esc(t.url), esc(filepath.Join(t.dir, lockName(t.ep))), esc(t.url), clock(t.since))
+		}
+		body.WriteString("</table>\n")
+	}
+	render(w, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
+		Body: template.HTML(body.String()), Status: s.about.status()})
+}
+
+// otherTrees reads the registries of every other address, sorted by URL.
+func (s *server) otherTrees() []servedTree {
+	if !s.about.ep.IsValid() {
+		return nil
+	}
+	eps, _ := endpoints()
+	var out []servedTree
+	for _, ep := range eps {
+		if ep != s.about.ep {
+			out = append(out, peekTrees(ep)...)
+		}
+	}
+	slices.SortFunc(out, func(a, b servedTree) int { return strings.Compare(a.url, b.url) })
+	return out
 }
 
 func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
@@ -556,7 +686,12 @@ func (t *tree) pandoc(ctx context.Context, input []byte, doc bool) (template.HTM
 type crumb struct {
 	Label string
 	Href  string
+	Title string // shown on hover, eg the tree's full path
 }
+
+// indexCrumb leads every tree page's breadcrumbs to the index, the parent
+// of all trees. Its label is not mdserve, which a tree may be called.
+var indexCrumb = crumb{Label: "index", Href: "/"}
 
 type page struct {
 	Title   string
@@ -564,23 +699,34 @@ type page struct {
 	Kind    string
 	Body    template.HTML
 	Raw     bool
-	Tree    string // prefix the stop button withdraws, or "" for every tree
+	Tree    string       // prefix the stop button withdraws, or "" for every tree
+	Status  string       // the server's age, on the index
+	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
 }
 
 func (t *tree) title(name string) string {
 	if name == "." {
-		return t.label
+		return path.Base(t.label)
 	}
 	return name
 }
 
-// crumbs links the root and every parent directory; the last part is plain.
+// rootCrumb is the tree's first breadcrumb: its base name, with the full
+// path on hover. The address bar already shows the path.
+func (t *tree) rootCrumb() crumb {
+	return crumb{Label: path.Base(t.label), Title: t.label}
+}
+
+// crumbs links the index, the root and every parent directory; the last
+// part is plain.
 func (t *tree) crumbs(name string) []crumb {
+	root := t.rootCrumb()
 	if name == "." {
-		return []crumb{{Label: t.label}}
+		return []crumb{indexCrumb, root}
 	}
-	out := []crumb{{Label: t.label, Href: t.prefixURL()}}
+	root.Href = t.prefixURL()
+	out := []crumb{indexCrumb, root}
 	parts := strings.Split(name, "/")
 	for i, p := range parts {
 		c := crumb{Label: p}
@@ -606,7 +752,7 @@ func render(w http.ResponseWriter, status int, p page) {
 	w.Write(b.Bytes())
 }
 
-// render gives the page this tree's stop button.
+// render gives the page this tree's Delete lock button.
 func (t *tree) render(w http.ResponseWriter, status int, p page) {
 	p.Tree = t.prefix
 	render(w, status, p)

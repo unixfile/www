@@ -1,4 +1,34 @@
 /* Copied from md2html-default. Edits there do not reach mdserve. */
+/* mdserve addition: STIX Two Text from the machine, else from mdserve,
+   never from the network. */
+@font-face {
+  font-family: "STIX Two Text";
+  font-style: normal;
+  font-weight: 400;
+  src: local("STIX Two Text Regular"), local("STIXTwoText-Regular"),
+       url("/_mdserve/fonts/STIXTwoText-Regular.otf") format("opentype");
+}
+@font-face {
+  font-family: "STIX Two Text";
+  font-style: italic;
+  font-weight: 400;
+  src: local("STIX Two Text Italic"), local("STIXTwoText-Italic"),
+       url("/_mdserve/fonts/STIXTwoText-Italic.otf") format("opentype");
+}
+@font-face {
+  font-family: "STIX Two Text";
+  font-style: normal;
+  font-weight: 700;
+  src: local("STIX Two Text Bold"), local("STIXTwoText-Bold"),
+       url("/_mdserve/fonts/STIXTwoText-Bold.otf") format("opentype");
+}
+@font-face {
+  font-family: "STIX Two Text";
+  font-style: italic;
+  font-weight: 700;
+  src: local("STIX Two Text Bold Italic"), local("STIXTwoText-BoldItalic"),
+       url("/_mdserve/fonts/STIXTwoText-BoldItalic.otf") format("opentype");
+}
 html { background: #f6f6f6; }
 body {
   max-width: 58ch;
@@ -41,13 +71,15 @@ header {
   justify-content: space-between;
   align-items: baseline;
   gap: 0.5em 1em;
-  font-size: 0.7em;
   text-align: left;
   hyphens: none;
+  font-size: 0.8em;
   border-bottom: 1px solid #cccccc;
-  padding-bottom: 0.4em;
+  padding-bottom: 0.6em;
+  margin-bottom: 1.5em;
 }
 header nav { overflow-wrap: anywhere; }
+header span { display: inline-flex; gap: 1em; align-items: baseline; }
 header form { display: inline; }
 header button {
   font: inherit;
@@ -55,10 +87,11 @@ header button {
   background: none;
   border: 1px solid currentColor;
   border-radius: 0.2em;
-  padding: 0 0.4em;
+  padding: 0.15em 0.7em;
   cursor: pointer;
 }
-pre, code { font-family: ui-monospace, "Iosevka", monospace; }
+/* What mdserve says is mono; what the document says is serif. */
+pre, code, header, .mdserve { font-family: ui-monospace, "Iosevka", monospace; }
 pre {
   font-size: 0.7em;
   line-height: 1.35;
@@ -75,6 +108,23 @@ ul.listing { list-style: none; padding: 0; text-align: left; }
 ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
 article.readme { margin-top: 2em; border-top: 1px solid #cccccc; }
 pre.error { white-space: pre-wrap; color: #902000; }
+header .age { color: #666666; }
+/* Kill server reaches every tree, so it alone wears the danger colour. */
+header button.kill { background: #902000; border-color: #902000; color: #f6f6f6; }
+p.mdserve { font-size: 0.8em; text-align: left; hyphens: none; }
+p.warn { color: #902000; }
+p.warn code { font-size: inherit; }
+h2.mdserve { font-size: 0.8em; font-weight: normal; color: #666666; margin-top: 2.5em; }
+table.locks { font-size: 0.8em; width: 100%; }
+table.locks td { overflow-wrap: anywhere; vertical-align: baseline; }
+table.locks td:first-child { padding-left: 0; }
+table.locks td:last-child { padding-right: 0; }
+table.locks td:first-child:last-child { padding-right: 0; }
+table.locks td:first-child { width: 100%; }
+table.locks .since { white-space: nowrap; color: #666666; margin-left: 1em; }
+table.locks td + td { text-align: right; }
+table.locks form { display: inline; }
+table.locks button { font: inherit; color: inherit; background: none; border: 1px solid currentColor; border-radius: 0.2em; padding: 0.15em 0.7em; cursor: pointer; white-space: nowrap; }
 /* lines.lua makes each line of a block its own paragraph: lines sit close,
    blocks keep the full paragraph gap */
 div.lines { margin: 1.2em 0; }

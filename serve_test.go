@@ -130,15 +130,15 @@ func TestTreesShareOneServer(t *testing.T) {
 	os.WriteFile(filepath.Join(two, "b.txt"), []byte("two\n"), 0o644)
 	base := "http://" + ep.String()
 
-	lines, served := start(t, config{dir: one, ep: ep, nobreaks: true})
-	if !strings.HasPrefix(lines[0], "msg serving "+one+" at "+base+one+"/") {
+	lines, served := start(t, config{dir: one, ep: ep})
+	if !strings.HasPrefix(lines[0], "url "+base+one+"/") {
 		t.Fatalf("server report: %q", lines)
 	}
 	lines, joined := start(t, config{dir: two, ep: ep})
 	if code := <-joined; code != 0 {
 		t.Fatalf("join failed with %d: %q", code, lines)
 	}
-	if !strings.HasPrefix(lines[0], "msg serving "+two+" at "+base+two+"/") {
+	if !strings.HasPrefix(lines[0], "url "+base+two+"/") {
 		t.Fatalf("join report: %q", lines)
 	}
 	lock1, lock2 := filepath.Join(one, lockName(ep)), filepath.Join(two, lockName(ep))
@@ -151,7 +151,7 @@ func TestTreesShareOneServer(t *testing.T) {
 		}
 	}
 	lines, again := start(t, config{dir: two, ep: ep})
-	if <-again != 0 || !strings.HasPrefix(lines[0], "msg already serving") {
+	if <-again != 0 || lines[0] != "url "+base+two+"/" {
 		t.Errorf("second run in a served tree: %q", lines)
 	}
 
@@ -186,7 +186,7 @@ func TestPollingFallback(t *testing.T) {
 	inotifyInit = func(int) (int, error) { return -1, syscall.EMFILE }
 	t.Cleanup(func() { inotifyInit = old })
 	dir := t.TempDir()
-	_, served := start(t, config{dir: dir, ep: ep, nobreaks: true})
+	_, served := start(t, config{dir: dir, ep: ep})
 	os.Remove(filepath.Join(dir, lockName(ep)))
 	select {
 	case <-served:
@@ -208,7 +208,7 @@ func TestStartDropsLeftovers(t *testing.T) {
 	reg.add(staleLock)
 	reg.close()
 
-	_, served := start(t, config{dir: dir, ep: ep, nobreaks: true})
+	_, served := start(t, config{dir: dir, ep: ep})
 	if _, err := os.Stat(staleLock); err == nil {
 		t.Error("stale lock survived the start")
 	}
@@ -228,7 +228,7 @@ func TestStartDropsLeftovers(t *testing.T) {
 func TestStopButtonEndsLastTree(t *testing.T) {
 	ep := testEndpoint(t)
 	dir := t.TempDir()
-	_, served := start(t, config{dir: dir, ep: ep, nobreaks: true})
+	_, served := start(t, config{dir: dir, ep: ep})
 	resp, err := http.PostForm("http://"+ep.String()+"/_mdserve/stop", map[string][]string{"tree": {dir + "/"}})
 	if err != nil {
 		t.Fatal(err)
@@ -242,19 +242,4 @@ func TestStopButtonEndsLastTree(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, lockName(ep))); err == nil {
 		t.Error("lock left behind")
 	}
-}
-
-// -nolock serves alone: it refuses a taken address instead of joining.
-func TestNolockNeverJoins(t *testing.T) {
-	ep := testEndpoint(t)
-	_, served := start(t, config{dir: t.TempDir(), ep: ep, nobreaks: true})
-	lines, code := start(t, config{dir: t.TempDir(), ep: ep, nobreaks: true, nolock: true, fg: true})
-	if <-code == 0 || !strings.Contains(lines[0], "never joins") {
-		t.Errorf("-nolock on a taken address: %q", lines)
-	}
-	resp, err := http.PostForm("http://"+ep.String()+"/_mdserve/stop", nil)
-	if err == nil {
-		resp.Body.Close()
-	}
-	<-served
 }

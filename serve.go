@@ -45,25 +45,13 @@ func checkDir(path, home string) (string, error) {
 }
 
 // run serves c.dir. It joins the server already on the endpoint, or becomes
-// that server. Under -nolock it serves alone.
+// that server.
 func run(c config, rep *reporter) int {
 	home, _ := os.UserHomeDir()
 	dir, err := checkDir(c.dir, home)
 	if err != nil {
 		return rep.fail(errnoOf(err), err.Error())
 	}
-	if c.nolock {
-		ln, err := net.Listen("tcp", c.ep.String())
-		if err != nil {
-			msg := "cannot listen on " + c.ep.String() + ": " + err.Error()
-			if errors.Is(err, syscall.EADDRINUSE) {
-				msg += "; -nolock never joins a server, so pass -addr"
-			}
-			return rep.fail(errnoOf(err), msg)
-		}
-		return serve(c, rep, ln, nil, dir, home)
-	}
-
 	reg, err := openRegistry(c.ep)
 	if err != nil {
 		return rep.fail(errnoOf(err), "cannot open the registry: "+err.Error())
@@ -75,9 +63,7 @@ func run(c config, rep *reporter) int {
 	lockPath := filepath.Join(dir, lockName(c.ep))
 	if l, ok := findLive(lockPath); ok {
 		reg.close()
-		rep.send("msg", "already serving "+dir+" at "+l.url)
-		rep.send("url", l.url)
-		rep.finish()
+		report(rep, l.url)
 		return 0
 	}
 	if err := syscall.Access(dir, wOK); err != nil {
@@ -89,9 +75,6 @@ func run(c config, rep *reporter) int {
 	case err == nil:
 		return serve(c, rep, ln, reg, dir, home)
 	case errors.Is(err, syscall.EADDRINUSE):
-		if c.nobreaks {
-			rep.send("msg", "note: the running server keeps its own line setting; -nobreaks applies to a new server")
-		}
 		return join(c.ep, rep, reg, dir, lockPath)
 	default:
 		reg.close()
@@ -111,7 +94,7 @@ func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath string)
 	for end := time.Now().Add(joinWait); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
 		if b, err := os.ReadFile(lockPath); err == nil {
 			if l := parseLock(b); l.live(bootID()) {
-				report(rep, dir, l.url, "rm "+lockPath)
+				report(rep, l.url)
 				return 0
 			}
 		}
@@ -124,44 +107,37 @@ func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath string)
 	return rep.fail(syscall.ETIMEDOUT, ep.String()+" is taken, but no mdserve there took "+dir)
 }
 
-func report(rep *reporter, dir, url, stop string) {
-	rep.send("msg", "serving "+dir+" at "+url)
-	rep.send("msg", "stop: "+stop+", or the Stop serving button")
+// report ends a start with the tree's URL alone, the same whether this run
+// started the tree or found it served.
+func report(rep *reporter, url string) {
 	rep.send("url", url)
 	rep.finish()
 }
 
-// serve runs the server on ln with dir as its first tree. Under -nolock reg
-// is nil; otherwise the caller holds the registry lock, which serve releases
-// once dir is adopted and a crashed server's leftovers are gone.
+// serve runs the server on ln with dir as its first tree. The caller holds
+// the registry lock, which serve releases once dir is adopted and a crashed
+// server's leftovers are gone.
 func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home string) int {
 	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(), done: make(chan struct{})}
 	defer h.w.close()
-	if reg != nil {
-		defer reg.close()
+	defer reg.close()
+	filter, err := writeFilter()
+	if err != nil {
+		ln.Close()
+		return rep.fail(errnoOf(err), "cannot write pandoc filter: "+err.Error())
 	}
-	if !c.nobreaks {
-		filter, err := writeFilter()
-		if err != nil {
-			ln.Close()
-			return rep.fail(errnoOf(err), "cannot write pandoc filter: "+err.Error())
-		}
-		h.filter = filter
-		defer os.Remove(filter)
-	}
-	if reg != nil {
-		h.dropLeftovers()
-		h.w.add(reg.dir)
-	}
+	h.filter = filter
+	defer os.Remove(filter)
+	h.dropLeftovers()
+	h.w.add(reg.dir)
 	t, err := h.adopt(filepath.Join(dir, lockName(c.ep)), "")
-	if reg != nil {
-		reg.unlock()
-	}
+	reg.unlock()
 	if err != nil {
 		ln.Close()
 		return rep.fail(errnoOf(err), "cannot serve "+dir+": "+err.Error())
 	}
 	h.srv.stop = h.stop
+	h.srv.about = newAbout(c.ep)
 	h.httpd = &http.Server{Handler: h.srv.handler(), ReadHeaderTimeout: 10 * time.Second}
 
 	sigs := make(chan os.Signal, 1)
@@ -177,11 +153,7 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	go h.loop()
 
 	url := "http://" + c.ep.String() + t.prefixURL()
-	if t.lock != nil {
-		report(rep, dir, url, "rm "+t.lock.path)
-	} else {
-		report(rep, dir, url, "Ctrl-C")
-	}
+	report(rep, url)
 	if err := h.httpd.Serve(ln); !h.halted.Load() {
 		h.shutdown()
 		<-h.done
@@ -199,7 +171,7 @@ type hub struct {
 	ep     netip.AddrPort
 	home   string
 	filter string
-	reg    *registry // nil under -nolock
+	reg    *registry
 	w      *watcher
 	srv    *server
 	ln     net.Listener
@@ -213,15 +185,11 @@ type hub struct {
 
 func (h *hub) lock() {
 	h.mu.Lock()
-	if h.reg != nil {
-		h.reg.lock()
-	}
+	h.reg.lock()
 }
 
 func (h *hub) unlock() {
-	if h.reg != nil {
-		h.reg.unlock()
-	}
+	h.reg.unlock()
 	h.mu.Unlock()
 }
 
@@ -257,24 +225,22 @@ func (h *hub) adopt(lockPath, link string) (*tree, error) {
 		return nil, err
 	}
 	t := newTree(root, dir, prefix, label, h.filter)
-	if h.reg != nil {
-		if t.lock, err = createLock(lockPath, dir, "http://"+h.ep.String()+t.prefixURL()); err != nil {
-			root.Close()
-			return nil, fmt.Errorf("cannot write lockfile: %w", err)
-		}
-		if link == "" {
-			t.link, t.linkInfo, err = h.reg.add(lockPath)
-		} else {
-			t.link = link
-			t.linkInfo, err = os.Lstat(link)
-		}
-		if err != nil {
-			t.lock.remove()
-			root.Close()
-			return nil, fmt.Errorf("cannot register: %w", err)
-		}
-		t.wd = h.w.add(dir)
+	if t.lock, err = createLock(lockPath, dir, "http://"+h.ep.String()+t.prefixURL()); err != nil {
+		root.Close()
+		return nil, fmt.Errorf("cannot write lockfile: %w", err)
 	}
+	if link == "" {
+		t.link, t.linkInfo, err = h.reg.add(lockPath)
+	} else {
+		t.link = link
+		t.linkInfo, err = os.Lstat(link)
+	}
+	if err != nil {
+		t.lock.remove()
+		root.Close()
+		return nil, fmt.Errorf("cannot register: %w", err)
+	}
+	t.wd = h.w.add(dir)
 	h.srv.add(t)
 	return t, nil
 }
@@ -286,10 +252,8 @@ func (h *hub) withdraw(t *tree) {
 	if !h.srv.remove(t) {
 		return
 	}
-	if t.lock != nil {
-		t.lock.remove()
-	}
-	if info, err := os.Lstat(t.link); t.link != "" && err == nil && os.SameFile(info, t.linkInfo) {
+	t.lock.remove()
+	if info, err := os.Lstat(t.link); err == nil && os.SameFile(info, t.linkInfo) {
 		os.Remove(t.link)
 	}
 	h.w.remove(t.wd)
@@ -306,23 +270,21 @@ func (h *hub) sync() bool {
 		return false
 	}
 	for _, t := range h.srv.list() {
-		if t.lock != nil && t.lock.gone() {
+		if t.lock.gone() {
 			h.withdraw(t)
 		}
 	}
-	if h.reg != nil {
-		served := map[string]bool{}
-		for _, t := range h.srv.list() {
-			served[t.link] = true
+	served := map[string]bool{}
+	for _, t := range h.srv.list() {
+		served[t.link] = true
+	}
+	links, _ := h.reg.links()
+	for link, target := range links {
+		if served[link] {
+			continue
 		}
-		links, _ := h.reg.links()
-		for link, target := range links {
-			if served[link] {
-				continue
-			}
-			if _, err := h.adopt(target, link); err != nil {
-				os.Remove(link)
-			}
+		if _, err := h.adopt(target, link); err != nil {
+			os.Remove(link)
 		}
 	}
 	if len(h.srv.list()) == 0 {

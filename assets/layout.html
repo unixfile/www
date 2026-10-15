@@ -4,13 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&display=swap">
-<link rel="stylesheet" href="/_mdserve/style.css">
+{{if .Stopped}}<style>{{.Style}}</style>{{else}}<link rel="stylesheet" href="/_mdserve/style.css">{{end}}
 </head>
 <body class="{{.Kind}}">
 <header>
-<nav>{{range $i, $c := .Crumbs}}{{if $i}} / {{end}}{{if $c.Href}}<a href="{{$c.Href}}">{{$c.Label}}</a>{{else}}{{$c.Label}}{{end}}{{end}}</nav>
-{{if not .Stopped}}<span>{{if .Raw}}<a href="?raw">raw</a> {{end}}<form method="post" action="/_mdserve/stop">{{if .Tree}}<input type="hidden" name="tree" value="{{.Tree}}"><button>Stop serving</button>{{else}}<button>Stop server</button>{{end}}</form></span>{{end}}
+<nav>{{range $i, $c := .Crumbs}}{{if $i}} / {{end}}{{if $c.Href}}<a href="{{$c.Href}}"{{with $c.Title}} title="{{.}}"{{end}}>{{$c.Label}}</a>{{else if $c.Title}}<span title="{{$c.Title}}">{{$c.Label}}</span>{{else}}{{$c.Label}}{{end}}{{end}}</nav>
+{{if not .Stopped}}<span>{{with .Status}}<span class="age">{{.}}</span>{{end}}{{if .Raw}}<a href="?raw">raw</a>{{end}}<form method="post" action="/_mdserve/stop">{{if .Tree}}<input type="hidden" name="tree" value="{{.Tree}}"><button>Delete lock</button>{{else}}<button class="kill">Kill server</button>{{end}}</form></span>{{end}}
 </header>
 <main>
 {{.Body}}
