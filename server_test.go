@@ -36,7 +36,14 @@ func tree(t *testing.T, breaks bool) (*server, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { root.Close() })
-	return newServer(root, "/", filepath.Base(dir), breaks), dir
+	filter := ""
+	if breaks {
+		if filter, err = writeFilter(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Remove(filter) })
+	}
+	return newServer(root, "/", filepath.Base(dir), filter), dir
 }
 
 func get(h http.Handler, path string, hdr ...string) *httptest.ResponseRecorder {
@@ -124,13 +131,15 @@ func TestListingSkipsLockAndShowsReadme(t *testing.T) {
 	}
 }
 
-func TestHardLineBreaks(t *testing.T) {
+// Each source line of a doc is its own paragraph; -nobreaks joins them.
+func TestLinesAreParagraphs(t *testing.T) {
 	needPandoc(t)
-	for _, breaks := range []bool{true, false} {
-		s, _ := tree(t, breaks)
+	for _, lines := range []bool{true, false} {
+		s, _ := tree(t, lines)
 		body := get(s.handler(), "/index.md").Body.String()
-		if got := strings.Contains(body, "line one<br />"); got != breaks {
-			t.Errorf("breaks=%v: line break rendered=%v: %s", breaks, got, body)
+		split := strings.Contains(body, "<p>line one</p>") && strings.Contains(body, "<p>line two</p>")
+		if split != lines {
+			t.Errorf("lines=%v: split into paragraphs=%v: %s", lines, split, body)
 		}
 	}
 }

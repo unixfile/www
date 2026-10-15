@@ -26,6 +26,9 @@ var styleCSS []byte
 //go:embed assets/layout.html
 var layoutHTML string
 
+//go:embed assets/lines.lua
+var linesLua []byte
+
 var layout = template.Must(template.New("layout").Parse(layoutHTML))
 
 // maxCode caps the size of a file shown as a code page; larger files go raw.
@@ -41,12 +44,30 @@ type server struct {
 	fsys   fs.FS
 	prefix string // URL path of the served directory, eg /scratch/notes/
 	label  string // the served directory as the first breadcrumb, eg ~/scratch/notes
-	breaks bool
+	filter string // path of lines.lua, or "" to join lines as standard Markdown does
 	stop   func()
 }
 
-func newServer(root *os.Root, prefix, label string, breaks bool) *server {
-	return &server{fsys: root.FS(), prefix: prefix, label: label, breaks: breaks, stop: func() {}}
+func newServer(root *os.Root, prefix, label, filter string) *server {
+	return &server{fsys: root.FS(), prefix: prefix, label: label, filter: filter, stop: func() {}}
+}
+
+// writeFilter puts lines.lua where pandoc can read it; pandoc takes a
+// filter only as a path. The caller removes the file.
+func writeFilter() (string, error) {
+	f, err := os.CreateTemp("", "mdserve-*.lua")
+	if err != nil {
+		return "", err
+	}
+	_, err = f.Write(linesLua)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // mount returns the URL prefix and label for dir. Inside home the prefix is
@@ -202,7 +223,7 @@ func (s *server) serveMarkdown(w http.ResponseWriter, r *http.Request, name stri
 		s.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body, err := s.pandoc(r.Context(), b, s.from())
+	body, err := s.pandoc(r.Context(), b, true)
 	if err != nil {
 		s.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
@@ -230,7 +251,7 @@ func (s *server) serveCode(w http.ResponseWriter, r *http.Request, name string, 
 		md.WriteByte('\n')
 	}
 	md.WriteString(fence + "\n")
-	body, err := s.pandoc(r.Context(), md.Bytes(), "markdown")
+	body, err := s.pandoc(r.Context(), md.Bytes(), false)
 	if err != nil {
 		s.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
@@ -351,7 +372,7 @@ func (s *server) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	if readme != "" {
 		b, err := fs.ReadFile(s.fsys, path.Join(name, readme))
 		if err == nil {
-			if html, err := s.pandoc(r.Context(), b, s.from()); err == nil {
+			if html, err := s.pandoc(r.Context(), b, true); err == nil {
 				body.WriteString("<article class=\"readme\">\n" + string(html) + "</article>\n")
 			}
 		}
@@ -364,17 +385,15 @@ func (s *server) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	})
 }
 
-func (s *server) from() string {
-	if s.breaks {
-		return "markdown+hard_line_breaks"
-	}
-	return "markdown"
-}
-
 // pandoc converts on every request; there is no cache yet. The request
-// context kills pandoc when the browser goes away.
-func (s *server) pandoc(ctx context.Context, input []byte, from string) (template.HTML, error) {
-	cmd := exec.CommandContext(ctx, "pandoc", "--sandbox", "--preserve-tabs", "-f", from, "-t", "html5")
+// context kills pandoc when the browser goes away. A doc gets lines.lua,
+// so each source line becomes a paragraph; a code page does not.
+func (s *server) pandoc(ctx context.Context, input []byte, doc bool) (template.HTML, error) {
+	args := []string{"--sandbox", "--preserve-tabs", "-f", "markdown", "-t", "html5"}
+	if doc && s.filter != "" {
+		args = append(args, "--lua-filter", s.filter)
+	}
+	cmd := exec.CommandContext(ctx, "pandoc", args...)
 	cmd.Stdin = bytes.NewReader(input)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out

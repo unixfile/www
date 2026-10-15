@@ -48,7 +48,7 @@ func main() {
 	flag.IntVar(&c.port, "port", defaultPort, "port on 127.0.0.1; if the default is taken, a free port is used")
 	flag.BoolVar(&c.fg, "fg", false, "stay in the foreground until Ctrl-C")
 	flag.BoolVar(&c.nolock, "nolock", false, "write no lockfile; implies -fg")
-	flag.BoolVar(&c.nobreaks, "nobreaks", false, "join consecutive lines into paragraphs, as standard Markdown does")
+	flag.BoolVar(&c.nobreaks, "nobreaks", false, "join consecutive lines into one paragraph, as standard Markdown does")
 	flag.BoolVar(&c.noopen, "noopen", false, "do not open a browser")
 	flag.Usage = usage
 	flag.Parse()
@@ -238,7 +238,15 @@ func run(c config, rep *reporter) int {
 	port := ln.Addr().(*net.TCPAddr).Port
 	home, _ := os.UserHomeDir()
 	prefix, label := mount(dir, home)
-	s := newServer(root, prefix, label, !c.nobreaks)
+	filter := ""
+	if !c.nobreaks {
+		if filter, err = writeFilter(); err != nil {
+			ln.Close()
+			return rep.fail(errnoOf(err), "cannot write pandoc filter: "+err.Error())
+		}
+		defer os.Remove(filter)
+	}
+	s := newServer(root, prefix, label, filter)
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", port, s.prefixURL())
 
 	var lk *lock

@@ -15,7 +15,7 @@ Running `mdserve` again in a served directory prints the running server's URL in
 
 - `-fg`: stay in the foreground until Ctrl-C
 - `-nolock`: write no lockfile; implies `-fg`
-- `-nobreaks`: join consecutive lines into paragraphs, as standard Markdown does
+- `-nobreaks`: join consecutive lines into one paragraph, as standard Markdown does
 - `-noopen`: print the URL without opening a browser
 - `-port n`: listen on port n; the default 7417 falls back to a free port when taken, an explicit port does not
 
@@ -26,7 +26,7 @@ Running `mdserve` again in a served directory prints the running server's URL in
 URLs start with the served directory's path relative to home, eg `http://127.0.0.1:7417/scratch/github.com/unixfile/webstack/index.md`, so a URL names its tree. A directory outside home uses its absolute path. `/` redirects to that prefix.
 Below the prefix, URLs mirror the file tree, so relative links in the docs work unchanged. An absolute link such as `/x.md` points outside the prefix and gives 404. A `.md` file renders as a page, a directory as a listing with its README below, a text file as a highlighted code page with linkable lines, and anything else raw. Add `?raw` to any URL for the file itself.
 
-Every line break is a hard break by default. The line-centric spec format puts one rule per line, which standard Markdown joins into one paragraph.
+Each source line renders as its own paragraph by default, through a small pandoc Lua filter. Lines of one block sit close together; a blank line still gives the full paragraph gap. The line-centric spec format puts one rule per line, which standard Markdown joins into one paragraph.
 
 The server binds 127.0.0.1 only, answers only to localhost host names and forbids scripts through a Content-Security-Policy. Pandoc passes raw HTML through, so a README in a cloned repo could otherwise run code on this origin.
 

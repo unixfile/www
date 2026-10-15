@@ -75,6 +75,10 @@ ul.listing { list-style: none; padding: 0; text-align: left; }
 ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
 article.readme { margin-top: 2em; border-top: 1px solid #cccccc; }
 pre.error { white-space: pre-wrap; color: #902000; }
+/* lines.lua makes each line of a block its own paragraph: lines sit close,
+   blocks keep the full paragraph gap */
+div.lines { margin: 1.2em 0; }
+div.lines > p { margin: 0.45em 0; }
 
 /* Pandoc's highlighting style, as pandoc 3.9 emits it for standalone HTML */
 pre > code.sourceCode { white-space: pre; position: relative; }
