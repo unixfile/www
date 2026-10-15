@@ -256,8 +256,14 @@ func (s *server) serveCode(w http.ResponseWriter, r *http.Request, name string, 
 		s.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
 	}
+	body = template.HTML(lineAnchors.Replace(string(body)))
 	s.render(w, http.StatusOK, page{Title: name, Crumbs: s.crumbs(name), Kind: "code", Body: body, Raw: true})
 }
+
+// lineAnchors renames pandoc's line ids from cb1-42 to L42, the form GitHub
+// uses, so links such as main.go#L42 written for GitHub land on the line.
+// Pandoc escapes quotes in code, so file content cannot match.
+var lineAnchors = strings.NewReplacer(`id="cb1-`, `id="L`, `href="#cb1-`, `href="#L`)
 
 // langClass returns the pandoc class that picks a highlighter. Pandoc
 // matches a file extension as well as a language name.
@@ -387,9 +393,10 @@ func (s *server) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 
 // pandoc converts on every request; there is no cache yet. The request
 // context kills pandoc when the browser goes away. A doc gets lines.lua,
-// so each source line becomes a paragraph; a code page does not.
+// so each source line becomes a paragraph; a code page does not. Bare URLs
+// become links, as on GitHub.
 func (s *server) pandoc(ctx context.Context, input []byte, doc bool) (template.HTML, error) {
-	args := []string{"--sandbox", "--preserve-tabs", "-f", "markdown", "-t", "html5"}
+	args := []string{"--sandbox", "--preserve-tabs", "-f", "markdown+autolink_bare_uris", "-t", "html5"}
 	if doc && s.filter != "" {
 		args = append(args, "--lua-filter", s.filter)
 	}

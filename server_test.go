@@ -16,7 +16,7 @@ func tree(t *testing.T, breaks bool) (*server, string) {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		"index.md":               "# Title\nline one\nline two\n\n[code](a/b.go)\n",
+		"index.md":               "# Title\nline one\nline two\n\n[code](a/b.go)\n\nsee https://example.com/x\n",
 		"a/b.go":                 "package a\n\nfunc F() {}\n",
 		"a/README.md":            "Readme of a\n",
 		"a/page.html":            "<script>alert(1)</script>\n",
@@ -144,12 +144,24 @@ func TestLinesAreParagraphs(t *testing.T) {
 	}
 }
 
+func TestBareURLIsLink(t *testing.T) {
+	needPandoc(t)
+	s, _ := tree(t, true)
+	body := get(s.handler(), "/index.md").Body.String()
+	if !strings.Contains(body, `<a href="https://example.com/x"`) {
+		t.Errorf("bare URL not linked: %s", body)
+	}
+}
+
 func TestCodePageIsHighlighted(t *testing.T) {
 	needPandoc(t)
 	s, _ := tree(t, true)
 	body := get(s.handler(), "/a/b.go").Body.String()
-	if !strings.Contains(body, `class="sourceCode`) || !strings.Contains(body, `id="cb1-3"`) {
-		t.Errorf("no highlighted, numbered code: %s", body)
+	if !strings.Contains(body, `class="sourceCode`) || !strings.Contains(body, `<span id="L3"><a href="#L3">`) {
+		t.Errorf("no highlighted code with GitHub line anchors: %s", body)
+	}
+	if strings.Contains(body, "cb1-") {
+		t.Errorf("pandoc line ids left in: %s", body)
 	}
 }
 

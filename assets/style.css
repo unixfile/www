@@ -80,6 +80,9 @@ pre.error { white-space: pre-wrap; color: #902000; }
 div.lines { margin: 1.2em 0; }
 div.lines > p { margin: 0.45em 0; }
 
+/* the line a #L42 link points at */
+pre > code.sourceCode > span:target { background: #fff3b0; }
+
 /* Pandoc's highlighting style, as pandoc 3.9 emits it for standalone HTML */
 pre > code.sourceCode { white-space: pre; position: relative; }
 pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
