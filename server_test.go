@@ -11,17 +11,17 @@ import (
 	"time"
 )
 
-// tree builds a small doc tree and returns a server rooted at it.
-func tree(t *testing.T, breaks bool) (*server, string) {
+// serveTree builds a small doc tree and returns a server holding it at /.
+func serveTree(t *testing.T, breaks bool) (*server, *tree, string) {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		"index.md":               "# Title\nline one\nline two\n\n[code](a/b.go)\n\nsee https://example.com/x\n",
-		"a/b.go":                 "package a\n\nfunc F() {}\n",
-		"a/README.md":            "Readme of a\n",
-		"a/page.html":            "<script>alert(1)</script>\n",
-		"serving-port-7417.lock": "url: x\n",
-		"bin.dat":                "\x00\x01\x02",
+		"index.md":             "# Title\nline one\nline two\n\n[code](a/b.go)\n\nsee https://example.com/x\n",
+		"a/b.go":               "package a\n\nfunc F() {}\n",
+		"a/README.md":          "Readme of a\n",
+		"a/page.html":          "<script>alert(1)</script>\n",
+		"127.31.1.1-8080.lock": "url: x\n",
+		"bin.dat":              "\x00\x01\x02",
 	}
 	for name, body := range files {
 		p := filepath.Join(dir, name)
@@ -31,19 +31,29 @@ func tree(t *testing.T, breaks bool) (*server, string) {
 		}
 	}
 	os.Symlink("/etc", filepath.Join(dir, "escape"))
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { root.Close() })
 	filter := ""
 	if breaks {
+		var err error
 		if filter, err = writeFilter(); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { os.Remove(filter) })
 	}
-	return newServer(root, "/", filepath.Base(dir), filter), dir
+	s := newServer()
+	tr := addTree(t, s, dir, "/", filepath.Base(dir), filter)
+	return s, tr, dir
+}
+
+func addTree(t *testing.T, s *server, dir, prefix, label, filter string) *tree {
+	t.Helper()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { root.Close() })
+	tr := newTree(root, dir, prefix, label, filter)
+	s.add(tr)
+	return tr
 }
 
 func get(h http.Handler, path string, hdr ...string) *httptest.ResponseRecorder {
@@ -52,7 +62,7 @@ func get(h http.Handler, path string, hdr ...string) *httptest.ResponseRecorder 
 
 func do(h http.Handler, method, path string, hdr ...string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, nil)
-	req.Host = "127.0.0.1:7417"
+	req.Host = "127.31.1.1:8080"
 	for i := 0; i+1 < len(hdr); i += 2 {
 		if hdr[i] == "Host" {
 			req.Host = hdr[i+1]
@@ -73,7 +83,7 @@ func needPandoc(t *testing.T) {
 }
 
 func TestForeignHostRejected(t *testing.T) {
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	if rec := get(s.handler(), "/", "Host", "evil.example:7417"); rec.Code != http.StatusMisdirectedRequest {
 		t.Fatalf("status %d, want 421", rec.Code)
 	}
@@ -85,7 +95,7 @@ func TestForeignHostRejected(t *testing.T) {
 }
 
 func TestEveryResponseForbidsScripts(t *testing.T) {
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	rec := get(s.handler(), "/a/page.html?raw")
 	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "default-src 'none'") {
 		t.Errorf("no CSP: %v", rec.Header())
@@ -100,7 +110,7 @@ func TestEveryResponseForbidsScripts(t *testing.T) {
 
 // Rendered pages stay out of the back/forward cache; raw files revalidate.
 func TestCacheHeaders(t *testing.T) {
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	for p, want := range map[string]string{"/missing": "no-store", "/bin.dat": "no-cache"} {
 		if cc := get(s.handler(), p).Header().Get("Cache-Control"); cc != want {
 			t.Errorf("%s: Cache-Control %q, want %q", p, cc, want)
@@ -109,7 +119,7 @@ func TestCacheHeaders(t *testing.T) {
 }
 
 func TestDirectoryRedirectsToSlash(t *testing.T) {
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	rec := get(s.handler(), "/a")
 	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/a/" {
 		t.Fatalf("status %d location %q, want 301 to /a/", rec.Code, rec.Header().Get("Location"))
@@ -118,9 +128,9 @@ func TestDirectoryRedirectsToSlash(t *testing.T) {
 
 func TestListingSkipsLockAndShowsReadme(t *testing.T) {
 	needPandoc(t)
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	body := get(s.handler(), "/").Body.String()
-	if strings.Contains(body, "serving-port-") {
+	if strings.Contains(body, "8080.lock") {
 		t.Error("listing shows the lockfile")
 	}
 	if !strings.Contains(body, `href="a/"`) || !strings.Contains(body, `href="index.md"`) {
@@ -135,7 +145,7 @@ func TestListingSkipsLockAndShowsReadme(t *testing.T) {
 func TestLinesAreParagraphs(t *testing.T) {
 	needPandoc(t)
 	for _, lines := range []bool{true, false} {
-		s, _ := tree(t, lines)
+		s, _, _ := serveTree(t, lines)
 		body := get(s.handler(), "/index.md").Body.String()
 		split := strings.Contains(body, "<p>line one</p>") && strings.Contains(body, "<p>line two</p>")
 		if split != lines {
@@ -146,7 +156,7 @@ func TestLinesAreParagraphs(t *testing.T) {
 
 func TestBareURLIsLink(t *testing.T) {
 	needPandoc(t)
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	body := get(s.handler(), "/index.md").Body.String()
 	if !strings.Contains(body, `<a href="https://example.com/x"`) {
 		t.Errorf("bare URL not linked: %s", body)
@@ -155,7 +165,7 @@ func TestBareURLIsLink(t *testing.T) {
 
 func TestCodePageIsHighlighted(t *testing.T) {
 	needPandoc(t)
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	body := get(s.handler(), "/a/b.go").Body.String()
 	if !strings.Contains(body, `class="sourceCode`) || !strings.Contains(body, `<span id="L3"><a href="#L3">`) {
 		t.Errorf("no highlighted code with GitHub line anchors: %s", body)
@@ -166,7 +176,7 @@ func TestCodePageIsHighlighted(t *testing.T) {
 }
 
 func TestBinaryGoesRaw(t *testing.T) {
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	rec := get(s.handler(), "/bin.dat")
 	if ct := rec.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/") {
 		t.Errorf("binary served as %q", ct)
@@ -174,7 +184,7 @@ func TestBinaryGoesRaw(t *testing.T) {
 }
 
 func TestNoEscapeFromRoot(t *testing.T) {
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	for _, p := range []string{"/../../etc/passwd", "/escape/passwd", "/escape/"} {
 		if rec := get(s.handler(), p); rec.Code == http.StatusOK {
 			t.Errorf("%s: status 200, want refusal", p)
@@ -183,9 +193,9 @@ func TestNoEscapeFromRoot(t *testing.T) {
 }
 
 func TestStopRefusesOtherSites(t *testing.T) {
-	s, _ := tree(t, true)
+	s, _, _ := serveTree(t, true)
 	stopped := make(chan struct{}, 1)
-	s.stop = func() { stopped <- struct{}{} }
+	s.stop = func([]*tree) { stopped <- struct{}{} }
 	h := s.handler()
 	if rec := do(h, "POST", "/_mdserve/stop", "Sec-Fetch-Site", "cross-site"); rec.Code != http.StatusForbidden {
 		t.Errorf("cross-site stop: status %d, want 403", rec.Code)
@@ -202,7 +212,7 @@ func TestStopRefusesOtherSites(t *testing.T) {
 		t.Errorf("null origin without Sec-Fetch-Site: status %d, want 403", rec.Code)
 	}
 	// A browser may send Origin: null on its own same-origin form post.
-	for _, origin := range []string{"http://127.0.0.1:7417", "null"} {
+	for _, origin := range []string{"http://127.31.1.1:8080", "null"} {
 		rec := do(h, "POST", "/_mdserve/stop", "Sec-Fetch-Site", "same-origin", "Origin", origin)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("same-origin stop with Origin %s: status %d", origin, rec.Code)
@@ -230,17 +240,15 @@ func TestMount(t *testing.T) {
 	}
 }
 
-// The served tree lives under its home-relative prefix; the rest is empty.
+// The served tree lives under its home-relative prefix; / lists the trees.
 func TestPrefixedTree(t *testing.T) {
 	needPandoc(t)
-	s, _ := tree(t, true)
-	s.prefix, s.label = "/scratch/my docs/", "~/scratch/my docs"
+	s, tr, _ := serveTree(t, true)
+	tr.prefix, tr.label = "/scratch/my docs/", "~/scratch/my docs"
 	h := s.handler()
-	for path, want := range map[string]string{"/": "/scratch/my%20docs/", "/scratch/my%20docs": "/scratch/my%20docs/"} {
-		rec := get(h, path)
-		if rec.Code != http.StatusFound || rec.Header().Get("Location") != want {
-			t.Errorf("%s: status %d location %q, want 302 to %s", path, rec.Code, rec.Header().Get("Location"), want)
-		}
+	rec := get(h, "/scratch/my%20docs")
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/scratch/my%20docs/" {
+		t.Errorf("status %d location %q, want 302 to the prefix", rec.Code, rec.Header().Get("Location"))
 	}
 	if rec := get(h, "/index.md"); rec.Code != http.StatusNotFound {
 		t.Errorf("path outside the prefix: status %d, want 404", rec.Code)
@@ -248,5 +256,76 @@ func TestPrefixedTree(t *testing.T) {
 	body := get(h, "/scratch/my%20docs/a/b.go").Body.String()
 	if !strings.Contains(body, `<a href="/scratch/my%20docs/">~/scratch/my docs</a> / <a href="/scratch/my%20docs/a/">a</a> / b.go`) {
 		t.Errorf("breadcrumbs lack the prefix: %s", body)
+	}
+}
+
+// The index at / links every served tree and offers to stop them all.
+func TestIndexListsTrees(t *testing.T) {
+	s, tr, dir := serveTree(t, false)
+	tr.prefix, tr.label = "/notes/", "~/notes"
+	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other", "")
+	rec := get(s.handler(), "/")
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, `<a href="/notes/">~/notes</a>`) || !strings.Contains(body, `<a href="/other/">~/other</a>`) {
+		t.Errorf("status %d, index lacks the trees: %s", rec.Code, body)
+	}
+	if !strings.Contains(body, "Stop server") || strings.Contains(body, `name="tree"`) {
+		t.Errorf("index lacks the button that stops every tree: %s", body)
+	}
+	if rec := get(s.handler(), "/elsewhere/"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "~/notes") {
+		t.Errorf("path outside every tree: status %d, want 404 with the index", rec.Code)
+	}
+}
+
+// A tree inside another answers for its own paths.
+func TestNestedTreeWins(t *testing.T) {
+	s, _, dir := serveTree(t, false)
+	addTree(t, s, filepath.Join(dir, "a"), "/a/", "inner", "")
+	body := get(s.handler(), "/a/b.go?raw").Body.String()
+	if body != "package a\n\nfunc F() {}\n" {
+		t.Errorf("nested tree served %q", body)
+	}
+	if body := get(s.handler(), "/a/").Body.String(); !strings.Contains(body, "<nav>inner</nav>") {
+		t.Errorf("nested tree lost its label: %s", body)
+	}
+}
+
+// A tree's button withdraws that tree only.
+func TestStopWithdrawsOneTree(t *testing.T) {
+	s, tr, dir := serveTree(t, false)
+	other := addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other", "")
+	var got []*tree
+	s.stop = func(ts []*tree) { got = ts }
+	body := get(s.handler(), "/other/").Body.String()
+	if !strings.Contains(body, `<input type="hidden" name="tree" value="/other/">`) {
+		t.Fatalf("tree page lacks its stop form: %s", body)
+	}
+	req := httptest.NewRequest("POST", "/_mdserve/stop", strings.NewReader("tree=%2Fother%2F"))
+	req.Host = "127.31.1.1:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || len(got) != 1 || got[0] != other {
+		t.Fatalf("status %d, withdrew %v, want only the other tree", rec.Code, got)
+	}
+	if got[0] == tr {
+		t.Fatal("withdrew the wrong tree")
+	}
+}
+
+func TestLocalHost(t *testing.T) {
+	hosts := filepath.Join(t.TempDir(), "hosts")
+	os.WriteFile(hosts, []byte("127.31.1.1 docs docs.local # mdserve\n192.168.1.5 nas\n# 127.0.0.1 commented\n"), 0o644)
+	old := hostsFile
+	hostsFile = hosts
+	t.Cleanup(func() { hostsFile = old })
+	for host, want := range map[string]bool{
+		"127.31.1.1": true, "127.31.200.1": true, "127.0.0.1": true, "::1": true, "localhost": true,
+		"docs": true, "DOCS.local": true,
+		"nas": false, "commented": false, "evil.example": false, "10.0.0.1": false,
+	} {
+		if got := localHost(host); got != want {
+			t.Errorf("%s: %v, want %v", host, got, want)
+		}
 	}
 }

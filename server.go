@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -40,16 +41,83 @@ const csp = "default-src 'none'; img-src 'self' data:; media-src 'self'; " +
 	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
 	"font-src https://fonts.gstatic.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
+// server answers for every tree served on one endpoint. A request goes to
+// the tree with the longest prefix of its path.
 type server struct {
-	fsys   fs.FS
-	prefix string // URL path of the served directory, eg /scratch/notes/
-	label  string // the served directory as the first breadcrumb, eg ~/scratch/notes
-	filter string // path of lines.lua, or "" to join lines as standard Markdown does
-	stop   func()
+	mu    sync.RWMutex
+	trees []*tree
+	stop  func([]*tree) // withdraws trees; set by the hub
 }
 
-func newServer(root *os.Root, prefix, label, filter string) *server {
-	return &server{fsys: root.FS(), prefix: prefix, label: label, filter: filter, stop: func() {}}
+func newServer() *server {
+	return &server{stop: func([]*tree) {}}
+}
+
+// tree is one served directory, exposed with everything below it.
+type tree struct {
+	dir      string
+	prefix   string // URL path of the tree, eg /scratch/notes/
+	label    string // the tree as the first breadcrumb, eg ~/scratch/notes
+	fsys     fs.FS
+	root     *os.Root
+	filter   string      // path of lines.lua, or "" to join lines as standard Markdown does
+	lock     *lock       // nil under -nolock
+	link     string      // registry link, "" under -nolock
+	linkInfo os.FileInfo // the link this server knows, to tell it from a new join
+	wd       int         // inotify watch on dir, or -1
+}
+
+func newTree(root *os.Root, dir, prefix, label, filter string) *tree {
+	return &tree{dir: dir, prefix: prefix, label: label, fsys: root.FS(), root: root, filter: filter, wd: -1}
+}
+
+func (s *server) add(t *tree) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.trees = append(s.trees, t)
+}
+
+// remove reports whether t was served.
+func (s *server) remove(t *tree) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := len(s.trees)
+	s.trees = slices.DeleteFunc(s.trees, func(x *tree) bool { return x == t })
+	return len(s.trees) < n
+}
+
+// list returns the served trees sorted by prefix.
+func (s *server) list() []*tree {
+	s.mu.RLock()
+	out := slices.Clone(s.trees)
+	s.mu.RUnlock()
+	slices.SortFunc(out, func(a, b *tree) int { return strings.Compare(a.prefix, b.prefix) })
+	return out
+}
+
+func (s *server) byPrefix(prefix string) *tree {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, t := range s.trees {
+		if t.prefix == prefix {
+			return t
+		}
+	}
+	return nil
+}
+
+// lookup returns the tree that serves path. A tree inside another wins, so
+// it keeps its own label and lock.
+func (s *server) lookup(path string) *tree {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var best *tree
+	for _, t := range s.trees {
+		if strings.HasPrefix(path, t.prefix) && (best == nil || len(t.prefix) > len(best.prefix)) {
+			best = t
+		}
+	}
+	return best
 }
 
 // writeFilter puts lines.lua where pandoc can read it; pandoc takes a
@@ -85,8 +153,8 @@ func mount(dir, home string) (prefix, label string) {
 	}
 }
 
-func (s *server) prefixURL() string {
-	return (&url.URL{Path: s.prefix}).String()
+func (t *tree) prefixURL() string {
+	return (&url.URL{Path: t.prefix}).String()
 }
 
 func (s *server) handler() http.Handler {
@@ -108,10 +176,8 @@ func guard(next http.Handler) http.Handler {
 		if err != nil {
 			host = r.Host
 		}
-		switch host {
-		case "127.0.0.1", "localhost", "::1":
-		default:
-			http.Error(w, "mdserve answers only to localhost", http.StatusMisdirectedRequest)
+		if !localHost(host) {
+			http.Error(w, "mdserve answers only to this machine", http.StatusMisdirectedRequest)
 			return
 		}
 		h := w.Header()
@@ -127,22 +193,72 @@ func guard(next http.Handler) http.Handler {
 	})
 }
 
-// handleStop serves the stop button. Any site can submit a form to
+// hostsFile maps names to addresses; tests point it elsewhere.
+var hostsFile = "/etc/hosts"
+
+// localHost accepts a loopback address, localhost, or a name that the hosts
+// file maps to loopback, eg an mdserve instance named there. DNS is never
+// asked: a DNS name that resolves to loopback is the rebinding attack itself.
+func localHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	b, err := os.ReadFile(hostsFile)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		line, _, _ = strings.Cut(line, "#")
+		f := strings.Fields(line)
+		if len(f) < 2 {
+			continue
+		}
+		if ip := net.ParseIP(f[0]); ip == nil || !ip.IsLoopback() {
+			continue
+		}
+		if slices.ContainsFunc(f[1:], func(name string) bool { return strings.EqualFold(name, host) }) {
+			return true
+		}
+	}
+	return false
+}
+
+// handleStop serves the stop buttons: a tree's button withdraws that tree,
+// the index's withdraws every tree. Any site can submit a form to
 // localhost, so the request must come from a page of this server.
 func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "stop must come from an mdserve page", http.StatusForbidden)
 		return
 	}
-	s.render(w, http.StatusOK, page{
+	trees, label, what := s.list(), "mdserve", "mdserve stopped"
+	if prefix := r.PostFormValue("tree"); prefix != "" {
+		t := s.byPrefix(prefix)
+		if t == nil {
+			s.serveIndex(w, http.StatusNotFound, "Not served: "+prefix)
+			return
+		}
+		trees, label, what = []*tree{t}, t.label, "mdserve stopped serving "+t.label
+	}
+	if slices.ContainsFunc(trees, func(t *tree) bool { return t.lock != nil }) {
+		what += " and removed its lockfile"
+		if len(trees) > 1 {
+			what += "s"
+		}
+	}
+	render(w, http.StatusOK, page{
 		Title:   "mdserve stopped",
-		Crumbs:  []crumb{{Label: s.label}},
+		Crumbs:  []crumb{{Label: label}},
 		Kind:    "stopped",
-		Body:    "<p>mdserve stopped and removed its lockfile. This tab can be closed.</p>",
+		Body:    template.HTML("<p>" + template.HTMLEscapeString(what) + ". This tab can be closed.</p>"),
 		Stopped: true,
 	})
-	// Shutdown waits for this response to finish, so it must not run here.
-	go s.stop()
+	// stop only withdraws; the hub shuts down on its own goroutine, since
+	// Shutdown waits for this response to finish.
+	s.stop(trees)
 }
 
 // sameOrigin trusts Sec-Fetch-Site when present: browsers set it and pages
@@ -163,23 +279,49 @@ func sameOrigin(r *http.Request) bool {
 // handlePath maps the URL path one to one onto the file tree, so relative
 // links in the docs work unchanged.
 func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
-	rest, ok := strings.CutPrefix(r.URL.Path, s.prefix)
-	if !ok {
-		if r.URL.Path == "/" || r.URL.Path+"/" == s.prefix {
-			// Temporary: the next server on this port may serve another tree.
-			http.Redirect(w, r, s.prefixURL(), http.StatusFound)
-			return
-		}
-		s.fail(w, ".", http.StatusNotFound, "Not found: "+r.URL.Path+"\nThis server serves "+s.label+" at "+s.prefix)
-		return
+	t := s.lookup(r.URL.Path)
+	switch {
+	case t != nil:
+		t.serve(w, r)
+	case s.byPrefix(r.URL.Path+"/") != nil:
+		// Temporary: the tree may be withdrawn and another served here.
+		http.Redirect(w, r, s.byPrefix(r.URL.Path+"/").prefixURL(), http.StatusFound)
+	case r.URL.Path == "/":
+		s.serveIndex(w, http.StatusOK, "")
+	default:
+		s.serveIndex(w, http.StatusNotFound, "Not found: "+r.URL.Path)
 	}
+}
+
+// serveIndex lists the served trees, at / and for paths outside them all.
+func (s *server) serveIndex(w http.ResponseWriter, status int, msg string) {
+	var body strings.Builder
+	if msg != "" {
+		body.WriteString("<pre class=\"error\">" + template.HTMLEscapeString(msg) + "</pre>\n")
+	}
+	trees := s.list()
+	if len(trees) == 0 {
+		body.WriteString("<p>No tree is served.</p>\n")
+	} else {
+		body.WriteString("<ul class=\"listing\">\n")
+		for _, t := range trees {
+			fmt.Fprintf(&body, "<li><a href=\"%s\">%s</a></li>\n",
+				template.HTMLEscapeString(t.prefixURL()), template.HTMLEscapeString(t.label))
+		}
+		body.WriteString("</ul>\n")
+	}
+	render(w, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "mdserve"}}, Kind: "dir", Body: template.HTML(body.String())})
+}
+
+func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, t.prefix)
 	name := strings.TrimPrefix(path.Clean("/"+rest), "/")
 	if name == "" {
 		name = "."
 	}
-	info, err := fs.Stat(s.fsys, name)
+	info, err := fs.Stat(t.fsys, name)
 	if err != nil {
-		s.fail(w, name, http.StatusNotFound, "Not found: "+name)
+		t.fail(w, name, http.StatusNotFound, "Not found: "+name)
 		return
 	}
 	if info.IsDir() {
@@ -188,20 +330,20 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, r.URL.EscapedPath()+"/", http.StatusMovedPermanently)
 			return
 		}
-		s.serveDir(w, r, name)
+		t.serveDir(w, r, name)
 		return
 	}
 	if _, raw := r.URL.Query()["raw"]; raw {
-		s.serveRaw(w, r, name, info)
+		t.serveRaw(w, r, name, info)
 		return
 	}
 	switch {
 	case isMarkdown(name):
-		s.serveMarkdown(w, r, name)
+		t.serveMarkdown(w, r, name)
 	case info.Size() <= maxCode:
-		s.serveCode(w, r, name, info)
+		t.serveCode(w, r, name, info)
 	default:
-		s.serveRaw(w, r, name, info)
+		t.serveRaw(w, r, name, info)
 	}
 }
 
@@ -217,30 +359,30 @@ func isText(b []byte) bool {
 	return utf8.Valid(b) && bytes.IndexByte(b, 0) < 0
 }
 
-func (s *server) serveMarkdown(w http.ResponseWriter, r *http.Request, name string) {
-	b, err := fs.ReadFile(s.fsys, name)
+func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string) {
+	b, err := fs.ReadFile(t.fsys, name)
 	if err != nil {
-		s.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body, err := s.pandoc(r.Context(), b, true)
+	body, err := t.pandoc(r.Context(), b, true)
 	if err != nil {
-		s.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.render(w, http.StatusOK, page{Title: name, Crumbs: s.crumbs(name), Kind: "doc", Body: body, Raw: true})
+	t.render(w, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
 }
 
 // serveCode shows a text file as a highlighted code page with numbered,
 // linkable lines. Binary files go raw.
-func (s *server) serveCode(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
-	b, err := fs.ReadFile(s.fsys, name)
+func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
+	b, err := fs.ReadFile(t.fsys, name)
 	if err != nil {
-		s.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if !isText(b) {
-		s.serveRaw(w, r, name, info)
+		t.serveRaw(w, r, name, info)
 		return
 	}
 	fence := strings.Repeat("`", max(3, longestRun(b, '`')+1))
@@ -251,13 +393,13 @@ func (s *server) serveCode(w http.ResponseWriter, r *http.Request, name string, 
 		md.WriteByte('\n')
 	}
 	md.WriteString(fence + "\n")
-	body, err := s.pandoc(r.Context(), md.Bytes(), false)
+	body, err := t.pandoc(r.Context(), md.Bytes(), false)
 	if err != nil {
-		s.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	body = template.HTML(lineAnchors.Replace(string(body)))
-	s.render(w, http.StatusOK, page{Title: name, Crumbs: s.crumbs(name), Kind: "code", Body: body, Raw: true})
+	t.render(w, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: body, Raw: true})
 }
 
 // lineAnchors renames pandoc's line ids from cb1-42 to L42, the form GitHub
@@ -299,16 +441,16 @@ func longestRun(b []byte, c byte) int {
 
 // serveRaw sends the file itself. Text goes as plain text, so a stray .html
 // or .ts file shows as source instead of rendering or downloading.
-func (s *server) serveRaw(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
-	f, err := s.fsys.Open(name)
+func (t *tree) serveRaw(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
+	f, err := t.fsys.Open(name)
 	if err != nil {
-		s.fail(w, name, http.StatusNotFound, "Not found: "+name)
+		t.fail(w, name, http.StatusNotFound, "Not found: "+name)
 		return
 	}
 	defer f.Close()
 	rs, ok := f.(io.ReadSeeker)
 	if !ok {
-		s.fail(w, name, http.StatusInternalServerError, "file is not seekable")
+		t.fail(w, name, http.StatusInternalServerError, "file is not seekable")
 		return
 	}
 	if strings.ToLower(path.Ext(name)) != ".svg" {
@@ -322,10 +464,10 @@ func (s *server) serveRaw(w http.ResponseWriter, r *http.Request, name string, i
 	http.ServeContent(w, r, name, info.ModTime(), rs)
 }
 
-func (s *server) serveDir(w http.ResponseWriter, r *http.Request, name string) {
-	entries, err := fs.ReadDir(s.fsys, name)
+func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
+	entries, err := fs.ReadDir(t.fsys, name)
 	if err != nil {
-		s.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	type item struct {
@@ -341,7 +483,7 @@ func (s *server) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		}
 		dir := e.IsDir()
 		if e.Type()&fs.ModeSymlink != 0 {
-			if info, err := fs.Stat(s.fsys, path.Join(name, n)); err == nil {
+			if info, err := fs.Stat(t.fsys, path.Join(name, n)); err == nil {
 				dir = info.IsDir()
 			}
 		}
@@ -376,16 +518,16 @@ func (s *server) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	}
 	body.WriteString("</ul>\n")
 	if readme != "" {
-		b, err := fs.ReadFile(s.fsys, path.Join(name, readme))
+		b, err := fs.ReadFile(t.fsys, path.Join(name, readme))
 		if err == nil {
-			if html, err := s.pandoc(r.Context(), b, true); err == nil {
+			if html, err := t.pandoc(r.Context(), b, true); err == nil {
 				body.WriteString("<article class=\"readme\">\n" + string(html) + "</article>\n")
 			}
 		}
 	}
-	s.render(w, http.StatusOK, page{
-		Title:  s.title(name),
-		Crumbs: s.crumbs(name),
+	t.render(w, http.StatusOK, page{
+		Title:  t.title(name),
+		Crumbs: t.crumbs(name),
 		Kind:   "dir",
 		Body:   template.HTML(body.String()),
 	})
@@ -395,10 +537,10 @@ func (s *server) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 // context kills pandoc when the browser goes away. A doc gets lines.lua,
 // so each source line becomes a paragraph; a code page does not. Bare URLs
 // become links, as on GitHub.
-func (s *server) pandoc(ctx context.Context, input []byte, doc bool) (template.HTML, error) {
+func (t *tree) pandoc(ctx context.Context, input []byte, doc bool) (template.HTML, error) {
 	args := []string{"--sandbox", "--preserve-tabs", "-f", "markdown+autolink_bare_uris", "-t", "html5"}
-	if doc && s.filter != "" {
-		args = append(args, "--lua-filter", s.filter)
+	if doc && t.filter != "" {
+		args = append(args, "--lua-filter", t.filter)
 	}
 	cmd := exec.CommandContext(ctx, "pandoc", args...)
 	cmd.Stdin = bytes.NewReader(input)
@@ -422,34 +564,35 @@ type page struct {
 	Kind    string
 	Body    template.HTML
 	Raw     bool
+	Tree    string // prefix the stop button withdraws, or "" for every tree
 	Stopped bool
 }
 
-func (s *server) title(name string) string {
+func (t *tree) title(name string) string {
 	if name == "." {
-		return s.label
+		return t.label
 	}
 	return name
 }
 
 // crumbs links the root and every parent directory; the last part is plain.
-func (s *server) crumbs(name string) []crumb {
+func (t *tree) crumbs(name string) []crumb {
 	if name == "." {
-		return []crumb{{Label: s.label}}
+		return []crumb{{Label: t.label}}
 	}
-	out := []crumb{{Label: s.label, Href: s.prefixURL()}}
+	out := []crumb{{Label: t.label, Href: t.prefixURL()}}
 	parts := strings.Split(name, "/")
 	for i, p := range parts {
 		c := crumb{Label: p}
 		if i < len(parts)-1 {
-			c.Href = (&url.URL{Path: s.prefix + strings.Join(parts[:i+1], "/") + "/"}).String()
+			c.Href = (&url.URL{Path: t.prefix + strings.Join(parts[:i+1], "/") + "/"}).String()
 		}
 		out = append(out, c)
 	}
 	return out
 }
 
-func (s *server) render(w http.ResponseWriter, status int, p page) {
+func render(w http.ResponseWriter, status int, p page) {
 	var b bytes.Buffer
 	if err := layout.ExecuteTemplate(&b, "page", p); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -463,10 +606,16 @@ func (s *server) render(w http.ResponseWriter, status int, p page) {
 	w.Write(b.Bytes())
 }
 
-func (s *server) fail(w http.ResponseWriter, name string, status int, msg string) {
-	s.render(w, status, page{
-		Title:  s.title(name),
-		Crumbs: s.crumbs(name),
+// render gives the page this tree's stop button.
+func (t *tree) render(w http.ResponseWriter, status int, p page) {
+	p.Tree = t.prefix
+	render(w, status, p)
+}
+
+func (t *tree) fail(w http.ResponseWriter, name string, status int, msg string) {
+	t.render(w, status, page{
+		Title:  t.title(name),
+		Crumbs: t.crumbs(name),
 		Kind:   "error",
 		Body:   template.HTML("<pre class=\"error\">" + template.HTMLEscapeString(msg) + "</pre>"),
 	})

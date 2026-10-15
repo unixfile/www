@@ -1,20 +1,23 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func TestIsLockName(t *testing.T) {
 	for name, want := range map[string]bool{
-		"serving-port-7417.lock": true,
-		"serving-port-.lock":     false,
-		"serving-port-x.lock":    false,
-		"serving-port-7417":      false,
+		"127.31.1.1-8080.lock":   true,
+		"127.0.0.1-1.lock":       true,
+		"127.31.1.1-8080":        false,
+		"127.31.1.1-.lock":       false,
+		"127.31.1.1-99999.lock":  false,
+		"127.31.1-8080.lock":     false,
+		"::1-8080.lock":          false,
+		"serving-port-7417.lock": false,
 		"index.md":               false,
 	} {
 		if got := isLockName(name); got != want {
@@ -23,10 +26,17 @@ func TestIsLockName(t *testing.T) {
 	}
 }
 
+func TestLockNameIsEndpoint(t *testing.T) {
+	ep := netip.MustParseAddrPort("127.31.1.1:8080")
+	if got := lockName(ep); got != "127.31.1.1-8080.lock" {
+		t.Errorf("lock name %q", got)
+	}
+}
+
 func writeLock(t *testing.T, dir string, pid int, boot string) string {
 	t.Helper()
-	p := filepath.Join(dir, "serving-port-1.lock")
-	body := fmt.Sprintf("url: http://127.0.0.1:1/\npid: %d\nboot_id: %s\n", pid, boot)
+	p := filepath.Join(dir, "127.31.1.1-8080.lock")
+	body := fmt.Sprintf("url: http://127.31.1.1:8080/\npid: %d\nboot_id: %s\n", pid, boot)
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -34,18 +44,16 @@ func writeLock(t *testing.T, dir string, pid int, boot string) string {
 }
 
 func TestLiveLockFound(t *testing.T) {
-	dir := t.TempDir()
-	writeLock(t, dir, os.Getpid(), bootID())
-	if _, ok := findLive(dir); !ok {
+	p := writeLock(t, t.TempDir(), os.Getpid(), bootID())
+	if _, ok := findLive(p); !ok {
 		t.Fatal("own live lock not found")
 	}
 }
 
 // A lock from an earlier boot is stale even if its PID is alive now.
 func TestLockFromEarlierBootRemoved(t *testing.T) {
-	dir := t.TempDir()
-	p := writeLock(t, dir, os.Getpid(), "earlier-boot")
-	if _, ok := findLive(dir); ok {
+	p := writeLock(t, t.TempDir(), os.Getpid(), "earlier-boot")
+	if _, ok := findLive(p); ok {
 		t.Fatal("lock from an earlier boot counted as live")
 	}
 	if _, err := os.Stat(p); !os.IsNotExist(err) {
@@ -54,9 +62,8 @@ func TestLockFromEarlierBootRemoved(t *testing.T) {
 }
 
 func TestLockOfDeadProcessRemoved(t *testing.T) {
-	dir := t.TempDir()
-	p := writeLock(t, dir, 1<<22+1, bootID())
-	if _, ok := findLive(dir); ok {
+	p := writeLock(t, t.TempDir(), 1<<22+1, bootID())
+	if _, ok := findLive(p); ok {
 		t.Fatal("lock of a dead process counted as live")
 	}
 	if _, err := os.Stat(p); !os.IsNotExist(err) {
@@ -64,23 +71,25 @@ func TestLockOfDeadProcessRemoved(t *testing.T) {
 	}
 }
 
-func TestWatchStopsWhenLockReplaced(t *testing.T) {
+func TestRemoveSparesReplacedLock(t *testing.T) {
 	dir := t.TempDir()
-	l, err := createLock(dir, 1, "http://127.0.0.1:1/")
+	l, err := createLock(filepath.Join(dir, "127.31.1.1-8080.lock"), dir, "http://127.31.1.1:8080/")
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.Remove(l.path)
 	os.WriteFile(l.path, []byte("other\n"), 0o644)
-	stopped := make(chan struct{})
-	go l.watch(context.Background(), 10*time.Millisecond, func() { close(stopped) })
-	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("replaced lock did not stop the server")
+	if !l.gone() {
+		t.Fatal("replaced lock not seen as gone")
 	}
 	l.remove()
 	if _, err := os.Stat(l.path); err != nil {
 		t.Error("remove deleted a lock it does not own")
+	}
+}
+
+func TestLinkNameEscapes(t *testing.T) {
+	if got := linkName("/home/u/100%/a"); got != "%2Fhome%2Fu%2F100%25%2Fa" {
+		t.Errorf("link name %q", got)
 	}
 }

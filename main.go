@@ -1,37 +1,32 @@
-// Command mdserve browses a directory of Markdown docs in the browser.
-// It renders each page through pandoc when requested, mirrors the file tree
-// in its URLs and stops when its lockfile is deleted.
+// Command mdserve browses trees of Markdown docs in the browser. It renders
+// each page through pandoc when requested and mirrors the file tree in its
+// URLs. Trees on one address share a server, which lives while their locks
+// exist.
 package main
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"flag"
 	"fmt"
-	"net"
-	"net/http"
+	"net/netip"
 	"os"
 	"os/exec"
-	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
-	"time"
 )
 
 const (
-	defaultPort = 7417
+	defaultPort = 8080
 	// readyEnv names the descriptor a detached child reports its start on.
 	readyEnv = "MDSERVE_READY_FD"
 )
 
 type config struct {
 	dir      string
-	port     int
-	portSet  bool
+	addr     string
+	ep       netip.AddrPort
 	fg       bool
 	nolock   bool
 	nobreaks bool
@@ -39,20 +34,19 @@ type config struct {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: mdserve [-fg] [-nolock] [-nobreaks] [-noopen] [-port n] [dir]\n")
+	fmt.Fprintf(os.Stderr, "usage: mdserve [-fg] [-nolock] [-nobreaks] [-noopen] [-addr ip[:port]] [dir]\n")
 	flag.PrintDefaults()
 }
 
 func main() {
 	var c config
-	flag.IntVar(&c.port, "port", defaultPort, "port on 127.0.0.1; if the default is taken, a free port is used")
-	flag.BoolVar(&c.fg, "fg", false, "stay in the foreground until Ctrl-C")
-	flag.BoolVar(&c.nolock, "nolock", false, "write no lockfile; implies -fg")
+	flag.StringVar(&c.addr, "addr", "", "loopback address to serve on, with an optional port (default 127.31.N.1:8080, N = uid - 1000)")
+	flag.BoolVar(&c.fg, "fg", false, "when no server runs on the address yet, serve in the foreground until Ctrl-C")
+	flag.BoolVar(&c.nolock, "nolock", false, "write no lockfile and serve alone in the foreground; never joins a server")
 	flag.BoolVar(&c.nobreaks, "nobreaks", false, "join consecutive lines into one paragraph, as standard Markdown does")
 	flag.BoolVar(&c.noopen, "noopen", false, "do not open a browser")
 	flag.Usage = usage
 	flag.Parse()
-	flag.Visit(func(f *flag.Flag) { c.portSet = c.portSet || f.Name == "port" })
 	switch flag.NArg() {
 	case 0:
 		c.dir = "."
@@ -65,6 +59,11 @@ func main() {
 	if c.nolock {
 		c.fg = true
 	}
+	ep, err := endpointFor(c.addr, os.Getuid())
+	if err != nil {
+		os.Exit(failNow(errnoOf(err), err.Error()))
+	}
+	c.ep = ep
 
 	fd := os.Getenv(readyEnv)
 	switch {
@@ -77,6 +76,40 @@ func main() {
 		os.Exit(detach(c))
 	}
 }
+
+// endpointFor returns where to serve: addr when given, else the user's own
+// 127.31.N.1:8080 with N = uid - 1000, so users on one machine never
+// collide. Only loopback serves; nothing beyond this machine may reach it.
+func endpointFor(addr string, uid int) (netip.AddrPort, error) {
+	if addr == "" {
+		n := uid - 1000
+		if n < 0 || n > 255 {
+			return netip.AddrPort{}, &errno{syscall.EINVAL, fmt.Sprintf("uid %d has no default address; pass -addr", uid)}
+		}
+		return netip.AddrPortFrom(netip.AddrFrom4([4]byte{127, 31, byte(n), 1}), defaultPort), nil
+	}
+	ep, err := netip.ParseAddrPort(addr)
+	if err != nil {
+		a, aerr := netip.ParseAddr(addr)
+		if aerr != nil {
+			return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": want eg 127.31.1.2 or 127.31.1.2:9000"}
+		}
+		ep = netip.AddrPortFrom(a, defaultPort)
+	}
+	if !ep.Addr().Is4() || !ep.Addr().IsLoopback() || ep.Port() == 0 {
+		return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": want an IPv4 loopback address and a port above 0"}
+	}
+	return ep, nil
+}
+
+// errno is an error with the code mdserve exits with.
+type errno struct {
+	code syscall.Errno
+	msg  string
+}
+
+func (e *errno) Error() string { return e.msg }
+func (e *errno) Unwrap() error { return e.code }
 
 // reporter carries the start outcome: to the terminal in the foreground,
 // or through a pipe to the parent that detached this process.
@@ -195,108 +228,4 @@ func errnoOf(err error) syscall.Errno {
 		return e
 	}
 	return syscall.EIO
-}
-
-func listen(c config) (net.Listener, error) {
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", c.port))
-	if err != nil && !c.portSet && errors.Is(err, syscall.EADDRINUSE) {
-		ln, err = net.Listen("tcp", "127.0.0.1:0")
-	}
-	return ln, err
-}
-
-func run(c config, rep *reporter) int {
-	dir, err := filepath.Abs(c.dir)
-	if err != nil {
-		return rep.fail(errnoOf(err), "bad directory: "+err.Error())
-	}
-	info, err := os.Stat(dir)
-	if err != nil {
-		return rep.fail(errnoOf(err), "cannot open "+dir+": "+err.Error())
-	}
-	if !info.IsDir() {
-		return rep.fail(syscall.ENOTDIR, "not a directory: "+dir)
-	}
-	if !c.nolock {
-		if l, ok := findLive(dir); ok {
-			rep.send("msg", "already serving "+dir+" at "+l.url)
-			rep.send("url", l.url)
-			rep.finish()
-			return 0
-		}
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return rep.fail(errnoOf(err), "cannot open "+dir+": "+err.Error())
-	}
-	defer root.Close()
-
-	ln, err := listen(c)
-	if err != nil {
-		return rep.fail(errnoOf(err), "cannot listen: "+err.Error())
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	home, _ := os.UserHomeDir()
-	prefix, label := mount(dir, home)
-	filter := ""
-	if !c.nobreaks {
-		if filter, err = writeFilter(); err != nil {
-			ln.Close()
-			return rep.fail(errnoOf(err), "cannot write pandoc filter: "+err.Error())
-		}
-		defer os.Remove(filter)
-	}
-	s := newServer(root, prefix, label, filter)
-	url := fmt.Sprintf("http://127.0.0.1:%d%s", port, s.prefixURL())
-
-	var lk *lock
-	if !c.nolock {
-		if lk, err = createLock(dir, port, url); err != nil {
-			ln.Close()
-			return rep.fail(errnoOf(err), "cannot write lockfile: "+err.Error())
-		}
-	}
-
-	srv := &http.Server{Handler: s.handler(), ReadHeaderTimeout: 10 * time.Second}
-	stopped := make(chan struct{})
-	// Every way to stop runs this: a signal, the deleted lock, the button.
-	stop := sync.OnceFunc(func() {
-		if lk != nil {
-			lk.remove()
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		srv.Shutdown(ctx)
-		close(stopped)
-	})
-	s.stop = stop
-
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-	go func() {
-		<-sigs
-		stop()
-	}()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	if lk != nil {
-		go lk.watch(ctx, time.Second, stop)
-	}
-
-	rep.send("msg", "serving "+dir+" at "+url)
-	if lk != nil {
-		rep.send("msg", "stop: rm "+lk.path+", or the Stop server button")
-	} else {
-		rep.send("msg", "stop: Ctrl-C, or the Stop server button")
-	}
-	rep.send("url", url)
-	rep.finish()
-
-	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
-		stop()
-		fmt.Fprintf(os.Stderr, "E%d: %s\n", syscall.EIO, err)
-		return int(syscall.EIO)
-	}
-	<-stopped
-	return 0
 }

@@ -1,35 +1,47 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 )
 
-// A lockfile marks a served directory. Its name carries the port, its body
-// says how to reach and stop the server, and deleting it stops the server.
-const (
-	lockPrefix = "serving-port-"
-	lockSuffix = ".lock"
-)
+// A lockfile marks a served tree. Its name is the endpoint that serves it,
+// eg 127.31.1.1-8080.lock, its body says how to reach and stop the server,
+// and deleting it withdraws the tree.
+const lockSuffix = ".lock"
+
+// endpointName joins address and port with a dash. A colon trips up shell
+// completion, scp, rsync and Make.
+func endpointName(ep netip.AddrPort) string {
+	return fmt.Sprintf("%s-%d", ep.Addr(), ep.Port())
+}
+
+func lockName(ep netip.AddrPort) string {
+	return endpointName(ep) + lockSuffix
+}
 
 func isLockName(name string) bool {
-	port, ok := strings.CutPrefix(name, lockPrefix)
+	base, ok := strings.CutSuffix(name, lockSuffix)
 	if !ok {
 		return false
 	}
-	port, ok = strings.CutSuffix(port, lockSuffix)
-	if !ok || port == "" {
+	// An IPv4 address holds no dash, so the first one ends it.
+	addr, port, ok := strings.Cut(base, "-")
+	if !ok {
 		return false
 	}
-	_, err := strconv.Atoi(port)
-	return err == nil
+	a, err := netip.ParseAddr(addr)
+	if err != nil || !a.Is4() {
+		return false
+	}
+	n, err := strconv.Atoi(port)
+	return err == nil && n > 0 && n < 1<<16
 }
 
 type lockInfo struct {
@@ -75,28 +87,18 @@ func (l lockInfo) live(boot string) bool {
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
-// findLive returns the lock of a server already running in dir. It deletes
-// stale locks on the way, so a crash leaves nothing behind for long.
-func findLive(dir string) (lockInfo, bool) {
-	entries, err := os.ReadDir(dir)
+// findLive returns the lock at path if its server still runs. A stale lock
+// is deleted on the way, so a crash leaves nothing behind for long. Callers
+// hold the registry lock, so the server cannot be halfway through writing it.
+func findLive(path string) (lockInfo, bool) {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return lockInfo{}, false
 	}
-	boot := bootID()
-	for _, e := range entries {
-		if !isLockName(e.Name()) {
-			continue
-		}
-		path := filepath.Join(dir, e.Name())
-		b, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		if l := parseLock(b); l.live(boot) {
-			return l, true
-		}
-		os.Remove(path)
+	if l := parseLock(b); l.live(bootID()) {
+		return l, true
 	}
+	os.Remove(path)
 	return lockInfo{}, false
 }
 
@@ -105,15 +107,14 @@ type lock struct {
 	info os.FileInfo
 }
 
-func createLock(dir string, port int, url string) (*lock, error) {
-	path := filepath.Join(dir, fmt.Sprintf("%s%d%s", lockPrefix, port, lockSuffix))
+func createLock(path, root, url string) (*lock, error) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return nil, err
 	}
-	_, err = fmt.Fprintf(f, "# mdserve is serving this directory. Delete this file to stop it.\n"+
+	_, err = fmt.Fprintf(f, "# mdserve is serving this directory. Delete this file to stop serving it.\n"+
 		"url: %s\nroot: %s\npid: %d\nstarted: %s\nboot_id: %s\n",
-		url, dir, os.Getpid(), time.Now().Format(time.RFC3339), bootID())
+		url, root, os.Getpid(), time.Now().Format(time.RFC3339), bootID())
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -139,23 +140,5 @@ func (l *lock) gone() bool {
 func (l *lock) remove() {
 	if !l.gone() {
 		os.Remove(l.path)
-	}
-}
-
-// watch calls stop once the lock is gone. It polls; a second of delay on
-// shutdown costs nothing and needs no inotify.
-func (l *lock) watch(ctx context.Context, every time.Duration, stop func()) {
-	t := time.NewTicker(every)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			if l.gone() {
-				stop()
-				return
-			}
-		}
 	}
 }
