@@ -1,0 +1,15 @@
+Package: mdserve
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: unixfile <unixfile@users.noreply.github.com>
+Installed-Size: @SIZE@
+Depends: pandoc (>= 2.15), libcap2-bin
+Recommends: xdg-utils
+Section: text
+Priority: optional
+Homepage: https://github.com/unixfile/mdserve
+Description: browse trees of Markdown docs in the browser
+ Run mdserve in a directory and it serves the tree on a loopback address
+ of the user's own, rendered by pandoc on each request. Links follow into
+ other docs, code and directories, and code pages anchor lines as GitHub
+ does. A visible lockfile in the directory controls the server.

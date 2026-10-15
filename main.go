@@ -17,11 +17,39 @@ import (
 	"syscall"
 )
 
-const (
-	defaultPort = 8080
-	// readyEnv names the descriptor a detached child reports its start on.
-	readyEnv = "MDSERVE_READY_FD"
-)
+// readyEnv names the descriptor a detached child reports its start on.
+const readyEnv = "MDSERVE_READY_FD"
+
+// defaultPort is 8080 until main finds that this process may bind port 80.
+var defaultPort uint16 = 8080
+
+// capNetBindService is the capability bit that lets a process bind ports
+// below 1024.
+const capNetBindService = 10
+
+// lowPortOK reports whether this process may bind port 80: it holds
+// CAP_NET_BIND_SERVICE, as the Debian package grants, or the machine lets
+// every user bind low ports.
+func lowPortOK() bool {
+	if b, err := os.ReadFile("/proc/sys/net/ipv4/ip_unprivileged_port_start"); err == nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && n <= 80 {
+			return true
+		}
+	}
+	b, err := os.ReadFile("/proc/self/status")
+	return err == nil && hasCap(string(b), capNetBindService)
+}
+
+// hasCap reads the effective capability set from a /proc status file.
+func hasCap(status string, bit uint) bool {
+	for _, line := range strings.Split(status, "\n") {
+		if v, ok := strings.CutPrefix(line, "CapEff:"); ok {
+			caps, err := strconv.ParseUint(strings.TrimSpace(v), 16, 64)
+			return err == nil && caps&(1<<bit) != 0
+		}
+	}
+	return false
+}
 
 type config struct {
 	dir     string
@@ -38,8 +66,9 @@ const usageText = `usage: mdserve [-fnh] [-a ip[:port]] [dir]
        mdserve --restart [-a ip[:port]]
        mdserve -l [-a ip[:port]] [dir]
 
-  -a, --addr ip[:port]  serve on this loopback address; the port defaults to 8080
-                        (default 127.31.N.1:8080, N = uid - 1000)
+  -a, --addr ip[:port]  serve on this loopback address; the port defaults to 80
+                        when mdserve may bind it, else 8080
+                        (default 127.31.N.1, N = uid - 1000)
   -f, --foreground      when no server runs on the address yet, serve in the
                         foreground until Ctrl-C
   -n, --no-open         print the URL without opening a browser
@@ -159,6 +188,9 @@ func main() {
 		io.WriteString(os.Stdout, usageText)
 		os.Exit(0)
 	}
+	if lowPortOK() {
+		defaultPort = 80
+	}
 	ep, err := endpointFor(c.addr, os.Getuid())
 	if err != nil {
 		os.Exit(failNow(errnoOf(err), err.Error()))
@@ -182,8 +214,8 @@ func main() {
 }
 
 // endpointFor returns where to serve: addr when given, else the user's own
-// 127.31.N.1:8080 with N = uid - 1000, so users on one machine never
-// collide. Only loopback serves; nothing beyond this machine may reach it.
+// 127.31.N.1 with N = uid - 1000, so users on one machine never collide.
+// The port is defaultPort unless addr names one. Only loopback serves; nothing beyond this machine may reach it.
 func endpointFor(addr string, uid int) (netip.AddrPort, error) {
 	if addr == "" {
 		n := uid - 1000

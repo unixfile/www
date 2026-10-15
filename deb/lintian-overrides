@@ -1,0 +1,2 @@
+# Go builds static binaries on purpose: no libc to match on the target.
+mdserve: statically-linked-binary [usr/bin/mdserve]

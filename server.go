@@ -287,24 +287,43 @@ func localHost(host string) bool {
 	if ip := net.ParseIP(host); ip != nil {
 		return ip.IsLoopback()
 	}
+	for _, e := range hostsEntries() {
+		if e.ip.IsLoopback() && e.has(host) {
+			return true
+		}
+	}
+	return false
+}
+
+// hostsEntry is one line of the hosts file: an address and its names.
+type hostsEntry struct {
+	ip    netip.Addr
+	names []string
+}
+
+func (e hostsEntry) has(host string) bool {
+	return slices.ContainsFunc(e.names, func(name string) bool { return strings.EqualFold(name, host) })
+}
+
+func hostsEntries() []hostsEntry {
 	b, err := os.ReadFile(hostsFile)
 	if err != nil {
-		return false
+		return nil
 	}
+	var out []hostsEntry
 	for _, line := range strings.Split(string(b), "\n") {
 		line, _, _ = strings.Cut(line, "#")
 		f := strings.Fields(line)
 		if len(f) < 2 {
 			continue
 		}
-		if ip := net.ParseIP(f[0]); ip == nil || !ip.IsLoopback() {
+		ip, err := netip.ParseAddr(f[0])
+		if err != nil {
 			continue
 		}
-		if slices.ContainsFunc(f[1:], func(name string) bool { return strings.EqualFold(name, host) }) {
-			return true
-		}
+		out = append(out, hostsEntry{ip.Unmap(), f[1:]})
 	}
-	return false
+	return out
 }
 
 // handleStop serves the stop buttons: a tree's button withdraws that tree,

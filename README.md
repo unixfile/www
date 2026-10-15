@@ -20,8 +20,9 @@ The server exits when its last lock is gone. SIGTERM stops it at once and remove
 A running server keeps the binary it started with. After `make install`, `mdserve --restart` moves its trees to the new one; open tabs need a reload.
 
 The index at `/` lists the server's locks: each tree with the time its lock was written and a Delete lock button, and the lock's path on hover. Trees on other addresses follow as plain links, since only their own server may stop them. The header shows when the server started and when its binary was built, and a warning appears when the binary on disk has changed since.
+To reach the server by name, add a line such as `127.31.1.1 mdserve` to `/etc/hosts`. Type the name with its slash, eg `mdserve/`, or the browser searches for it.
 
-- `-a`, `--addr ip[:port]`: serve on another loopback address; the port defaults to 8080
+- `-a`, `--addr ip[:port]`: serve on another loopback address; the port defaults to 80 where mdserve may bind it, else 8080
 - `-f`, `--foreground`: when no server runs on the address yet, serve in the foreground until Ctrl-C
 - `-n`, `--no-open`: print the URL without opening a browser
 - `--restart`: replace the server on the address with one running this binary, serving the same trees; it prints each tree's URL
@@ -30,11 +31,19 @@ The index at `/` lists the server's locks: each tree with the time its lock was 
 
 Options follow GNU style. Short ones combine, as in `-fn`, and options may follow the directory.
 
+## Install
+
+mdserve needs pandoc 2.15 or later.
 `make install` links `build/mdserve` into `~/.local/bin`.
+`make deb` builds a Debian package in `build/`, such as `mdserve_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on pandoc. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
+`make install-deb` builds the package and installs it with `sudo apt install`, which pulls in pandoc. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit, then `mdserve --restart`. `make uninstall-deb` removes the package.
+
+The package grants `/usr/bin/mdserve` one capability, `cap_net_bind_service`, so it can bind port 80 while running as the user. `getcap /usr/bin/mdserve` shows it. With it mdserve serves on port 80 and URLs carry no port; without it, as after `make install`, the port is 8080. mdserve also takes port 80 where the machine lets every user bind low ports.
 
 ## Notes
 
-Each user owns 127.31.N.0/24 with N = uid − 1000 and serves on 127.31.N.1:8080 by default. Uids from 1000 to 1255 fit; others need `--addr`. Only loopback addresses serve.
+Each user owns 127.31.N.0/24 with N = uid − 1000 and serves on 127.31.N.1 by default, port 80 or 8080 as above. Uids from 1000 to 1255 fit; others need `--addr`. Only loopback addresses serve.
+The addresses keep users out of each other's way, not out of each other's trees. Loopback is open to every local account, so on a machine shared with other users, they can reach your server. Serve nothing there you would not show them.
 
 URLs start with the served directory's path relative to home, eg `http://127.31.1.1:8080/scratch/github.com/unixfile/webstack/index.md`, so a URL names its tree. A directory outside home uses its absolute path.
 Below the prefix, URLs mirror the file tree, so relative links in the docs work unchanged. An absolute link such as `/x.md` points outside the prefix and gives 404. A `.md` file renders as a page, a directory as a listing with its README below, a text file as a highlighted code page with linkable lines, and anything else raw. Add `?raw` to any URL for the file itself. A tree inside another served tree answers for its own paths.
@@ -54,3 +63,7 @@ Pages load no fonts from the network. STIX Two Text, the serif, comes from the m
 The header names a tree by its base name and shows the full path on hover. Every tree page's breadcrumbs start at `index`, which links `/`. The header and mdserve's own messages are mono; documents keep the serif.
 
 Add `127.*-*.lock` to `~/.config/git/ignore` so locks stay out of `git status`.
+
+## Licence
+
+MIT, see `LICENSE`. The embedded STIX Two Text fonts are under the SIL Open Font License, in `assets/fonts/STIXTwoText-OFL.txt`.

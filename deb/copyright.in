@@ -1,0 +1,18 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mdserve
+Source: https://github.com/unixfile/mdserve
+
+Files: *
+Copyright: 2026 unixfile
+License: Expat
+
+Files: assets/fonts/*
+Copyright: 2001-2021 The STIX Fonts Project Authors
+License: OFL-1.1
+Comment: STIX Two Text, embedded in the binary and served to the browser
+ when the font is not installed.
+
+License: Expat
+@EXPAT@
+
+License: OFL-1.1

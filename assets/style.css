@@ -113,7 +113,7 @@ header .age { color: #666666; }
 header button.kill { background: #902000; border-color: #902000; color: #f6f6f6; }
 p.mdserve { font-size: 0.8em; text-align: left; hyphens: none; }
 p.warn { color: #902000; }
-p.warn code { font-size: inherit; }
+p.mdserve code { font-size: inherit; }
 h2.mdserve { font-size: 0.8em; font-weight: normal; color: #666666; margin-top: 2.5em; }
 table.locks { font-size: 0.8em; width: 100%; }
 table.locks td { overflow-wrap: anywhere; vertical-align: baseline; }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -107,6 +108,19 @@ func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath string)
 	return rep.fail(syscall.ETIMEDOUT, ep.String()+" is taken, but no mdserve there took "+dir)
 }
 
+// origin is the URL of the server on ep. Port 80 is HTTP's own and goes
+// unwritten.
+func origin(ep netip.AddrPort) string {
+	return originHost(ep.Addr().String(), ep.Port())
+}
+
+func originHost(host string, port uint16) string {
+	if port == 80 {
+		return "http://" + host
+	}
+	return "http://" + host + ":" + strconv.Itoa(int(port))
+}
+
 // report ends a start with the tree's URL alone, the same whether this run
 // started the tree or found it served.
 func report(rep *reporter, url string) {
@@ -152,7 +166,7 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	}()
 	go h.loop()
 
-	url := "http://" + c.ep.String() + t.prefixURL()
+	url := origin(c.ep) + t.prefixURL()
 	report(rep, url)
 	if err := h.httpd.Serve(ln); !h.halted.Load() {
 		h.shutdown()
@@ -225,7 +239,7 @@ func (h *hub) adopt(lockPath, link string) (*tree, error) {
 		return nil, err
 	}
 	t := newTree(root, dir, prefix, label, h.filter)
-	if t.lock, err = createLock(lockPath, dir, "http://"+h.ep.String()+t.prefixURL()); err != nil {
+	if t.lock, err = createLock(lockPath, dir, origin(h.ep)+t.prefixURL()); err != nil {
 		root.Close()
 		return nil, fmt.Errorf("cannot write lockfile: %w", err)
 	}

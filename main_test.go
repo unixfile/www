@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"net/netip"
+	"testing"
+)
 
 // Options parse the GNU way: short ones combine, values sit joined or apart,
 // and options may follow the directory.
@@ -68,6 +71,31 @@ func TestWithin(t *testing.T) {
 	} {
 		if got := within(tc.dir, tc.root); got != tc.want {
 			t.Errorf("within(%q, %q) = %v, want %v", tc.dir, tc.root, got, tc.want)
+		}
+	}
+}
+
+// CAP_NET_BIND_SERVICE is bit 10 of the effective set.
+func TestHasCap(t *testing.T) {
+	for status, want := range map[string]bool{
+		"Name:\tmdserve\nCapInh:\t0000000000000000\nCapEff:\t0000000000000400\n": true,
+		"CapEff:\t000001ffffffffff\n":                                            true,
+		"CapPrm:\t0000000000000400\nCapEff:\t0000000000000000\n":                 false,
+		"Name:\tmdserve\n": false,
+	} {
+		if got := hasCap(status, capNetBindService); got != want {
+			t.Errorf("%q: %v, want %v", status, got, want)
+		}
+	}
+}
+
+func TestOrigin(t *testing.T) {
+	for ep, want := range map[string]string{
+		"127.31.1.1:80":   "http://127.31.1.1",
+		"127.31.1.1:8080": "http://127.31.1.1:8080",
+	} {
+		if got := origin(netip.MustParseAddrPort(ep)); got != want {
+			t.Errorf("%s: %s, want %s", ep, got, want)
 		}
 	}
 }
