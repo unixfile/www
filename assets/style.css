@@ -1,0 +1,142 @@
+/* Copied from md2html-default. Edits there do not reach mdserve. */
+html { background: #f6f6f6; }
+body {
+  max-width: 58ch;
+  margin: 2em auto;
+  background: #f6f6f6;
+  color: #1a1a1a;
+  font-family: "STIX Two Text", Georgia, serif;
+  font-size: clamp(16px, 3.0vw, 38px);
+  line-height: 1.2;
+  text-align: justify;
+  hyphens: auto;
+  padding: 0 1em;
+}
+p { margin: 1.2em 0; }
+h1, h2, h3, h4, h5, h6 {
+  font-family: "STIX Two Text", Georgia, serif;
+  font-weight: bold;
+  text-align: left;
+  hyphens: none;
+  margin-top: 2em;
+  margin-bottom: 0.3em;
+}
+h1 { font-size: 1.3em; }
+h2 { font-size: 1.1em; }
+h3 { font-size: 1em; font-style: italic; font-weight: normal; }
+blockquote {
+  margin: 1.2em 0 1.2em 2em;
+  padding-left: 1em;
+  border-left: 2px solid currentColor;
+  opacity: 0.75;
+}
+@media (pointer: coarse), (max-width: 768px) {
+  body { max-width: 100%; }
+}
+
+/* mdserve additions: page chrome, code, tables, listings */
+header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5em 1em;
+  font-size: 0.7em;
+  text-align: left;
+  hyphens: none;
+  border-bottom: 1px solid #cccccc;
+  padding-bottom: 0.4em;
+}
+header nav { overflow-wrap: anywhere; }
+header form { display: inline; }
+header button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 0.2em;
+  padding: 0 0.4em;
+  cursor: pointer;
+}
+pre, code { font-family: ui-monospace, "Iosevka", monospace; }
+pre {
+  font-size: 0.7em;
+  line-height: 1.35;
+  text-align: left;
+  hyphens: none;
+  overflow-x: auto;
+}
+:not(pre) > code { font-size: 0.85em; }
+body.code { max-width: 120ch; }
+table { border-collapse: collapse; margin: 1.2em 0; }
+th, td { border-bottom: 1px solid #cccccc; padding: 0.2em 0.6em; text-align: left; }
+img { max-width: 100%; }
+ul.listing { list-style: none; padding: 0; text-align: left; }
+ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
+article.readme { margin-top: 2em; border-top: 1px solid #cccccc; }
+pre.error { white-space: pre-wrap; color: #902000; }
+
+/* Pandoc's highlighting style, as pandoc 3.9 emits it for standalone HTML */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { color: #008000; } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { color: #008000; font-weight: bold; } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
