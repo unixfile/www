@@ -567,7 +567,7 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if info.IsDir() && !strings.HasSuffix(r.URL.Path, "/") {
-		// Without the slash, relative links in the README resolve one level up.
+		// Without the slash, relative links in the listing resolve one level up.
 		u := r.URL.EscapedPath() + "/"
 		if r.URL.RawQuery != "" {
 			u += "?" + r.URL.RawQuery
@@ -607,10 +607,6 @@ func isMarkdown(name string) bool {
 		return true
 	}
 	return false
-}
-
-func isReadme(name string) bool {
-	return strings.EqualFold(strings.TrimSuffix(name, path.Ext(name)), "readme") && isMarkdown(name)
 }
 
 func isText(b []byte) bool {
@@ -739,7 +735,6 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	_, err = t.root.Stat(name)
 	outside := err != nil || t.shared
 	var items []item
-	readme := ""
 	for _, e := range entries {
 		n := e.Name()
 		if t.unlisted(name, n) {
@@ -756,9 +751,6 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 			} else if info, err := fs.Stat(t.fsys, path.Join(name, n)); err == nil {
 				dir = info.IsDir()
 			}
-		}
-		if ref == nil && !dir && readme == "" && isReadme(n) {
-			readme = n
 		}
 		items = append(items, item{n, dir, ref})
 	}
@@ -799,14 +791,6 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 			template.HTMLEscapeString(href), template.HTMLEscapeString(label))
 	}
 	body.WriteString("</ul>\n")
-	if readme != "" {
-		b, err := fs.ReadFile(t.fsys, path.Join(name, readme))
-		if err == nil {
-			if html, err := t.pandoc(r.Context(), b, true); err == nil {
-				body.WriteString("<article class=\"readme\">\n" + string(html) + "</article>\n")
-			}
-		}
-	}
 	t.render(w, r, http.StatusOK, page{
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),

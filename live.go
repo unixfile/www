@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -261,8 +260,8 @@ func (t *tree) version(h io.Writer, name string) byte {
 		fmt.Fprintf(h, "%d %d", info.ModTime().UnixNano(), info.Size())
 		return 'f'
 	}
-	// A listing shows names, and the README below it. A change to another
-	// file in the directory leaves the page as it was.
+	// A listing shows names. A change to a file in the directory leaves the
+	// page as it was.
 	entries, err := fs.ReadDir(t.fsys, name)
 	if err != nil {
 		io.WriteString(h, err.Error())
@@ -274,11 +273,6 @@ func (t *tree) version(h io.Writer, name string) byte {
 			continue
 		}
 		fmt.Fprintf(h, "%s %v\n", n, e.Type())
-		if isReadme(n) {
-			if info, err := fs.Stat(t.fsys, path.Join(name, n)); err == nil {
-				fmt.Fprintf(h, "%d %d\n", info.ModTime().UnixNano(), info.Size())
-			}
-		}
 	}
 	return 'd'
 }

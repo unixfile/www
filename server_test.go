@@ -126,7 +126,7 @@ func TestDirectoryRedirectsToSlash(t *testing.T) {
 	}
 }
 
-func TestListingSkipsLockAndShowsReadme(t *testing.T) {
+func TestListingSkipsLockAndReadme(t *testing.T) {
 	needPandoc(t)
 	s, _, _ := serveTree(t, true)
 	body := get(s.handler(), "/").Body.String()
@@ -136,8 +136,8 @@ func TestListingSkipsLockAndShowsReadme(t *testing.T) {
 	if !strings.Contains(body, `href="a/"`) || !strings.Contains(body, `href="index.md"`) {
 		t.Errorf("listing lacks entries: %s", body)
 	}
-	if body := get(s.handler(), "/a/").Body.String(); !strings.Contains(body, "Readme of a") {
-		t.Errorf("README not rendered below listing: %s", body)
+	if body := get(s.handler(), "/a/").Body.String(); strings.Contains(body, "Readme of a") {
+		t.Errorf("README rendered below listing: %s", body)
 	}
 }
 

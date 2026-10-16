@@ -147,7 +147,6 @@ header a, ul.listing a, table.locks a, p.foot a, .mdserve a { color: inherit; te
 header a:visited, ul.listing a:visited, table.locks a:visited, p.foot a:visited, .mdserve a:visited { color: var(--muted); }
 header a:hover, ul.listing a:hover, table.locks a:hover, p.foot a:hover, .mdserve a:hover { text-decoration-color: currentColor; }
 ul.listing li.refused span { color: var(--muted); font-size: 0.8em; }
-article.readme { margin-top: 2em; border-top: 1px solid var(--rule); }
 /* A history: hash and date are mdserve's and mono, subject and body the
    author's and serif. A page's foot leads to its history. */
 ol.log { list-style: none; padding: 0; }

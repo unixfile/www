@@ -141,7 +141,7 @@ func TestLiveReloadsOnRenameSave(t *testing.T) {
 }
 
 // A listing reloads when a file joins it, and not when a file in it
-// changes; its README changes it.
+// changes, its README included.
 func TestListingVersion(t *testing.T) {
 	s, _, dir, _ := liveTree(t)
 	version := func() string { return s.version("/a/") }
@@ -151,10 +151,8 @@ func TestListingVersion(t *testing.T) {
 		t.Error("listing changed with a file's content")
 	}
 	os.WriteFile(filepath.Join(dir, "a", "README.md"), []byte("New readme\n"), 0o644)
-	if w := version(); w == v {
-		t.Error("listing unchanged with its README")
-	} else {
-		v = w
+	if version() != v {
+		t.Error("listing changed with its README")
 	}
 	os.WriteFile(filepath.Join(dir, "a", "c.go"), nil, 0o644)
 	if version() == v {
