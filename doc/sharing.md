@@ -20,7 +20,7 @@ The server serves only what other users on the machine could read. A file needs 
 
 A refused entry shows as refused, without the reason, since the reason names paths outside the tree. The index at `/` lists the shared trees by name. It shows no lock paths, no other addresses and no buttons. No page has a Delete lock or Kill server button, so no visitor can stop the server.
 
-The server answers to any `Host` header, since visitors use whatever name reaches the machine. Scripts stay forbidden by the Content-Security-Policy.
+The server answers to any `Host` header, since visitors use whatever name reaches the machine. The Content-Security-Policy forbids every script but live reload's.
 
 ## Nobody can connect
 

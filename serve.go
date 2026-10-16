@@ -198,7 +198,7 @@ func ifaceOf(a netip.Addr) string {
 // the registry lock, which serve releases once dir is adopted and a crashed
 // server's leftovers are gone.
 func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home string) int {
-	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(), done: make(chan struct{})}
+	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(lockMask), done: make(chan struct{})}
 	defer h.w.close()
 	defer reg.close()
 	filter, err := writeFilter()
@@ -220,6 +220,8 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	}
 	h.srv.stop = h.stop
 	h.srv.about = newAbout(c.ep)
+	h.srv.live = newLive()
+	defer h.srv.live.close()
 	h.httpd = &http.Server{Handler: h.srv.handler(), ReadHeaderTimeout: 10 * time.Second}
 
 	sigs := make(chan os.Signal, 1)
@@ -442,6 +444,8 @@ func (h *hub) halt() {
 		return
 	}
 	h.ln.Close()
+	// Live reload streams never end on their own, and Shutdown waits for them.
+	h.srv.live.close()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

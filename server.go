@@ -40,15 +40,18 @@ var linesLua []byte
 //go:embed assets/fonts/*.otf
 var fontFS embed.FS
 
-var layout = template.Must(template.New("layout").Parse(layoutHTML))
+var layout = template.Must(template.New("layout").Funcs(template.FuncMap{
+	"liveJS": func() template.JS { return template.JS(liveJS) },
+}).Parse(layoutHTML))
 
 // maxCode caps the size of a file shown as a code page; larger files go raw.
 const maxCode = 1 << 20
 
-// csp forbids every script. Pandoc passes raw HTML through, and a README
-// in a cloned repo must not run code on this origin.
-const csp = "default-src 'none'; img-src 'self' data:; media-src 'self'; " +
-	"style-src 'self' 'unsafe-inline'; font-src 'self'; " +
+// csp forbids every script but live reload's, which it names by hash.
+// Pandoc passes raw HTML through, and a README in a cloned repo must not
+// run code on this origin.
+var csp = "default-src 'none'; script-src " + scriptSrc(liveJS) + "; connect-src 'self'; " +
+	"img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; " +
 	"form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
 // server answers for every tree served on one endpoint. A request goes to
@@ -58,7 +61,8 @@ type server struct {
 	trees  []*tree
 	stop   func([]*tree) // withdraws trees; set by the hub
 	about  about
-	shared bool // on an address beyond loopback: it shows the trees and nothing of the machine
+	shared bool  // on an address beyond loopback: it shows the trees and nothing of the machine
+	live   *live // nil in tests that do without live reload
 }
 
 // about describes the server for its index: where it listens, since when,
@@ -154,6 +158,7 @@ func (s *server) add(t *tree) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.trees = append(s.trees, t)
+	s.live.kick()
 }
 
 // remove reports whether t was served.
@@ -162,6 +167,7 @@ func (s *server) remove(t *tree) bool {
 	defer s.mu.Unlock()
 	n := len(s.trees)
 	s.trees = slices.DeleteFunc(s.trees, func(x *tree) bool { return x == t })
+	s.live.kick()
 	return len(s.trees) < n
 }
 
@@ -270,6 +276,7 @@ func (s *server) handler() http.Handler {
 	if !s.shared {
 		mux.HandleFunc("POST /_mdserve/stop", s.handleStop)
 	}
+	mux.HandleFunc("GET /_mdserve/live", s.handleLive)
 	mux.HandleFunc("GET /", s.handlePath)
 	return guard(mux, s.shared)
 }
@@ -365,7 +372,7 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 	if prefix := r.PostFormValue("tree"); prefix != "" {
 		t := s.byPrefix(prefix)
 		if t == nil {
-			s.serveIndex(w, http.StatusNotFound, "Not served: "+prefix)
+			s.serveIndex(w, r, http.StatusNotFound, "Not served: "+prefix)
 			return
 		}
 		trees, crumbs, what = []*tree{t}, []crumb{t.rootCrumb()}, "Stopped serving "+t.label
@@ -384,7 +391,7 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 	if len(trees) > 1 {
 		what += "s"
 	}
-	render(w, http.StatusOK, page{
+	render(w, r, http.StatusOK, page{
 		Title:  "mdserve stopped",
 		Crumbs: crumbs,
 		Kind:   "stopped",
@@ -417,6 +424,9 @@ func sameOrigin(r *http.Request) bool {
 // handlePath maps the URL path one to one onto the file tree, so relative
 // links in the docs work unchanged.
 func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
+	if _, raw := r.URL.Query()["raw"]; !raw {
+		r = s.withLive(r)
+	}
 	t := s.lookup(r.URL.Path)
 	switch {
 	case t != nil:
@@ -425,9 +435,9 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 		// Temporary: the tree may be withdrawn and another served here.
 		http.Redirect(w, r, s.byPrefix(r.URL.Path+"/").prefixURL(), http.StatusFound)
 	case r.URL.Path == "/":
-		s.serveIndex(w, http.StatusOK, "")
+		s.serveIndex(w, r, http.StatusOK, "")
 	default:
-		s.serveIndex(w, http.StatusNotFound, "Not found: "+r.URL.Path)
+		s.serveIndex(w, r, http.StatusNotFound, "Not found: "+r.URL.Path)
 	}
 }
 
@@ -435,9 +445,9 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 // button that deletes it, then the trees on other addresses, which only
 // their own server may stop. It answers at / and for paths outside every
 // tree.
-func (s *server) serveIndex(w http.ResponseWriter, status int, msg string) {
+func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, msg string) {
 	if s.shared {
-		s.serveSharedIndex(w, status, msg)
+		s.serveSharedIndex(w, r, status, msg)
 		return
 	}
 	esc := template.HTMLEscapeString
@@ -473,13 +483,13 @@ func (s *server) serveIndex(w http.ResponseWriter, status int, msg string) {
 		}
 		body.WriteString("</table>\n")
 	}
-	render(w, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
+	render(w, r, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
 		Body: template.HTML(body.String()), Status: s.about.status()})
 }
 
 // serveSharedIndex lists the trees shared without a secret, by name alone:
 // no lock paths, buttons or other addresses.
-func (s *server) serveSharedIndex(w http.ResponseWriter, status int, msg string) {
+func (s *server) serveSharedIndex(w http.ResponseWriter, r *http.Request, status int, msg string) {
 	esc := template.HTMLEscapeString
 	var body strings.Builder
 	if msg != "" {
@@ -495,7 +505,7 @@ func (s *server) serveSharedIndex(w http.ResponseWriter, status int, msg string)
 		}
 		body.WriteString("</ul>\n")
 	}
-	render(w, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
+	render(w, r, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
 		Body: template.HTML(body.String()), Shared: true})
 }
 
@@ -515,19 +525,25 @@ func (s *server) otherTrees() []servedTree {
 	return out
 }
 
-func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
-	rest := strings.TrimPrefix(r.URL.Path, t.prefix)
+// name is the file below the tree that urlPath names, or "." for its root.
+func (t *tree) name(urlPath string) string {
+	rest := strings.TrimPrefix(urlPath, t.prefix)
 	name := strings.TrimPrefix(path.Clean("/"+rest), "/")
 	if name == "" {
-		name = "."
+		return "."
 	}
+	return name
+}
+
+func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
+	name := t.name(r.URL.Path)
 	info, err := fs.Stat(t.fsys, name)
 	if ref := (*refusal)(nil); errors.As(err, &ref) {
-		t.fail(w, name, http.StatusForbidden, t.why(ref))
+		t.fail(w, r, name, http.StatusForbidden, t.why(ref))
 		return
 	}
 	if err != nil {
-		t.fail(w, name, http.StatusNotFound, "Not found: "+name)
+		t.fail(w, r, name, http.StatusNotFound, "Not found: "+name)
 		return
 	}
 	if info.IsDir() {
@@ -561,6 +577,10 @@ func isMarkdown(name string) bool {
 	return false
 }
 
+func isReadme(name string) bool {
+	return strings.EqualFold(strings.TrimSuffix(name, path.Ext(name)), "readme") && isMarkdown(name)
+}
+
 func isText(b []byte) bool {
 	return utf8.Valid(b) && bytes.IndexByte(b, 0) < 0
 }
@@ -568,15 +588,15 @@ func isText(b []byte) bool {
 func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string) {
 	b, err := fs.ReadFile(t.fsys, name)
 	if err != nil {
-		t.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	body, err := t.pandoc(r.Context(), b, true)
 	if err != nil {
-		t.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	t.render(w, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
+	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
 }
 
 // serveCode shows a text file as a highlighted code page with numbered,
@@ -584,7 +604,7 @@ func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string
 func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
 	b, err := fs.ReadFile(t.fsys, name)
 	if err != nil {
-		t.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if !isText(b) {
@@ -601,11 +621,11 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 	md.WriteString(fence + "\n")
 	body, err := t.pandoc(r.Context(), md.Bytes(), false)
 	if err != nil {
-		t.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	body = template.HTML(lineAnchors.Replace(string(body)))
-	t.render(w, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: body, Raw: true})
+	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: body, Raw: true})
 }
 
 // lineAnchors renames pandoc's line ids from cb1-42 to L42, the form GitHub
@@ -650,13 +670,13 @@ func longestRun(b []byte, c byte) int {
 func (t *tree) serveRaw(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
 	f, err := t.fsys.Open(name)
 	if err != nil {
-		t.fail(w, name, http.StatusNotFound, "Not found: "+name)
+		t.fail(w, r, name, http.StatusNotFound, "Not found: "+name)
 		return
 	}
 	defer f.Close()
 	rs, ok := f.(io.ReadSeeker)
 	if !ok {
-		t.fail(w, name, http.StatusInternalServerError, "file is not seekable")
+		t.fail(w, r, name, http.StatusInternalServerError, "file is not seekable")
 		return
 	}
 	if strings.ToLower(path.Ext(name)) != ".svg" {
@@ -673,7 +693,7 @@ func (t *tree) serveRaw(w http.ResponseWriter, r *http.Request, name string, inf
 func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	entries, err := fs.ReadDir(t.fsys, name)
 	if err != nil {
-		t.fail(w, name, http.StatusInternalServerError, err.Error())
+		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	type item struct {
@@ -704,7 +724,7 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 				dir = info.IsDir()
 			}
 		}
-		if ref == nil && !dir && readme == "" && strings.EqualFold(strings.TrimSuffix(n, path.Ext(n)), "readme") && isMarkdown(n) {
+		if ref == nil && !dir && readme == "" && isReadme(n) {
 			readme = n
 		}
 		items = append(items, item{n, dir, ref})
@@ -751,7 +771,7 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 			}
 		}
 	}
-	t.render(w, http.StatusOK, page{
+	t.render(w, r, http.StatusOK, page{
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),
 		Kind:   "dir",
@@ -799,7 +819,8 @@ type page struct {
 	Status  string       // the server's age, on the index
 	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
-	Shared  bool // a shared server's page, which has no button
+	Shared  bool   // a shared server's page, which has no button
+	Live    string // the URL of the page's live reload stream, or ""
 }
 
 func (t *tree) title(name string) string {
@@ -835,7 +856,8 @@ func (t *tree) crumbs(name string) []crumb {
 	return out
 }
 
-func render(w http.ResponseWriter, status int, p page) {
+func render(w http.ResponseWriter, r *http.Request, status int, p page) {
+	p.Live = liveURL(r)
 	var b bytes.Buffer
 	if err := layout.ExecuteTemplate(&b, "page", p); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -851,9 +873,9 @@ func render(w http.ResponseWriter, status int, p page) {
 
 // render gives the page this tree's Delete lock button, unless the tree is
 // shared.
-func (t *tree) render(w http.ResponseWriter, status int, p page) {
+func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Tree, p.Shared = t.prefix, t.shared
-	render(w, status, p)
+	render(w, r, status, p)
 }
 
 // why is what a refusal page says: the reason in full, or on a shared tree
@@ -865,8 +887,8 @@ func (t *tree) why(ref *refusal) string {
 	return ref.Error()
 }
 
-func (t *tree) fail(w http.ResponseWriter, name string, status int, msg string) {
-	t.render(w, status, page{
+func (t *tree) fail(w http.ResponseWriter, r *http.Request, name string, status int, msg string) {
+	t.render(w, r, status, page{
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),
 		Kind:   "error",

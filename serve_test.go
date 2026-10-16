@@ -58,7 +58,7 @@ func TestCheckDirRefusesHome(t *testing.T) {
 
 // The watcher wakes on a change in a watched directory.
 func TestWatcherWakes(t *testing.T) {
-	w := newWatcher()
+	w := newWatcher(lockMask)
 	defer w.close()
 	dir := t.TempDir()
 	if w.add(dir) < 0 {
