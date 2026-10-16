@@ -38,6 +38,7 @@ func newWatcher(mask uint32) *watcher {
 	w := &watcher{fd: -1, mask: mask, wake: make(chan struct{}, 1)}
 	fd, err := inotifyInit(syscall.IN_NONBLOCK | syscall.IN_CLOEXEC)
 	if err != nil {
+		logErr("inotify unavailable, polling every second: %v", err)
 		w.poll.Store(true)
 		return w
 	}
@@ -78,7 +79,9 @@ func (w *watcher) add(dir string) int {
 		return -1
 	}
 	if err != nil {
-		w.poll.Store(true)
+		if !w.poll.Swap(true) {
+			logErr("cannot watch %s, polling every second: %v", dir, err)
+		}
 		return -1
 	}
 	return wd

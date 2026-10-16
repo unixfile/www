@@ -125,6 +125,7 @@ func kill(c config) int {
 // stopServer sends the server on ep SIGTERM and waits until it has removed
 // the locks of trees.
 func stopServer(ep netip.AddrPort, pid int, trees []servedTree) error {
+	logInfo("sends SIGTERM to the server on %s, pid %d", ep, pid)
 	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return &errno{errnoOf(err), "cannot stop the server on " + ep.String() + ": " + err.Error()}
 	}

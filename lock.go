@@ -95,10 +95,13 @@ func findLive(path string) (lockInfo, bool) {
 	if err != nil {
 		return lockInfo{}, false
 	}
-	if l := parseLock(b); l.live(bootID()) {
+	l := parseLock(b)
+	if l.live(bootID()) {
 		return l, true
 	}
-	os.Remove(path)
+	if os.Remove(path) == nil {
+		logInfo("removed stale lock %s: pid %d is gone or from an earlier boot", path, l.pid)
+	}
 	return lockInfo{}, false
 }
 

@@ -59,7 +59,7 @@ var csp = "default-src 'none'; script-src " + scriptSrc(liveJS) + "; connect-src
 type server struct {
 	mu     sync.RWMutex
 	trees  []*tree
-	stop   func([]*tree) // withdraws trees; set by the hub
+	stop   func([]*tree, string) // withdraws trees for a cause; set by the hub
 	about  about
 	shared bool  // on an address beyond loopback: it shows the trees and nothing of the machine
 	live   *live // nil in tests that do without live reload
@@ -124,7 +124,7 @@ func clock(t time.Time) string {
 }
 
 func newServer() *server {
-	return &server{stop: func([]*tree) {}}
+	return &server{stop: func([]*tree, string) {}}
 }
 
 // tree is one served directory, exposed with everything below it.
@@ -278,8 +278,61 @@ func (s *server) handler() http.Handler {
 	}
 	mux.HandleFunc("GET /_mdserve/live", s.handleLive)
 	mux.HandleFunc("GET /", s.handlePath)
-	return guard(mux, s.shared)
+	return s.logged(guard(mux, s.shared))
 }
+
+// logged records each request but those that come with every page: live
+// reload streams, the stylesheet, fonts and the favicon. A shared server
+// adds the visitor's address. A secret tree's token stays out of the log.
+func (s *server) logged(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p == "/favicon.ico" || strings.HasPrefix(p, "/_mdserve/") && p != "/_mdserve/stop" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		uri := r.URL.RequestURI()
+		if t := s.lookup(p); t != nil && t.secret {
+			uri = "/<token>/" + strings.TrimPrefix(uri, t.prefix)
+		} else if t := s.byPrefix(p + "/"); t != nil && t.secret {
+			// The secret path without its slash, which redirects.
+			uri = "/<token>" + strings.TrimPrefix(uri, p)
+		}
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		msg := fmt.Sprintf("%s %s %d %dms", r.Method, uri, sw.status, time.Since(start).Milliseconds())
+		if s.shared {
+			msg += " from " + r.RemoteAddr
+		}
+		if sw.status >= 500 {
+			logErr("%s", msg)
+		} else {
+			logInfo("%s", msg)
+		}
+	})
+}
+
+// statusWriter keeps the status a handler sent, for the log.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+	wrote  bool
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	if !w.wrote {
+		w.status, w.wrote = code, true
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	w.wrote = true
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // guard rejects requests for any host but this machine, which defeats DNS
 // rebinding, and sets the headers every response needs. A shared server
@@ -368,19 +421,19 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "stop must come from an mdserve page", http.StatusForbidden)
 		return
 	}
-	trees, crumbs, what := s.list(), []crumb{{Label: "mdserve"}}, "Stopped mdserve"
+	trees, crumbs, what, why := s.list(), []crumb{{Label: "mdserve"}}, "Stopped mdserve", "Kill server button"
 	if prefix := r.PostFormValue("tree"); prefix != "" {
 		t := s.byPrefix(prefix)
 		if t == nil {
 			s.serveIndex(w, r, http.StatusNotFound, "Not served: "+prefix)
 			return
 		}
-		trees, crumbs, what = []*tree{t}, []crumb{t.rootCrumb()}, "Stopped serving "+t.label
+		trees, crumbs, what, why = []*tree{t}, []crumb{t.rootCrumb()}, "Stopped serving "+t.label, "Delete lock button"
 		// While other trees remain the server lives on: a button on the
 		// index returns there, and a tree's page links it.
 		if len(s.list()) > 1 {
 			if r.PostFormValue("from") == "index" {
-				s.stop(trees)
+				s.stop(trees, why+" on the index")
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				return
 			}
@@ -403,7 +456,7 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 	})
 	// stop only withdraws; the hub shuts down on its own goroutine, since
 	// Shutdown waits for this response to finish.
-	s.stop(trees)
+	s.stop(trees, why)
 }
 
 // sameOrigin trusts Sec-Fetch-Site when present: browsers set it and pages
@@ -908,6 +961,14 @@ func (t *tree) why(ref *refusal) string {
 }
 
 func (t *tree) fail(w http.ResponseWriter, r *http.Request, name string, status int, msg string) {
+	// The request's own entry says not found; a refusal or fault says why
+	// only here.
+	switch {
+	case status >= 500:
+		logErr("%s: %s", t.dir, msg)
+	case status != http.StatusNotFound:
+		logInfo("%s: %s", t.dir, msg)
+	}
 	t.render(w, r, status, page{
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),

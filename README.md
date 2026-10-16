@@ -50,6 +50,10 @@ Two variables set the default addresses. `--help` shows each value and where it 
 
 Add `?log` to a path for its git history, newest first: one line per commit, which opens to the full message and the diff. A tracked directory's listing opens it from its first entry, `<(git log)`, and a tracked doc or code page from a line at its top that names its last commit. A commit's hash opens its diff for that path, with a link to all its files. Shares show it without trailers, and only when other users could read the repo. See [doc/history.md](doc/history.md).
 
+## Log
+
+mdserve logs every run, server event and page request to the systemd journal: `journalctl --user -t mdserve`. Without a journal it writes `~/.local/state/mdserve/log`. See [doc/log.md](doc/log.md).
+
 ## Install
 
 mdserve needs pandoc 2.15 or later and git.

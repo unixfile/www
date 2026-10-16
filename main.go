@@ -233,6 +233,7 @@ func main() {
 	c, err := parseArgs(os.Args[1:])
 	switch {
 	case err != nil:
+		noteRun()
 		code := failNow(errnoOf(err), err.Error())
 		io.WriteString(os.Stderr, usageText)
 		os.Exit(code)
@@ -241,17 +242,24 @@ func main() {
 		defaultPort = 80
 	}
 	if c.help {
-		io.WriteString(os.Stdout, usageText+environment(os.Getuid()))
+		io.WriteString(os.Stdout, usageText+environment(os.Getuid())+logHelp())
 		os.Exit(0)
 	}
 	if hint := spacedShare(c); hint != "" {
+		noteRun()
 		os.Exit(failNow(syscall.ENOENT, hint))
 	}
 	ep, err := endpointOf(c, os.Getuid())
 	if err != nil {
+		noteRun()
 		os.Exit(failNow(errnoOf(err), err.Error()))
 	}
 	c.ep = ep
+	// --list, --kill and --restart without an address cover every server.
+	if !(c.list || c.kill || c.restart) || c.addr != "" || c.sharing {
+		setLogEndpoint(endpointName(ep))
+	}
+	noteRun()
 	if c.secret && c.token == "" {
 		c.token = newToken()
 	}
@@ -271,6 +279,14 @@ func main() {
 		os.Exit(run(c, &reporter{noopen: c.noopen}))
 	default:
 		os.Exit(detach(c))
+	}
+}
+
+// noteRun logs this run, once its endpoint is known or it fails without
+// one. A detached server is the same run, re-executed; its start says so.
+func noteRun() {
+	if os.Getenv(readyEnv) == "" {
+		logRun(os.Args[1:])
 	}
 }
 
@@ -505,6 +521,7 @@ func (r *reporter) finish() {
 }
 
 func (r *reporter) fail(code syscall.Errno, msg string) int {
+	logErr("E%d: %s", code, msg)
 	r.send("err", fmt.Sprintf("E%d: %s", code, msg))
 	r.finish()
 	return int(code)
@@ -549,6 +566,12 @@ func detach(c config) int {
 	cmd.Env = append(os.Environ(), readyEnv+"=3")
 	cmd.ExtraFiles = []*os.File{w}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	// Without a terminal, the server's stderr goes to the log, so a panic
+	// is kept.
+	if sink := logSink(); sink != nil {
+		cmd.Stderr = sink
+		defer sink.Close()
+	}
 	if err := cmd.Start(); err != nil {
 		return failNow(errnoOf(err), "cannot start server: "+err.Error())
 	}
@@ -575,6 +598,7 @@ func detach(c config) int {
 }
 
 func failNow(code syscall.Errno, msg string) int {
+	logErr("E%d: %s", code, msg)
 	fmt.Fprintf(os.Stderr, "E%d: %s\n", code, msg)
 	return int(code)
 }

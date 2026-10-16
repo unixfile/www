@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -65,6 +66,7 @@ func run(c config, rep *reporter) int {
 	lockPath := filepath.Join(dir, lockName(c.ep))
 	if l, ok := findLive(lockPath); ok {
 		reg.close()
+		logInfo("already served: %s", dir)
 		if c.secret {
 			rep.send("note", "already served; --secret applies to a new share. Delete "+lockPath+" and share again to change it.")
 		}
@@ -104,6 +106,7 @@ func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath, token 
 	for end := time.Now().Add(joinWait); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
 		if b, err := os.ReadFile(lockPath); err == nil {
 			if l := parseLock(b); l.live(bootID()) {
+				logInfo("joined the server on %s: %s", ep, dir)
 				report(rep, ep, l.url)
 				return 0
 			}
@@ -198,6 +201,7 @@ func ifaceOf(a netip.Addr) string {
 // the registry lock, which serve releases once dir is adopted and a crashed
 // server's leftovers are gone.
 func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home string) int {
+	logInfo("server starts on %s: %s", c.ep, build())
 	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(lockMask),
 		done: make(chan struct{}), fresh: map[net.Conn]bool{}}
 	defer h.w.close()
@@ -223,15 +227,16 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	h.srv.about = newAbout(c.ep)
 	h.srv.live = newLive()
 	defer h.srv.live.close()
-	h.httpd = &http.Server{Handler: h.srv.handler(), ReadHeaderTimeout: 10 * time.Second, ConnState: h.track}
+	h.httpd = &http.Server{Handler: h.srv.handler(), ReadHeaderTimeout: 10 * time.Second, ConnState: h.track,
+		ErrorLog: log.New(logWriter{}, "", 0)}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	defer signal.Stop(sigs)
 	go func() {
 		select {
-		case <-sigs:
-			h.shutdown()
+		case sig := <-sigs:
+			h.shutdown(signalName(sig))
 		case <-h.done:
 		}
 	}()
@@ -240,13 +245,31 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	url := h.origin + t.prefixURL()
 	report(rep, c.ep, url)
 	if err := h.httpd.Serve(ln); !h.halted.Load() {
-		h.shutdown()
+		h.shutdown("cannot serve: " + err.Error())
 		<-h.done
-		fmt.Fprintf(os.Stderr, "E%d: %s\n", syscall.EIO, err)
+		logErr("E%d: %s", syscall.EIO, err)
+		// Detached, stderr is the log itself.
+		if rep.pipe == nil {
+			fmt.Fprintf(os.Stderr, "E%d: %s\n", syscall.EIO, err)
+		}
 		return int(syscall.EIO)
 	}
 	<-h.done
+	logInfo("server exits")
 	return 0
+}
+
+// signalName names the signals serve stops on, as kill(1) does.
+func signalName(sig os.Signal) string {
+	switch sig {
+	case syscall.SIGINT:
+		return "SIGINT"
+	case syscall.SIGTERM:
+		return "SIGTERM"
+	case syscall.SIGHUP:
+		return "SIGHUP"
+	}
+	return sig.String()
 }
 
 // hub keeps the served trees in line with their locks and the registry. It
@@ -300,7 +323,9 @@ func (h *hub) dropLeftovers() {
 	links, _ := h.reg.links()
 	for link, target := range links {
 		if lockPath, _ := splitTarget(target); filepath.Base(lockPath) == lockName(h.ep) {
-			os.Remove(lockPath)
+			if os.Remove(lockPath) == nil {
+				logInfo("removed %s, left by a crashed server", lockPath)
+			}
 		}
 		os.Remove(link)
 	}
@@ -356,16 +381,26 @@ func (h *hub) adopt(lockPath, link, token string) (*tree, error) {
 	}
 	t.wd = h.w.add(dir)
 	h.srv.add(t)
+	logInfo("serves %s at %s", dir, h.where(t))
 	return t, nil
 }
 
-// withdraw stops serving t and removes its lock and link. A link that is
-// not the one the server knows is a new join for the same directory, and
-// stays. The caller holds the lock.
-func (h *hub) withdraw(t *tree) {
+// where is t's URL for the log; a secret tree's would hold its token.
+func (h *hub) where(t *tree) string {
+	if t.secret {
+		return h.origin + "/<token>/"
+	}
+	return h.origin + t.prefixURL()
+}
+
+// withdraw stops serving t for the cause why and removes its lock and link.
+// A link that is not the one the server knows is a new join for the same
+// directory, and stays. The caller holds the lock.
+func (h *hub) withdraw(t *tree, why string) {
 	if !h.srv.remove(t) {
 		return
 	}
+	logInfo("withdraws %s: %s", t.dir, why)
 	t.lock.remove()
 	if info, err := os.Lstat(t.link); err == nil && os.SameFile(info, t.linkInfo) {
 		os.Remove(t.link)
@@ -385,7 +420,7 @@ func (h *hub) sync() bool {
 	}
 	for _, t := range h.srv.list() {
 		if t.lock.gone() {
-			h.withdraw(t)
+			h.withdraw(t, "its lock "+t.lock.path+" was deleted or replaced")
 		}
 	}
 	served := map[string]bool{}
@@ -399,11 +434,12 @@ func (h *hub) sync() bool {
 		}
 		lockPath, token := splitTarget(target)
 		if _, err := h.adopt(lockPath, link, token); err != nil {
+			logErr("E%d: refused %s: %v", errnoOf(err), lockPath, err)
 			os.Remove(link)
 		}
 	}
 	if len(h.srv.list()) == 0 {
-		h.halt()
+		h.halt("its last tree is gone")
 		return false
 	}
 	return true
@@ -430,22 +466,22 @@ func (h *hub) loop() {
 
 // stop withdraws trees at the press of a button. The loop then stops the
 // server if no tree is left.
-func (h *hub) stop(trees []*tree) {
+func (h *hub) stop(trees []*tree, why string) {
 	h.lock()
 	for _, t := range trees {
-		h.withdraw(t)
+		h.withdraw(t, why)
 	}
 	h.unlock()
 	h.w.signal()
 }
 
 // shutdown withdraws every tree and stops the server, as on a signal.
-func (h *hub) shutdown() {
+func (h *hub) shutdown(why string) {
 	h.lock()
 	for _, t := range h.srv.list() {
-		h.withdraw(t)
+		h.withdraw(t, why)
 	}
-	h.halt()
+	h.halt(why)
 	h.unlock()
 	h.w.signal()
 }
@@ -454,10 +490,11 @@ func (h *hub) shutdown() {
 // mdserve finds the address free and starts a new server instead of
 // linking into this one. Open connections drain in the background. The
 // caller holds the lock.
-func (h *hub) halt() {
+func (h *hub) halt(why string) {
 	if h.halted.Swap(true) {
 		return
 	}
+	logInfo("server stops: %s", why)
 	h.ln.Close()
 	// Live reload streams never end on their own, and Shutdown waits for them.
 	h.srv.live.close()
