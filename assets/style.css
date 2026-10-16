@@ -143,12 +143,12 @@ ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
 main a { color: inherit; text-decoration-color: var(--muted); }
 main a:visited { text-decoration-color: var(--rule); }
 main a:hover { text-decoration-color: currentColor; }
-header a, ul.listing a, table.locks a, p.foot a, .mdserve a { color: inherit; text-decoration-color: var(--rule); }
-header a:visited, ul.listing a:visited, table.locks a:visited, p.foot a:visited, .mdserve a:visited { color: var(--muted); }
-header a:hover, ul.listing a:hover, table.locks a:hover, p.foot a:hover, .mdserve a:hover { text-decoration-color: currentColor; }
+header a, ul.listing a, table.locks a, p.latest a, .mdserve a { color: inherit; text-decoration-color: var(--rule); }
+header a:visited, ul.listing a:visited, table.locks a:visited, p.latest a:visited, .mdserve a:visited { color: var(--muted); }
+header a:hover, ul.listing a:hover, table.locks a:hover, p.latest a:hover, .mdserve a:hover { text-decoration-color: currentColor; }
 ul.listing li.refused span { color: var(--muted); font-size: 0.8em; }
 /* A history: hash and date are mdserve's and mono, subject and body the
-   author's and serif. A page's foot leads to its history. */
+   author's and serif. A page's top line leads to its history. */
 ol.log { list-style: none; padding: 0; }
 ol.log > li { margin: 0 0 2em; }
 ol.log p { margin: 0.45em 0; text-align: left; }
@@ -165,8 +165,8 @@ pre.diff span { display: block; min-height: 1.35em; }
 pre.diff span.add { background: var(--added); }
 pre.diff span.del { background: var(--removed); }
 pre.diff span.hunk, pre.diff span.meta { color: var(--muted); }
-p.foot { margin-top: 2em; border-top: 1px solid var(--rule); padding-top: 0.6em; color: var(--muted); }
-p.foot a { color: var(--text); }
+p.latest { margin-bottom: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 0.6em; color: var(--muted); }
+p.latest a { color: var(--text); }
 pre.error { white-space: pre-wrap; color: var(--danger); }
 header .age { color: var(--muted); }
 /* Kill server reaches every tree, so it alone wears the danger colour. */

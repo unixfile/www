@@ -101,19 +101,19 @@ func TestHistoryRedirectKeepsQuery(t *testing.T) {
 	}
 }
 
-// Doc and code pages name their last commit at the foot.
-func TestPageFootNamesLastCommit(t *testing.T) {
+// Doc and code pages name their last commit at the top.
+func TestPageTopNamesLastCommit(t *testing.T) {
 	needPandoc(t)
 	s, _ := repoTree(t)
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<p class="mdserve foot"><a href="?log">&lt;(git log)</a> <a class="hash" href="?commit=`) || !strings.Contains(body, "</span> "+subject+"</p>") {
-			t.Errorf("%s: no foot line with %q:\n%s", p, subject, body)
+		if !strings.Contains(body, `<p class="mdserve latest"><a href="?log">&lt;(git log)</a> <a class="hash" href="?commit=`) || !strings.Contains(body, "</span> "+subject+"</p>") {
+			t.Errorf("%s: no top line with %q:\n%s", p, subject, body)
 		}
 	}
 	if body := get(h, "/untracked/x.txt").Body.String(); strings.Contains(body, "?log") {
-		t.Errorf("untracked file has a foot line:\n%s", body)
+		t.Errorf("untracked file has a top line:\n%s", body)
 	}
 }
 

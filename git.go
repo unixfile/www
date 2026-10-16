@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// logLabel names the history in a listing, at a page's foot and in the
+// logLabel names the history in a listing, at a page's top and in the
 // crumbs: the command that makes it.
 const logLabel = "<(git log)"
 
@@ -212,7 +212,7 @@ func (t *tree) gitHead(name string) (gitDir, state string) {
 	return gitDir, string(out)
 }
 
-// commitLine is a commit's hash and date, as a history and a page's foot
+// commitLine is a commit's hash and date, as a history and a page's top
 // show them.
 func commitLine(c *commit) string {
 	esc := template.HTMLEscapeString
@@ -220,14 +220,14 @@ func commitLine(c *commit) string {
 		esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"))
 }
 
-// logFoot is the line at the foot of a doc or code page that leads to its
+// logLine is the line at the top of a doc or code page that leads to its
 // history and names its last commit, or "" when it has none.
-func (t *tree) logFoot(ctx context.Context, name string) string {
+func (t *tree) logLine(ctx context.Context, name string) string {
 	c := t.lastCommit(ctx, name)
 	if c == nil {
 		return ""
 	}
-	return fmt.Sprintf("<p class=\"mdserve foot\"><a href=\"?log\">%s</a> %s %s</p>\n",
+	return fmt.Sprintf("<p class=\"mdserve latest\"><a href=\"?log\">%s</a> %s %s</p>\n",
 		template.HTMLEscapeString(logLabel), commitLine(c), template.HTMLEscapeString(c.subject))
 }
 

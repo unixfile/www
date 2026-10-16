@@ -48,7 +48,7 @@ Two variables set the default addresses. `--help` shows each value and where it 
 
 ## History
 
-Add `?log` to a path for its git history, newest first. A tracked directory's listing opens it from its first entry, `<(git log)`, and a tracked doc or code page from a line at its foot that names its last commit. A commit's hash opens its diff for that path, with a link to all its files. Shares show it without trailers, and only when other users could read the repo. See [doc/history.md](doc/history.md).
+Add `?log` to a path for its git history, newest first. A tracked directory's listing opens it from its first entry, `<(git log)`, and a tracked doc or code page from a line at its top that names its last commit. A commit's hash opens its diff for that path, with a link to all its files. Shares show it without trailers, and only when other users could read the repo. See [doc/history.md](doc/history.md).
 
 ## Install
 

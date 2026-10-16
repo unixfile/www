@@ -624,7 +624,7 @@ func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body += template.HTML(t.logFoot(r.Context(), name))
+	body = template.HTML(t.logLine(r.Context(), name)) + body
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
 }
 
@@ -653,7 +653,7 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body = template.HTML(lineAnchors.Replace(string(body)) + t.logFoot(r.Context(), name))
+	body = template.HTML(t.logLine(r.Context(), name) + lineAnchors.Replace(string(body)))
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: body, Raw: true})
 }
 
