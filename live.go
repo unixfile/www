@@ -270,7 +270,7 @@ func (t *tree) version(h io.Writer, name string) byte {
 	}
 	for _, e := range entries {
 		n := e.Name()
-		if isLockName(n) {
+		if t.unlisted(name, n) {
 			continue
 		}
 		fmt.Fprintf(h, "%s %v\n", n, e.Type())

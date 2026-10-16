@@ -40,6 +40,13 @@ func (f treeFS) Open(name string) (fs.File, error) {
 	return file, nil
 }
 
+// unlisted reports whether a listing of dir leaves out its entry n: a
+// lock, or on a share a dot entry. The listing and its version agree, so
+// a hidden file never reloads the page.
+func (t *tree) unlisted(dir, n string) bool {
+	return isLockName(n) || t.shared && t.dotted(path.Join(dir, n))
+}
+
 // dotted reports whether name, or where it resolves inside the tree,
 // passes a name that begins with a dot.
 func (t *tree) dotted(name string) bool {

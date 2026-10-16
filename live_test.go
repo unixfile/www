@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -163,6 +164,33 @@ func TestListingVersion(t *testing.T) {
 	os.Remove(filepath.Join(dir, "a", "c.go"))
 	if version() != v {
 		t.Error("lock in a listing counts")
+	}
+}
+
+// A share hides dot entries, so they leave its listing's version alone.
+func TestSharedListingVersionSkipsDots(t *testing.T) {
+	s, _, dir, _ := liveTree(t)
+	s.lookup("/a/").shared = true
+	v := s.version("/a/")
+	os.WriteFile(filepath.Join(dir, "a", ".b.go.swp"), nil, 0o644)
+	if s.version("/a/") != v {
+		t.Error("dot entry counts on a share")
+	}
+}
+
+// A share keeps a private repo's commits from showing by a reload.
+func TestSharedClosedRepoVersion(t *testing.T) {
+	needGit(t)
+	s, _, dir, _ := liveTree(t)
+	exec.Command("git", "init", "-q", dir).Run()
+	commitAll(t, dir, "First")
+	os.Chmod(filepath.Join(dir, ".git"), 0o700)
+	s.lookup("/a/").shared = true
+	v := s.version("/a/")
+	os.WriteFile(filepath.Join(dir, "new.txt"), nil, 0o644)
+	commitAll(t, dir, "Second")
+	if s.version("/a/") != v {
+		t.Error("commit in a closed repo changes a shared page")
 	}
 }
 

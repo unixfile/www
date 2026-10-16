@@ -6,12 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -44,7 +47,7 @@ type commit struct {
 // variable from mdserve's own environment leaks in. git's safe.directory
 // check refuses repos that other users own.
 func git(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	args = append([]string{"-c", "protocol.allow=never", "--no-pager", "--literal-pathspecs"}, args...)
+	args = append([]string{"-c", "protocol.allow=never", "-c", "core.quotePath=false", "--no-pager", "--literal-pathspecs"}, args...)
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	for _, kv := range os.Environ() {
@@ -94,10 +97,18 @@ func (t *tree) gitLog(ctx context.Context, name string, n int) ([]commit, error)
 		return nil, errNoHistory
 	}
 	out, err := git(ctx, dir, "log", "--no-ext-diff", "--no-textconv", "--no-show-signature", "--no-color",
-		"-z", "--format=%H%n%h%n%aI%n%s%n%b", "-n", fmt.Sprint(n), "--", spec)
+		"-z", "--format="+commitFormat, "-n", fmt.Sprint(n), "--", spec)
 	if err != nil {
 		return nil, t.gitErr(err)
 	}
+	return t.commits(out), nil
+}
+
+// commitFormat is how git prints a commit for commits to read.
+const commitFormat = "%H%n%h%n%aI%n%s%n%b"
+
+// commits reads git's records in commitFormat, each ended by a NUL.
+func (t *tree) commits(out []byte) []commit {
 	var log []commit
 	for _, rec := range strings.Split(string(out), "\x00") {
 		f := strings.SplitN(rec, "\n", 5)
@@ -114,7 +125,7 @@ func (t *tree) gitLog(ctx context.Context, name string, n int) ([]commit, error)
 		}
 		log = append(log, c)
 	}
-	return log, nil
+	return log
 }
 
 // gitErr is err, or on a share errNoHistory.
@@ -143,19 +154,30 @@ func openRepo(ctx context.Context, dir string) bool {
 	return true
 }
 
-// dropTrailers cuts a body's trailer block: a last paragraph made only of
-// Key: value lines, such as Signed-off-by or Claude-Session.
+// dropTrailers cuts a body's trailer block, such as Signed-off-by or
+// Claude-Session. As git does, it takes the last paragraph for one when a
+// quarter of its lines are trailers, so a cherry-pick note left inside
+// does not save the rest. A line that starts with blank space continues
+// the trailer above it.
 func dropTrailers(body string) string {
 	paras := strings.Split(body, "\n\n")
+	trailers, others := 0, 0
 	for _, line := range strings.Split(paras[len(paras)-1], "\n") {
-		if !trailer.MatchString(line) {
-			return body
+		switch {
+		case trailer.MatchString(line):
+			trailers++
+		case trailers > 0 && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")):
+		default:
+			others++
 		}
+	}
+	if trailers == 0 || 3*trailers < others {
+		return body
 	}
 	return strings.TrimSpace(strings.Join(paras[:len(paras)-1], "\n\n"))
 }
 
-var trailer = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*: \S`)
+var trailer = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*[ \t]*:[ \t]*\S`)
 
 // lastCommit is the newest commit that touched name, or nil when none
 // did or name lies outside a repo.
@@ -169,7 +191,9 @@ func (t *tree) lastCommit(ctx context.Context, name string) *commit {
 
 // gitHead names the repo name lies in and its HEAD, so a page can watch
 // the repo and reload when a commit lands. Outside a repo it returns git's
-// complaint, which changes only if a repo appears.
+// complaint, which changes only if a repo appears. A share watches only
+// a repo whose history it shows, or a reload would tell when a commit
+// lands in one it calls private.
 func (t *tree) gitHead(name string) (gitDir, state string) {
 	dir, _, err := t.gitPlace(name)
 	if err != nil {
@@ -177,6 +201,9 @@ func (t *tree) gitHead(name string) (gitDir, state string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), gitWait)
 	defer cancel()
+	if t.shared && !openRepo(ctx, dir) {
+		return "", ""
+	}
 	out, err := git(ctx, dir, "rev-parse", "--absolute-git-dir", "HEAD")
 	if err != nil {
 		return "", string(out) + err.Error()
@@ -189,8 +216,8 @@ func (t *tree) gitHead(name string) (gitDir, state string) {
 // show them.
 func commitLine(c *commit) string {
 	esc := template.HTMLEscapeString
-	return fmt.Sprintf("<span class=\"hash\" title=\"%s\">%s</span> <span class=\"date\">%s</span>",
-		esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"))
+	return fmt.Sprintf("<a class=\"hash\" href=\"?commit=%s\" title=\"%s\">%s</a> <span class=\"date\">%s</span>",
+		esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"))
 }
 
 // logFoot is the line at the foot of a doc or code page that leads to its
@@ -207,14 +234,9 @@ func (t *tree) logFoot(ctx context.Context, name string) string {
 // serveLog lists the commits that touched name, newest first, each with
 // its hash, date, subject and body.
 func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir bool) {
-	crumbs := t.crumbs(name)
-	if dir && name != "." {
-		name += "/"
-	}
-	crumbs[len(crumbs)-1].Href = (&url.URL{Path: t.prefix + strings.TrimPrefix(name, ".")}).String()
-	crumbs = append(crumbs, crumb{Label: logLabel})
-	title := "git log " + t.title(strings.TrimSuffix(name, "/"))
-	log, err := t.gitLog(r.Context(), strings.TrimSuffix(name, "/"), maxLog+1)
+	crumbs := append(t.pageCrumbs(name, dir), crumb{Label: logLabel})
+	title := "git log " + t.title(name)
+	log, err := t.gitLog(r.Context(), name, maxLog+1)
 	if err != nil {
 		t.render(w, r, http.StatusNotFound, page{Title: title, Crumbs: crumbs, Kind: "error",
 			Body: template.HTML("<pre class=\"error\">" + template.HTMLEscapeString(err.Error()) + "</pre>")})
@@ -223,7 +245,11 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	esc := template.HTMLEscapeString
 	var body strings.Builder
 	if len(log) == 0 {
-		body.WriteString("<p class=\"mdserve\">No commit touches " + esc(name) + ".</p>\n")
+		shown := t.title(name)
+		if dir && name != "." {
+			shown += "/"
+		}
+		body.WriteString("<p class=\"mdserve\">No commit touches " + esc(shown) + ".</p>\n")
 	}
 	if len(log) > maxLog {
 		log = log[:maxLog]
@@ -240,6 +266,195 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	}
 	body.WriteString("</ol>\n")
 	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "log", Body: template.HTML(body.String())})
+}
+
+// pageCrumbs are the crumbs of the page at name, the last a link back to
+// it, for a page that hangs below it.
+func (t *tree) pageCrumbs(name string, dir bool) []crumb {
+	crumbs := t.crumbs(name)
+	href := name
+	switch {
+	case name == ".":
+		href = ""
+	case dir:
+		href += "/"
+	}
+	crumbs[len(crumbs)-1].Href = (&url.URL{Path: t.prefix + href}).String()
+	return crumbs
+}
+
+// maxDiff caps the bytes of diff a commit page shows.
+const maxDiff = 1 << 20
+
+var hexHash = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
+
+// fileDiff is one file's part of a commit's diff: its name in the tree
+// and the diff's lines below git's header. A file whose type changed has
+// two.
+type fileDiff struct {
+	name  string
+	lines []string
+}
+
+// gitShow reads the commit that hash names and its diff, limited to name.
+// A share leaves out files whose names begin with a dot. cut reports a
+// diff cut at maxDiff.
+func (t *tree) gitShow(ctx context.Context, name, hash string) (c *commit, diffs []fileDiff, cut bool, err error) {
+	dir, spec, err := t.gitPlace(name)
+	if err != nil {
+		return nil, nil, false, t.gitErr(err)
+	}
+	if t.shared && !openRepo(ctx, dir) {
+		return nil, nil, false, errNoHistory
+	}
+	// ^{commit} refuses a blob or a tree, which would show a file's text.
+	rev := hash + "^{commit}"
+	show := func(args ...string) ([]byte, error) {
+		args = append([]string{"show", "--no-ext-diff", "--no-textconv", "--no-show-signature", "--no-color",
+			"--no-renames", "--diff-merges=first-parent", "--relative", "--src-prefix=a/", "--dst-prefix=b/"}, args...)
+		return git(ctx, dir, args...)
+	}
+	out, err := show("-s", "-z", "--format="+commitFormat, rev, "--")
+	if err != nil {
+		return nil, nil, false, t.gitErr(err)
+	}
+	log := t.commits(out)
+	if len(log) == 0 {
+		return nil, nil, false, t.gitErr(errors.New("no commit " + hash))
+	}
+	out, err = show("--format=", "--patch", rev, "--", spec)
+	if err != nil {
+		return nil, nil, false, t.gitErr(err)
+	}
+	if len(out) > maxDiff {
+		out, cut = out[:bytes.LastIndexByte(out[:maxDiff], '\n')+1], true
+	}
+	for _, b := range strings.Split("\n"+string(out), "\ndiff --git ")[1:] {
+		head, _, _ := strings.Cut(b, "\n")
+		f, ok := diffName(head)
+		if !ok || t.shared && hasDotName(f) {
+			continue
+		}
+		switch {
+		case spec != ".":
+			f = name
+		case name != ".":
+			f = path.Join(name, f)
+		}
+		diffs = append(diffs, fileDiff{name: f, lines: diffLines(b)})
+	}
+	return &log[0], diffs, cut, nil
+}
+
+// diffName reads the file's name from the header of its diff, a/name
+// b/name, which git quotes as C does when the name holds a quote, a
+// backslash or a control character. Without renames both names are one.
+func diffName(head string) (string, bool) {
+	if !strings.HasPrefix(head, `"`) {
+		n := (len(head) - len("a/ b/")) / 2
+		if n < 1 || !strings.HasPrefix(head, "a/") {
+			return "", false
+		}
+		return head[2 : 2+n], true
+	}
+	for i := 1; i < len(head); i++ {
+		switch head[i] {
+		case '\\':
+			i++
+		case '"':
+			f, err := strconv.Unquote(head[:i+1])
+			return strings.TrimPrefix(f, "a/"), err == nil && strings.HasPrefix(f, "a/")
+		}
+	}
+	return "", false
+}
+
+// diffLines drops the header git puts above a file's diff, which names
+// the file again, and keeps the lines that say what kind of change it is.
+func diffLines(block string) []string {
+	var out []string
+	lines := strings.Split(strings.TrimSuffix(block, "\n"), "\n")[1:]
+	for i, line := range lines {
+		if strings.HasPrefix(line, "@@") {
+			return append(out, lines[i:]...)
+		}
+		switch {
+		case strings.HasPrefix(line, "index "), strings.HasPrefix(line, "--- "), strings.HasPrefix(line, "+++ "):
+		case strings.HasPrefix(line, "Binary files "):
+			out = append(out, "Binary file changed")
+		default:
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// serveCommit shows the commit that hash names: its message and its diff
+// limited to name, with a link to the diff across the whole tree.
+func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, dir bool, hash string) {
+	crumbs := t.pageCrumbs(name, dir)
+	crumbs = append(crumbs, crumb{Label: logLabel, Href: crumbs[len(crumbs)-1].Href + "?log"}, crumb{Label: hash})
+	title := "git show " + hash + " " + t.title(name)
+	fail := func(err error) {
+		t.render(w, r, http.StatusNotFound, page{Title: title, Crumbs: crumbs, Kind: "error",
+			Body: template.HTML("<pre class=\"error\">" + template.HTMLEscapeString(err.Error()) + "</pre>")})
+	}
+	if !hexHash.MatchString(hash) {
+		fail(errors.New("Not a commit hash: " + hash))
+		return
+	}
+	c, diffs, cut, err := t.gitShow(r.Context(), name, hash)
+	if err != nil {
+		fail(err)
+		return
+	}
+	crumbs[len(crumbs)-1].Label = c.short
+	esc := template.HTMLEscapeString
+	var body strings.Builder
+	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"mdserve\">%s</p>\n<p class=\"subject\">%s</p>\n", commitLine(c), esc(c.subject))
+	for _, para := range paragraphs(c.body) {
+		body.WriteString("<p>" + para + "</p>\n")
+	}
+	body.WriteString("</div>\n")
+	all := (&url.URL{Path: t.prefix, RawQuery: "commit=" + c.hash}).String()
+	shown := name
+	if dir {
+		shown += "/"
+	}
+	switch {
+	case name != "." && len(diffs) == 0:
+		fmt.Fprintf(&body, "<p class=\"mdserve\">It does not change %s. <a href=\"%s\">All files</a></p>\n", esc(shown), esc(all))
+	case name != ".":
+		fmt.Fprintf(&body, "<p class=\"mdserve\">Changes to %s. <a href=\"%s\">All files</a></p>\n", esc(shown), esc(all))
+	case len(diffs) == 0:
+		body.WriteString("<p class=\"mdserve\">It changes no file here.</p>\n")
+	}
+	for _, d := range diffs {
+		label := esc(d.name)
+		if _, err := fs.Stat(t.fsys, d.name); err == nil {
+			label = fmt.Sprintf("<a href=\"%s\">%s</a>", esc((&url.URL{Path: t.prefix + d.name}).String()), label)
+		}
+		fmt.Fprintf(&body, "<p class=\"mdserve file\">%s</p>\n<pre class=\"diff\">", label)
+		for _, line := range d.lines {
+			class := "meta"
+			switch {
+			case strings.HasPrefix(line, "@@"):
+				class = "hunk"
+			case strings.HasPrefix(line, "+"):
+				class = "add"
+			case strings.HasPrefix(line, "-"):
+				class = "del"
+			case strings.HasPrefix(line, " "):
+				class = "same"
+			}
+			fmt.Fprintf(&body, "<span class=\"%s\">%s</span>", class, esc(line))
+		}
+		body.WriteString("</pre>\n")
+	}
+	if cut {
+		fmt.Fprintf(&body, "<p class=\"mdserve\">The diff stops at %d KiB. <code>git show %s</code> shows the rest.</p>\n", maxDiff>>10, esc(c.short))
+	}
+	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "commit", Body: template.HTML(body.String())})
 }
 
 // paragraphs splits a commit body at blank lines and joins the lines of

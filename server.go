@@ -579,6 +579,10 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		t.serveLog(w, r, name, info.IsDir())
 		return
 	}
+	if hash, ok := r.URL.Query()["commit"]; ok {
+		t.serveCommit(w, r, name, info.IsDir(), hash[0])
+		return
+	}
 	if info.IsDir() {
 		t.serveDir(w, r, name)
 		return
@@ -738,7 +742,7 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	readme := ""
 	for _, e := range entries {
 		n := e.Name()
-		if isLockName(n) || t.shared && t.dotted(path.Join(name, n)) {
+		if t.unlisted(name, n) {
 			continue
 		}
 		dir := e.IsDir()

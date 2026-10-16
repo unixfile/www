@@ -82,6 +82,9 @@ func TestHistoryPage(t *testing.T) {
 	if body := get(h, "/index.md?log").Body.String(); strings.Contains(body, "Rename") || !strings.Contains(body, "Add the docs") {
 		t.Errorf("file history holds other files' commits:\n%s", body)
 	}
+	if body := get(h, "/.gitignore?log").Body.String(); !strings.Contains(body, `<a href="/.gitignore">.gitignore</a>`) {
+		t.Errorf("dot file's crumb lost its dot:\n%s", body)
+	}
 	if body := get(h, "/a/b.go?log").Body.String(); !strings.Contains(body, "Rename") || !strings.Contains(body, `<a href="/a/b.go">b.go</a>`) {
 		t.Errorf("file history:\n%s", body)
 	}
@@ -105,7 +108,7 @@ func TestPageFootNamesLastCommit(t *testing.T) {
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<p class="mdserve foot"><a href="?log">&lt;(git log)</a> <span class="hash"`) || !strings.Contains(body, "</span> "+subject+"</p>") {
+		if !strings.Contains(body, `<p class="mdserve foot"><a href="?log">&lt;(git log)</a> <a class="hash" href="?commit=`) || !strings.Contains(body, "</span> "+subject+"</p>") {
 			t.Errorf("%s: no foot line with %q:\n%s", p, subject, body)
 		}
 	}
@@ -172,11 +175,14 @@ func TestLoopbackKeepsTrailers(t *testing.T) {
 
 func TestDropTrailers(t *testing.T) {
 	for in, want := range map[string]string{
-		"Body.\n\nKey: v\nOther-Key: w": "Body.",
-		"Claude-Session: https://x":     "",
-		"Body.\n\nNot a trailer line":   "Body.\n\nNot a trailer line",
-		"Body.\n\nKey: v\nplain":        "Body.\n\nKey: v\nplain",
-		"":                              "",
+		"Body.\n\nKey: v\nOther-Key: w":                                    "Body.",
+		"Claude-Session: https://x":                                        "",
+		"Body.\n\nNot a trailer line":                                      "Body.\n\nNot a trailer line",
+		"Body.\n\nKey: v\nplain":                                           "Body.",
+		"Body.\n\n(cherry picked from commit abc)\nSigned-off-by: t <t@x>": "Body.",
+		"Body.\n\nCo-authored-by: a\n  <a@x>\nKey: v":                      "Body.",
+		"Body.\n\nOne\ntwo\nthree\nfour\nNote: five":                       "Body.\n\nOne\ntwo\nthree\nfour\nNote: five",
+		"": "",
 	} {
 		if got := dropTrailers(in); got != want {
 			t.Errorf("%q: %q, want %q", in, got, want)
@@ -195,5 +201,78 @@ func TestLiveReloadsOnCommit(t *testing.T) {
 	exec.Command("git", "-C", dir, "-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "--allow-empty", "-m", "Second").Run()
 	if !reloads(lines, 2*time.Second) {
 		t.Fatal("no reload after a commit")
+	}
+}
+
+// head is the hash of HEAD in dir.
+func head(t *testing.T, dir, rev string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", dir, "rev-parse", rev).Output()
+	if err != nil {
+		t.Fatalf("rev-parse %s: %v", rev, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// A commit page shows the message and the diff of the path it came from,
+// and links to the commit across the tree.
+func TestCommitPage(t *testing.T) {
+	s, dir := repoTree(t)
+	h := s.handler()
+	c := head(t, dir, "HEAD")
+	body := get(h, "/a/b.go?commit="+c).Body.String()
+	for _, want := range []string{
+		"Rename the package &lt;b&gt;",
+		`<span class="del">-func F() {}</span><span class="add">+package b</span>`,
+		`<a href="/?commit=` + c + `">All files</a>`,
+		`<p class="mdserve file"><a href="/a/b.go">a/b.go</a></p>`,
+		`<a href="/a/b.go?log">&lt;(git log)</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %q:\n%s", want, body)
+		}
+	}
+	if body := get(h, "/index.md?commit="+c).Body.String(); !strings.Contains(body, "It does not change index.md.") {
+		t.Errorf("commit that skips the file:\n%s", body)
+	}
+	first := get(h, "/?commit="+head(t, dir, "HEAD~1")).Body.String()
+	if !strings.Contains(first, `<a href="/index.md">index.md</a>`) || !strings.Contains(first, `<a href="/a/b.go">a/b.go</a>`) || strings.Contains(first, "All files") {
+		t.Errorf("whole commit:\n%s", first)
+	}
+	for _, bad := range []string{"zz", "-p", head(t, dir, "HEAD:a/b.go")} {
+		if rec := get(h, "/?commit="+bad); rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d:\n%s", bad, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestDiffName(t *testing.T) {
+	for in, want := range map[string]string{
+		"a/x.md b/x.md":                     "x.md",
+		"a/two words b/two words":           "two words",
+		`"a/q\"uote" "b/q\"uote"`:           `q"uote`,
+		`"a/tab\there.md" "b/tab\there.md"`: "tab\there.md",
+	} {
+		if got, ok := diffName(in); !ok || got != want {
+			t.Errorf("%q: %q %v, want %q", in, got, ok, want)
+		}
+	}
+}
+
+// A share's diffs leave out dot files.
+func TestShareDiffSkipsDots(t *testing.T) {
+	needGit(t)
+	s := shareTree(t)
+	dir := s.list()[0].dir
+	if s.list()[0].secret {
+		dir = s.list()[1].dir
+	}
+	exec.Command("git", "init", "-q", dir).Run()
+	os.WriteFile(filepath.Join(dir, ".env"), []byte("TOKEN=hidden\n"), 0o644)
+	commitAll(t, dir, "Shared")
+	exec.Command("chmod", "-R", "go+rX", filepath.Join(dir, ".git")).Run()
+	body := get(s.handler(), "/docs/?commit="+head(t, dir, "HEAD")).Body.String()
+	if !strings.Contains(body, "+docs/pub.txt") || strings.Contains(body, "hidden") {
+		t.Errorf("share diff:\n%s", body)
 	}
 }
