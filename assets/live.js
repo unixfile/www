@@ -1,13 +1,26 @@
 (() => {
 	const url = document.currentScript.dataset.live;
 	let es = null;
+	// A page goes down with its server: a stream lost for three seconds
+	// reloads it, and the browser says the server is gone. A restart's new
+	// server answers within a second or two and sends reload itself.
+	let lost = null;
+	const found = () => {
+		clearTimeout(lost);
+		lost = null;
+	};
 	const sync = () => {
 		if (document.hidden) {
 			if (es) es.close();
 			es = null;
+			found();
 		} else if (!es) {
 			es = new EventSource(url);
 			es.onmessage = () => location.reload();
+			es.onopen = found;
+			es.onerror = () => {
+				if (!lost) lost = setTimeout(() => location.reload(), 3000);
+			};
 		}
 	};
 	document.addEventListener("visibilitychange", sync);

@@ -22,9 +22,10 @@ import (
 )
 
 // liveJS is the one script a page may run. It holds an EventSource while
-// the tab is visible and reloads the page on its one event. A hidden tab
-// lets go, since a browser opens no more than six connections to a host,
-// and asks again when it shows. It also loads a commit's diff into a
+// the tab is visible and reloads the page on its one event, or when the
+// stream stays lost for three seconds, since the server is gone. A hidden
+// tab lets go, since a browser opens no more than six connections to a
+// host, and asks again when it shows. It also loads a commit's diff into a
 // history when its fold opens.
 //
 //go:embed assets/live.js
@@ -182,7 +183,9 @@ func (s *server) handleLive(w http.ResponseWriter, r *http.Request) {
 	wake, release := l.subscribe(s.watchDirs(p))
 	defer release()
 	w.Header().Set("Content-Type", "text/event-stream")
-	// A dropped stream comes back after a second, as on --restart.
+	// A dropped stream comes back after a second, as on --restart. One lost
+	// for three seconds reloads its page, so a page goes down with its
+	// server.
 	fmt.Fprint(w, "retry: 1000\n\n")
 	fl.Flush()
 	var grace <-chan time.Time
