@@ -566,12 +566,20 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		t.fail(w, r, name, http.StatusNotFound, "Not found: "+name)
 		return
 	}
-	if info.IsDir() {
-		if !strings.HasSuffix(r.URL.Path, "/") {
-			// Without the slash, relative links in the README resolve one level up.
-			http.Redirect(w, r, r.URL.EscapedPath()+"/", http.StatusMovedPermanently)
-			return
+	if info.IsDir() && !strings.HasSuffix(r.URL.Path, "/") {
+		// Without the slash, relative links in the README resolve one level up.
+		u := r.URL.EscapedPath() + "/"
+		if r.URL.RawQuery != "" {
+			u += "?" + r.URL.RawQuery
 		}
+		http.Redirect(w, r, u, http.StatusMovedPermanently)
+		return
+	}
+	if _, log := r.URL.Query()["log"]; log {
+		t.serveLog(w, r, name, info.IsDir())
+		return
+	}
+	if info.IsDir() {
 		t.serveDir(w, r, name)
 		return
 	}
@@ -616,6 +624,7 @@ func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
+	body += template.HTML(t.logFoot(r.Context(), name))
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
 }
 
@@ -644,7 +653,7 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body = template.HTML(lineAnchors.Replace(string(body)))
+	body = template.HTML(lineAnchors.Replace(string(body)) + t.logFoot(r.Context(), name))
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: body, Raw: true})
 }
 
@@ -761,6 +770,9 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 
 	var body strings.Builder
 	body.WriteString("<ul class=\"listing\">\n")
+	if t.lastCommit(r.Context(), name) != nil {
+		body.WriteString("<li class=\"log\"><a href=\"?log\">" + template.HTMLEscapeString(logLabel) + "</a></li>\n")
+	}
 	if name != "." {
 		body.WriteString("<li><a href=\"../\">../</a></li>\n")
 	}

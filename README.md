@@ -1,6 +1,6 @@
 # mdserve
 
-Browse trees of Markdown docs in the browser, rendered by pandoc on each request.
+Browse trees of Markdown docs in the browser, rendered by pandoc on each request, with their git history.
 
 ## Usage
 
@@ -46,12 +46,16 @@ Two variables set the default addresses. `--help` shows each value and where it 
 
 `mdserve --share` serves the tree to other machines on the LAN from a server of its own. It serves only what other users could read, hides dot entries such as `.git` and shows nothing of the machine around the tree. `--secret` puts the tree under a random token. See [doc/sharing.md](doc/sharing.md).
 
+## History
+
+Add `?log` to a path for its git history, newest first. A tracked directory's listing opens it from its first entry, `<(git log)`, and a tracked doc or code page from a line at its foot that names its last commit. Shares show it without trailers, and only when other users could read the repo. See [doc/history.md](doc/history.md).
+
 ## Install
 
-mdserve needs pandoc 2.15 or later.
+mdserve needs pandoc 2.15 or later and git.
 `make install` links `build/mdserve` into `~/.local/bin`.
-`make deb` builds a Debian package in `build/`, such as `mdserve_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on pandoc. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
-`make install-deb` builds the package and installs it with `sudo apt install`, which pulls in pandoc. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
+`make deb` builds a Debian package in `build/`, such as `mdserve_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on pandoc and git. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
+`make install-deb` builds the package and installs it with `sudo apt install`, which pulls in pandoc and git. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
 
 The package grants `/usr/bin/mdserve` one capability, `cap_net_bind_service`, so it can bind port 80 while running as the user. `getcap /usr/bin/mdserve` shows it. With it mdserve serves on port 80 and URLs carry no port; without it, as after `make install`, the port is 8080. mdserve also takes port 80 where the machine lets every user bind low ports.
 
@@ -64,7 +68,7 @@ URLs start with the served directory's path relative to home, eg `http://127.31.
 Below the prefix, URLs mirror the file tree, so relative links in the docs work unchanged. An absolute link such as `/x.md` points outside the prefix and gives 404. A `.md` file renders as a page, a directory as a listing with its README below, a text file as a highlighted code page with linkable lines, and anything else raw. Add `?raw` to any URL for the file itself. A tree inside another served tree answers for its own paths.
 A code page anchors lines as GitHub does, so `main.go#L42` lands on line 42 and highlights it. Bare URLs in a doc become links.
 
-Open pages reload when what they show changes. A doc or code page reloads when its file is written, a listing when a name in it or its README changes, and the index when a tree joins or leaves. A page whose file or tree is gone waits two seconds for it to return, then reloads to say so. Each page holds a server-sent events stream while its tab is visible; a hidden tab lets go, since a browser opens at most six connections to one host, and checks again when shown. The server watches the directory of each open page through inotify, since editors save by renaming a new file over the old one, and polls every second where inotify fails.
+Open pages reload when what they show changes. A doc or code page reloads when its file is written, a listing when a name in it or its README changes, any page in a repo when its HEAD moves, and the index when a tree joins or leaves. A page whose file or tree is gone waits two seconds for it to return, then reloads to say so. Each page holds a server-sent events stream while its tab is visible; a hidden tab lets go, since a browser opens at most six connections to one host, and checks again when shown. The server watches the directory of each open page and its repo's git directory through inotify, since editors save by renaming a new file over the old one, and polls every second where inotify fails.
 
 Each source line renders as its own paragraph, through a small pandoc Lua filter. Lines of one block sit close together; a blank line still gives the full paragraph gap. The line-centric spec format puts one rule per line, which standard Markdown joins into one paragraph.
 

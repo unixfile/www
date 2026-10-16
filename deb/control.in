@@ -3,7 +3,7 @@ Version: @VERSION@
 Architecture: @ARCH@
 Maintainer: unixfile <unixfile@users.noreply.github.com>
 Installed-Size: @SIZE@
-Depends: pandoc (>= 2.15), libcap2-bin
+Depends: pandoc (>= 2.15), git, libcap2-bin
 Recommends: xdg-utils
 Section: text
 Priority: optional

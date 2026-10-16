@@ -1,0 +1,10 @@
+# History
+
+Add `?log` to a path for its git history: the commits that touched it, newest first, with hash, date, subject and body. A directory's history covers everything below it. A listing whose directory has commits opens its history from its first entry, `<(git log)`. A doc or code page with commits ends in a line that leads there and names its last commit. A page outside a repo shows git's complaint.
+A history lists the 500 newest commits. Bodies wrapped by hand join into paragraphs; a list item or an indented line keeps its own line.
+mdserve runs `git log` and `git rev-parse` in the directory of what the page shows, after links resolve. A cloned repo's `.git/config` can name programs for git to run, so mdserve turns off external diff, textconv, signature checks and fetches, and drops `GIT_` variables from its environment. git's own `safe.directory` check refuses repos that other users own.
+
+## On shares
+
+A shared server shows history as loopback does, with three differences. History appears only when other users could read the repo's git directory, its `HEAD`, `objects` and `refs`; nobody reads through mdserve what git run as another user would not show them. Each message loses its trailer block, the last paragraph of `Key: value` lines such as `Signed-off-by:` and `Claude-Session:`, which carry emails and session links. A share never shows git's errors, which name paths on the machine, and says only `No git history here.`
+No history page shows authors or diffs, on a share or on loopback.

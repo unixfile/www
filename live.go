@@ -254,6 +254,9 @@ func (t *tree) version(h io.Writer, name string) byte {
 		io.WriteString(h, err.Error())
 		return '!'
 	}
+	// Pages in a repo show its history, which a commit changes.
+	_, head := t.gitHead(name)
+	io.WriteString(h, head+"\n")
 	if !info.IsDir() {
 		fmt.Fprintf(h, "%d %d", info.ModTime().UnixNano(), info.Size())
 		return 'f'
@@ -282,8 +285,9 @@ func (t *tree) version(h io.Writer, name string) byte {
 
 // watchDirs are the directories whose changes may change the page at
 // urlPath: the directory a listing shows, or the one holding the file, and
-// the same for the target when the path leads through a link. The index
-// needs none, since trees that join or leave kick every page.
+// the same for the target when the path leads through a link, and the
+// repo's git directory, which a commit writes. The
+// index needs none, since trees that join or leave kick every page.
 func (s *server) watchDirs(urlPath string) []string {
 	t := s.lookup(urlPath)
 	if t == nil {
@@ -301,6 +305,9 @@ func (s *server) watchDirs(urlPath string) []string {
 		} else {
 			dirs = append(dirs, filepath.Dir(p))
 		}
+	}
+	if gitDir, _ := t.gitHead(t.name(urlPath)); gitDir != "" {
+		dirs = append(dirs, gitDir)
 	}
 	return dirs
 }
