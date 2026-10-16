@@ -198,7 +198,8 @@ func ifaceOf(a netip.Addr) string {
 // the registry lock, which serve releases once dir is adopted and a crashed
 // server's leftovers are gone.
 func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home string) int {
-	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(lockMask), done: make(chan struct{})}
+	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(lockMask),
+		done: make(chan struct{}), fresh: map[net.Conn]bool{}}
 	defer h.w.close()
 	defer reg.close()
 	filter, err := writeFilter()
@@ -222,7 +223,7 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	h.srv.about = newAbout(c.ep)
 	h.srv.live = newLive()
 	defer h.srv.live.close()
-	h.httpd = &http.Server{Handler: h.srv.handler(), ReadHeaderTimeout: 10 * time.Second}
+	h.httpd = &http.Server{Handler: h.srv.handler(), ReadHeaderTimeout: 10 * time.Second, ConnState: h.track}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -266,6 +267,20 @@ type hub struct {
 	mu     sync.Mutex
 	halted atomic.Bool
 	done   chan struct{} // closed once open connections are drained
+	// fresh holds the connections that have sent no request yet.
+	fresh   map[net.Conn]bool
+	freshMu sync.Mutex
+}
+
+// track keeps fresh up to date.
+func (h *hub) track(c net.Conn, state http.ConnState) {
+	h.freshMu.Lock()
+	defer h.freshMu.Unlock()
+	if state == http.StateNew {
+		h.fresh[c] = true
+	} else {
+		delete(h.fresh, c)
+	}
 }
 
 func (h *hub) lock() {
@@ -446,6 +461,14 @@ func (h *hub) halt() {
 	h.ln.Close()
 	// Live reload streams never end on their own, and Shutdown waits for them.
 	h.srv.live.close()
+	// Shutdown also waits five seconds for a connection that has sent no
+	// request, in case one is on its way. Browsers open such connections
+	// ahead of need, and a stopping server has no page for them.
+	h.freshMu.Lock()
+	for c := range h.fresh {
+		c.Close()
+	}
+	h.freshMu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

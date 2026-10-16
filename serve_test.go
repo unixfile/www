@@ -179,6 +179,27 @@ func TestTreesShareOneServer(t *testing.T) {
 	}
 }
 
+// A connection that never sends a request does not hold the server past
+// its last lock. Browsers open such connections ahead of need, and so may
+// a client's pool, as in TestTreesShareOneServer.
+func TestSilentConnectionDoesNotHoldServer(t *testing.T) {
+	ep := testEndpoint(t)
+	dir := t.TempDir()
+	_, served := start(t, config{dir: dir, ep: ep})
+	c, err := net.Dial("tcp", ep.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	time.Sleep(50 * time.Millisecond)
+	os.Remove(filepath.Join(dir, lockName(ep)))
+	select {
+	case <-served:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a connection without a request held the server")
+	}
+}
+
 // Without inotify the server polls, and still sees a deleted lock.
 func TestPollingFallback(t *testing.T) {
 	ep := testEndpoint(t)
