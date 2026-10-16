@@ -57,6 +57,8 @@ mdserve needs pandoc 2.15 or later and git.
 `make deb` builds a Debian package in `build/`, such as `mdserve_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on pandoc and git. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
 `make install-deb` builds the package and installs it with `sudo apt install`, which pulls in pandoc and git. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
 
+To try a change without installing it, `make run` builds `build/mdserve` and serves this directory in the foreground on port 8080, beside an installed server on port 80. Stop it with Ctrl-C before the next run; a run that finds a server on 8080 hands its tree to that server, which keeps the old code.
+
 The package grants `/usr/bin/mdserve` one capability, `cap_net_bind_service`, so it can bind port 80 while running as the user. `getcap /usr/bin/mdserve` shows it. With it mdserve serves on port 80 and URLs carry no port; without it, as after `make install`, the port is 8080. mdserve also takes port 80 where the machine lets every user bind low ports.
 
 ## Notes
