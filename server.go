@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -127,6 +128,7 @@ func newServer() *server {
 // tree is one served directory, exposed with everything below it.
 type tree struct {
 	dir      string
+	realDir  string // dir with its links resolved
 	prefix   string // URL path of the tree, eg /scratch/notes/
 	label    string // the tree as the first breadcrumb, eg ~/scratch/notes
 	fsys     fs.FS
@@ -139,7 +141,13 @@ type tree struct {
 }
 
 func newTree(root *os.Root, dir, prefix, label, filter string) *tree {
-	return &tree{dir: dir, prefix: prefix, label: label, fsys: root.FS(), root: root, filter: filter, wd: -1}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		real = dir
+	}
+	t := &tree{dir: dir, realDir: real, prefix: prefix, label: label, root: root, filter: filter, wd: -1}
+	t.fsys = treeFS{t}
+	return t
 }
 
 func (s *server) add(t *tree) {
@@ -469,6 +477,10 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		name = "."
 	}
 	info, err := fs.Stat(t.fsys, name)
+	if ref := (*refusal)(nil); errors.As(err, &ref) {
+		t.fail(w, name, http.StatusForbidden, ref.Error())
+		return
+	}
 	if err != nil {
 		t.fail(w, name, http.StatusNotFound, "Not found: "+name)
 		return
@@ -622,7 +634,12 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	type item struct {
 		name string
 		dir  bool
+		ref  *refusal
 	}
+	// Entries reached through a link out of the tree are checked one by
+	// one, since each may be refused.
+	_, err = t.root.Stat(name)
+	outside := err != nil
 	var items []item
 	readme := ""
 	for _, e := range entries {
@@ -631,15 +648,21 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 			continue
 		}
 		dir := e.IsDir()
-		if e.Type()&fs.ModeSymlink != 0 {
-			if info, err := fs.Stat(t.fsys, path.Join(name, n)); err == nil {
+		var ref *refusal
+		if e.Type()&fs.ModeSymlink != 0 || outside {
+			ref = t.refused(path.Join(name, n))
+			if ref != nil {
+				if ref.link == path.Join(name, n) {
+					dir = ref.dir
+				}
+			} else if info, err := fs.Stat(t.fsys, path.Join(name, n)); err == nil {
 				dir = info.IsDir()
 			}
 		}
-		if !dir && readme == "" && strings.EqualFold(strings.TrimSuffix(n, path.Ext(n)), "readme") && isMarkdown(n) {
+		if ref == nil && !dir && readme == "" && strings.EqualFold(strings.TrimSuffix(n, path.Ext(n)), "readme") && isMarkdown(n) {
 			readme = n
 		}
-		items = append(items, item{n, dir})
+		items = append(items, item{n, dir, ref})
 	}
 	slices.SortStableFunc(items, func(a, b item) int {
 		if a.dir != b.dir {
@@ -662,6 +685,11 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 			label += "/"
 		}
 		href := (&url.URL{Path: label}).String()
+		if it.ref != nil {
+			fmt.Fprintf(&body, "<li class=\"refused\"><a href=\"%s\" title=\"%s\">%s</a> <span class=\"mdserve\">refused</span></li>\n",
+				template.HTMLEscapeString(href), template.HTMLEscapeString(it.ref.Error()), template.HTMLEscapeString(label))
+			continue
+		}
 		fmt.Fprintf(&body, "<li><a href=\"%s\">%s</a></li>\n",
 			template.HTMLEscapeString(href), template.HTMLEscapeString(label))
 	}

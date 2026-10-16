@@ -106,6 +106,7 @@ th, td { border-bottom: 1px solid #cccccc; padding: 0.2em 0.6em; text-align: lef
 img { max-width: 100%; }
 ul.listing { list-style: none; padding: 0; text-align: left; }
 ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
+ul.listing li.refused span { color: #666666; font-size: 0.8em; }
 article.readme { margin-top: 2em; border-top: 1px solid #cccccc; }
 pre.error { white-space: pre-wrap; color: #902000; }
 header .age { color: #666666; }
