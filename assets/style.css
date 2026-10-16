@@ -1,6 +1,19 @@
-/* Copied from md2html-default. Edits there do not reach mdserve. */
-/* mdserve addition: STIX Two Text from the machine, else from mdserve,
-   never from the network. */
+/* mdserve's stylesheet. It began as md2html-default's and is mdserve's
+   own now; the light palette is the user's design. */
+
+/* The page colours. The syntax colours below are pandoc's. */
+:root {
+  --page: #f6f6f6;
+  --text: #1a1a1a;
+  --muted: #666666;
+  --rule: #cccccc;
+  --danger: #902000;
+  --target: #fff3b0;
+  --gutter: #aaaaaa;
+}
+
+/* STIX Two Text from the machine, else from mdserve, never from the
+   network. */
 @font-face {
   font-family: "STIX Two Text";
   font-style: normal;
@@ -29,12 +42,12 @@
   src: local("STIX Two Text Bold Italic"), local("STIXTwoText-BoldItalic"),
        url("/_mdserve/fonts/STIXTwoText-BoldItalic.otf") format("opentype");
 }
-html { background: #f6f6f6; }
+html { background: var(--page); }
 body {
   max-width: 58ch;
   margin: 2em auto;
-  background: #f6f6f6;
-  color: #1a1a1a;
+  background: var(--page);
+  color: var(--text);
   font-family: "STIX Two Text", Georgia, serif;
   font-size: clamp(16px, 3.0vw, 38px);
   line-height: 1.2;
@@ -64,22 +77,30 @@ blockquote {
   body { max-width: 100%; }
 }
 
-/* mdserve additions: page chrome, code, tables, listings */
+/* Page chrome, code, tables, listings */
+/* raw and the stop button keep one place, top right: long crumbs wrap in
+   their own column. Only a phone, too narrow for both, drops the buttons
+   to a line of their own, still at the right. */
 header {
   display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
   gap: 0.5em 1em;
   text-align: left;
   hyphens: none;
   font-size: 0.8em;
-  border-bottom: 1px solid #cccccc;
+  border-bottom: 1px solid var(--rule);
   padding-bottom: 0.6em;
   margin-bottom: 1.5em;
 }
-header nav { overflow-wrap: anywhere; }
-header span { display: inline-flex; gap: 1em; align-items: baseline; }
+header nav { flex: 1 1 auto; min-width: 0; }
+/* A crumb stays whole: lines break between names, after the slash, and
+   inside a name only when it alone is wider than the column. */
+header nav > * { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  header { flex-wrap: wrap; }
+}
+header > span { display: inline-flex; gap: 1em; align-items: baseline; flex: none; margin-left: auto; }
 header form { display: inline; }
 header button {
   font: inherit;
@@ -90,8 +111,9 @@ header button {
   padding: 0.15em 0.7em;
   cursor: pointer;
 }
-/* What mdserve says is mono; what the document says is serif. */
-pre, code, header, .mdserve { font-family: ui-monospace, "Iosevka", monospace; }
+/* What mdserve says is mono, file names in a listing included; what the
+   document says is serif. */
+pre, code, header, .mdserve, ul.listing { font-family: ui-monospace, "Iosevka", monospace; }
 pre {
   font-size: 0.7em;
   line-height: 1.35;
@@ -102,27 +124,34 @@ pre {
 :not(pre) > code { font-size: 0.85em; }
 body.code { max-width: 120ch; }
 table { border-collapse: collapse; margin: 1.2em 0; }
-th, td { border-bottom: 1px solid #cccccc; padding: 0.2em 0.6em; text-align: left; }
+th, td { border-bottom: 1px solid var(--rule); padding: 0.2em 0.6em; text-align: left; }
 img { max-width: 100%; }
 ul.listing { list-style: none; padding: 0; text-align: left; }
 ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
-ul.listing li.refused span { color: #666666; font-size: 0.8em; }
-article.readme { margin-top: 2em; border-top: 1px solid #cccccc; }
-pre.error { white-space: pre-wrap; color: #902000; }
-header .age { color: #666666; }
+/* mdserve's own links, in the header, listings and the index, are quiet,
+   not lost: the text colour with a faint underline, which tells a link
+   from the current crumb or a refused entry on a share. The underline
+   turns full under the pointer, and a visited link turns grey. */
+header a, ul.listing a, table.locks a { color: inherit; text-decoration-color: var(--rule); }
+header a:visited, ul.listing a:visited, table.locks a:visited { color: var(--muted); }
+header a:hover, ul.listing a:hover, table.locks a:hover { text-decoration-color: currentColor; }
+ul.listing li.refused span { color: var(--muted); font-size: 0.8em; }
+article.readme { margin-top: 2em; border-top: 1px solid var(--rule); }
+pre.error { white-space: pre-wrap; color: var(--danger); }
+header .age { color: var(--muted); }
 /* Kill server reaches every tree, so it alone wears the danger colour. */
-header button.kill { background: #902000; border-color: #902000; color: #f6f6f6; }
+header button.kill { background: var(--danger); border-color: var(--danger); color: var(--page); }
 p.mdserve { font-size: 0.8em; text-align: left; hyphens: none; }
-p.warn { color: #902000; }
+p.warn { color: var(--danger); }
 p.mdserve code { font-size: inherit; }
-h2.mdserve { font-size: 0.8em; font-weight: normal; color: #666666; margin-top: 2.5em; }
+h2.mdserve { font-size: 0.8em; font-weight: normal; color: var(--muted); margin-top: 2.5em; }
 table.locks { font-size: 0.8em; width: 100%; }
 table.locks td { overflow-wrap: anywhere; vertical-align: baseline; }
 table.locks td:first-child { padding-left: 0; }
 table.locks td:last-child { padding-right: 0; }
 table.locks td:first-child:last-child { padding-right: 0; }
 table.locks td:first-child { width: 100%; }
-table.locks .since { white-space: nowrap; color: #666666; margin-left: 1em; }
+table.locks .since { white-space: nowrap; color: var(--muted); margin-left: 1em; }
 table.locks td + td { text-align: right; }
 table.locks form { display: inline; }
 table.locks button { font: inherit; color: inherit; background: none; border: 1px solid currentColor; border-radius: 0.2em; padding: 0.15em 0.7em; cursor: pointer; white-space: nowrap; }
@@ -132,7 +161,7 @@ div.lines { margin: 1.2em 0; }
 div.lines > p { margin: 0.45em 0; }
 
 /* the line a #L42 link points at */
-pre > code.sourceCode > span:target { background: #fff3b0; }
+pre > code.sourceCode > span:target { background: var(--target); }
 
 /* Pandoc's highlighting style, as pandoc 3.9 emits it for standalone HTML */
 pre > code.sourceCode { white-space: pre; position: relative; }
@@ -161,9 +190,9 @@ pre.numberSource code > span > a:first-child::before
     -khtml-user-select: none; -moz-user-select: none;
     -ms-user-select: none; user-select: none;
     padding: 0 4px; width: 4em;
-    color: #aaaaaa;
+    color: var(--gutter);
   }
-pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+pre.numberSource { margin-left: 3em; border-left: 1px solid var(--gutter);  padding-left: 4px; }
 div.sourceCode
   {   }
 @media screen {

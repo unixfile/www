@@ -307,7 +307,7 @@ func TestPrefixedTree(t *testing.T) {
 		t.Errorf("path outside the prefix: status %d, want 404", rec.Code)
 	}
 	body := get(h, "/scratch/my%20docs/a/b.go").Body.String()
-	if !strings.Contains(body, `<a href="/scratch/my%20docs/" title="~/scratch/my docs">my docs</a> / <a href="/scratch/my%20docs/a/">a</a> / b.go`) {
+	if !strings.Contains(body, `<a href="/scratch/my%20docs/" title="~/scratch/my docs">my docs</a>&nbsp;/ <a href="/scratch/my%20docs/a/">a</a>&nbsp;/ <span>b.go</span>`) {
 		t.Errorf("breadcrumbs lack the prefix: %s", body)
 	}
 }
@@ -342,7 +342,7 @@ func TestNestedTreeWins(t *testing.T) {
 	if body != "package a\n\nfunc F() {}\n" {
 		t.Errorf("nested tree served %q", body)
 	}
-	if body := get(s.handler(), "/a/").Body.String(); !strings.Contains(body, `<nav><a href="/">index</a> / <span title="inner">inner</span></nav>`) {
+	if body := get(s.handler(), "/a/").Body.String(); !strings.Contains(body, `<nav><a href="/">index</a>&nbsp;/ <span title="inner">inner</span></nav>`) {
 		t.Errorf("nested tree lost its label: %s", body)
 	}
 }
