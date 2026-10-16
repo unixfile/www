@@ -44,7 +44,10 @@
   src: local("STIX Two Text Bold Italic"), local("STIXTwoText-BoldItalic"),
        url("/_mdserve/fonts/STIXTwoText-BoldItalic.otf") format("opentype");
 }
-html { background: var(--page); }
+/* The header holds still from page to page: every page keeps one width,
+   and the scrollbar's space is kept on short pages too, so the centred
+   column does not shift when a long page brings a scrollbar. */
+html { background: var(--page); scrollbar-gutter: stable; }
 body {
   max-width: 58ch;
   margin: 2em auto;
