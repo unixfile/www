@@ -320,7 +320,7 @@ func TestIndexListsTrees(t *testing.T) {
 	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other", "")
 	rec := get(s.handler(), "/")
 	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, `<a href="/notes/" title="">~/notes</a>`) || !strings.Contains(body, `<a href="/other/" title="">~/other</a>`) {
+	if rec.Code != http.StatusOK || !strings.Contains(body, `<a href="/notes/" title=""><span class="seg">~/</span><wbr><span class="seg">notes</span></a>`) || !strings.Contains(body, `<a href="/other/" title=""><span class="seg">~/</span><wbr><span class="seg">other</span></a>`) {
 		t.Errorf("status %d, index lacks the trees: %s", rec.Code, body)
 	}
 	if !strings.Contains(body, `<button class="kill">Kill server</button>`) {
@@ -329,8 +329,22 @@ func TestIndexListsTrees(t *testing.T) {
 	if !strings.Contains(body, `name="tree" value="/notes/"><input type="hidden" name="from" value="index"><button>Delete lock</button>`) {
 		t.Errorf("index lacks a Delete lock button per tree: %s", body)
 	}
-	if rec := get(s.handler(), "/elsewhere/"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "~/notes") {
+	if rec := get(s.handler(), "/elsewhere/"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `href="/notes/"`) {
 		t.Errorf("path outside every tree: status %d, want 404 with the index", rec.Code)
+	}
+}
+
+// A path breaks after its slashes, and a URL keeps // with its scheme.
+func TestSegments(t *testing.T) {
+	for in, want := range map[string]string{
+		"~/a b/c":        `<span class="seg">~/</span><wbr><span class="seg">a b/</span><wbr><span class="seg">c</span>`,
+		"/tmp/x/":        `<span class="seg">/</span><wbr><span class="seg">tmp/</span><wbr><span class="seg">x/</span>`,
+		"http://h:80/a/": `<span class="seg">http://</span><wbr><span class="seg">h:80/</span><wbr><span class="seg">a/</span>`,
+		"<x>/y":          `<span class="seg">&lt;x&gt;/</span><wbr><span class="seg">y</span>`,
+	} {
+		if got := segments(in); got != want {
+			t.Errorf("segments(%q) = %s, want %s", in, got, want)
+		}
 	}
 }
 

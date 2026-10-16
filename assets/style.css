@@ -94,9 +94,12 @@ header {
   margin-bottom: 1.5em;
 }
 header nav { flex: 1 1 auto; min-width: 0; }
-/* A crumb stays whole: lines break between names, after the slash, and
-   inside a name only when it alone is wider than the column. */
-header nav > * { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+/* A crumb, or a name in a path on the index, stays whole: lines break
+   between names, after the slash, and inside a name only when it alone is
+   wider than the column. */
+header nav > *, .seg { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+/* A box does not take its link's underline unless asked. */
+.seg { text-decoration: inherit; }
 @media (max-width: 480px) {
   header { flex-wrap: wrap; }
 }
@@ -132,6 +135,12 @@ ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
    not lost: the text colour with a faint underline, which tells a link
    from the current crumb or a refused entry on a share. The underline
    turns full under the pointer, and a visited link turns grey. */
+/* A link in a document keeps the text colour and a grey underline, dark
+   enough to find among words. Visited, the underline fades; the words
+   stay readable. */
+main a { color: inherit; text-decoration-color: var(--muted); }
+main a:visited { text-decoration-color: var(--rule); }
+main a:hover { text-decoration-color: currentColor; }
 header a, ul.listing a, table.locks a { color: inherit; text-decoration-color: var(--rule); }
 header a:visited, ul.listing a:visited, table.locks a:visited { color: var(--muted); }
 header a:hover, ul.listing a:hover, table.locks a:hover { text-decoration-color: currentColor; }

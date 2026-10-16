@@ -471,7 +471,7 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">%s</span></td>"+
 				"<td><form method=\"post\" action=\"/_mdserve/stop\"><input type=\"hidden\" name=\"tree\" value=\"%s\">"+
 				"<input type=\"hidden\" name=\"from\" value=\"index\"><button>Delete lock</button></form></td></tr>\n",
-				esc(t.prefixURL()), esc(lockPath), esc(t.label), since, esc(t.prefix))
+				esc(t.prefixURL()), esc(lockPath), segments(t.label), since, esc(t.prefix))
 		}
 		body.WriteString("</table>\n")
 	}
@@ -479,12 +479,32 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 		body.WriteString("<h2 class=\"mdserve\">Other addresses</h2>\n<table class=\"locks mdserve\">\n")
 		for _, t := range others {
 			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">since %s</span></td></tr>\n",
-				esc(t.url), esc(filepath.Join(t.dir, lockName(t.ep))), esc(t.url), clock(t.since))
+				esc(t.url), esc(filepath.Join(t.dir, lockName(t.ep))), segments(t.url), clock(t.since))
 		}
 		body.WriteString("</table>\n")
 	}
 	render(w, r, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
 		Body: template.HTML(body.String()), Status: s.about.status()})
+}
+
+// segments writes a path or URL as one box per name, each ending in its
+// slash, so a line breaks between names and not inside one. The // of a
+// URL stays with its scheme.
+func segments(p string) string {
+	var parts []string
+	for _, s := range strings.SplitAfter(p, "/") {
+		switch {
+		case s == "":
+		case s == "/" && len(parts) > 0:
+			parts[len(parts)-1] += s
+		default:
+			parts = append(parts, s)
+		}
+	}
+	for i, s := range parts {
+		parts[i] = `<span class="seg">` + template.HTMLEscapeString(s) + `</span>`
+	}
+	return strings.Join(parts, "<wbr>")
 }
 
 // serveSharedIndex lists the trees shared without a secret, by name alone:
