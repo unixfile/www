@@ -62,7 +62,7 @@ func TestListingLeadsToHistory(t *testing.T) {
 
 // A directory's history covers its subtree; a file's covers the file.
 func TestHistoryPage(t *testing.T) {
-	s, _ := repoTree(t)
+	s, dir := repoTree(t)
 	h := s.handler()
 	rec := get(h, "/?log")
 	body := rec.Body.String()
@@ -79,6 +79,18 @@ func TestHistoryPage(t *testing.T) {
 	if !strings.Contains(body, `<span>&lt;(git log)</span>`) {
 		t.Errorf("no history crumb:\n%s", body)
 	}
+	// Each commit folds; its diff loads from the commit page, which the
+	// fold also links in its place.
+	c := head(t, dir, "HEAD")
+	for _, want := range []string{
+		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"mdserve\"><a class=\"hash\" href=\"?commit=" + c + `"`,
+		`</span> <span class="subject">Rename the package &lt;b&gt;</span></summary>`,
+		`<div class="diffs"><p class="mdserve"><a href="?commit=` + c + `">diff</a></p></div>` + "\n</details></li>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %q:\n%s", want, body)
+		}
+	}
 	if body := get(h, "/index.md?log").Body.String(); strings.Contains(body, "Rename") || !strings.Contains(body, "Add the docs") {
 		t.Errorf("file history holds other files' commits:\n%s", body)
 	}
@@ -90,6 +102,31 @@ func TestHistoryPage(t *testing.T) {
 	}
 	if body := get(h, "/untracked/?log").Body.String(); !strings.Contains(body, "No commit touches untracked/.") {
 		t.Errorf("untracked history:\n%s", body)
+	}
+}
+
+// A commit with no message still folds: its line holds the hash and date
+// alone. A message without a blank line is all subject.
+func TestHistoryOddMessages(t *testing.T) {
+	s, dir := repoTree(t)
+	os.WriteFile(filepath.Join(dir, "index.md"), []byte("# Changed\n"), 0o644)
+	if out, err := exec.Command("git", "-C", dir, "-c", "user.name=t", "-c", "user.email=t@x",
+		"commit", "-qa", "--allow-empty-message", "-m", "").CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, out)
+	}
+	os.WriteFile(filepath.Join(dir, "index.md"), []byte("# Again\n"), 0o644)
+	commitAll(t, dir, "One paragraph\nthat runs on")
+	body := get(s.handler(), "/index.md?log").Body.String()
+	empty, long := head(t, dir, "HEAD~1"), head(t, dir, "HEAD")
+	for _, want := range []string{
+		`<details data-diff="?commit=` + empty + `">`,
+		`</span> <span class="subject"></span></summary>`,
+		`<details data-diff="?commit=` + long + `">`,
+		`<span class="subject">One paragraph that runs on</span></summary>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %q:\n%s", want, body)
+		}
 	}
 }
 
@@ -227,6 +264,8 @@ func TestCommitPage(t *testing.T) {
 		`<a href="/?commit=` + c + `">All files</a>`,
 		`<p class="mdserve file"><a href="/a/b.go">a/b.go</a></p>`,
 		`<a href="/a/b.go?log">&lt;(git log)</a>`,
+		"</div>\n<div class=\"diffs\">\n<p class=\"mdserve\">Changes to a/b.go.",
+		"</pre>\n</div>\n",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("no %q:\n%s", want, body)

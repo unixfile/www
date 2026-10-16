@@ -149,11 +149,17 @@ header a:hover, ul.listing a:hover, table.locks a:hover, p.latest a:hover, .mdse
 ul.listing li.refused span { color: var(--muted); font-size: 0.8em; }
 /* A history: hash and date are mdserve's and mono, subject and body the
    author's and serif. A page's top line leads to its history. */
+/* Each commit is a fold: one line closed, message and diff open. The page
+   is as wide as a diff; a message keeps a doc's measure. */
+body.log { max-width: 120ch; }
 ol.log { list-style: none; padding: 0; }
-ol.log > li { margin: 0 0 2em; }
-ol.log p { margin: 0.45em 0; text-align: left; }
-ol.log p.mdserve { color: var(--muted); margin-bottom: 0; }
-ol.log p.subject, div.commit p.subject { font-weight: bold; margin-top: 0.2em; }
+ol.log > li { margin: 0 0 0.4em; }
+ol.log summary { cursor: pointer; text-align: left; }
+ol.log summary > .mdserve { color: var(--muted); }
+ol.log details[open] { margin-bottom: 2em; }
+ol.log details > p { max-width: 58ch; margin: 0.45em 0 0.45em 1.2em; text-align: left; }
+ol.log div.diffs > p.mdserve:only-child { margin-left: 1.2em; }
+div.commit p.subject { font-weight: bold; margin-top: 0.2em; }
 div.commit p { text-align: left; }
 div.commit p.mdserve { color: var(--muted); margin-bottom: 0; }
 /* A commit's diff: added and removed lines on a faint tint, git's own

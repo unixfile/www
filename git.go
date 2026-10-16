@@ -255,14 +255,19 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 		log = log[:maxLog]
 		fmt.Fprintf(&body, "<p class=\"mdserve\">The %d newest commits. <code>git log</code> lists the rest.</p>\n", maxLog)
 	}
+	// Each commit folds out to its message and its diff. The diff comes
+	// from the commit page when the fold opens, through the one script;
+	// without it, the link in its place opens that page.
 	body.WriteString("<ol class=\"log\">\n")
 	for i := range log {
 		c := &log[i]
-		fmt.Fprintf(&body, "<li>\n<p class=\"mdserve\">%s</p>\n<p class=\"subject\">%s</p>\n", commitLine(c), esc(c.subject))
+		show := esc("?commit=" + c.hash)
+		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"mdserve\">%s</span> <span class=\"subject\">%s</span></summary>\n",
+			show, commitLine(c), esc(c.subject))
 		for _, para := range paragraphs(c.body) {
 			body.WriteString("<p>" + para + "</p>\n")
 		}
-		body.WriteString("</li>\n")
+		fmt.Fprintf(&body, "<div class=\"diffs\"><p class=\"mdserve\"><a href=\"%s\">diff</a></p></div>\n</details></li>\n", show)
 	}
 	body.WriteString("</ol>\n")
 	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "log", Body: template.HTML(body.String())})
@@ -390,7 +395,8 @@ func diffLines(block string) []string {
 }
 
 // serveCommit shows the commit that hash names: its message and its diff
-// limited to name, with a link to the diff across the whole tree.
+// limited to name, with a link to the diff across the whole tree. A
+// history's fold takes the diff from div.diffs.
 func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, dir bool, hash string) {
 	crumbs := t.pageCrumbs(name, dir)
 	crumbs = append(crumbs, crumb{Label: logLabel, Href: crumbs[len(crumbs)-1].Href + "?log"}, crumb{Label: hash})
@@ -415,7 +421,7 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 	for _, para := range paragraphs(c.body) {
 		body.WriteString("<p>" + para + "</p>\n")
 	}
-	body.WriteString("</div>\n")
+	body.WriteString("</div>\n<div class=\"diffs\">\n")
 	all := (&url.URL{Path: t.prefix, RawQuery: "commit=" + c.hash}).String()
 	shown := name
 	if dir {
@@ -454,6 +460,7 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 	if cut {
 		fmt.Fprintf(&body, "<p class=\"mdserve\">The diff stops at %d KiB. <code>git show %s</code> shows the rest.</p>\n", maxDiff>>10, esc(c.short))
 	}
+	body.WriteString("</div>\n")
 	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "commit", Body: template.HTML(body.String())})
 }
 

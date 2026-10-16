@@ -48,7 +48,7 @@ Two variables set the default addresses. `--help` shows each value and where it 
 
 ## History
 
-Add `?log` to a path for its git history, newest first. A tracked directory's listing opens it from its first entry, `<(git log)`, and a tracked doc or code page from a line at its top that names its last commit. A commit's hash opens its diff for that path, with a link to all its files. Shares show it without trailers, and only when other users could read the repo. See [doc/history.md](doc/history.md).
+Add `?log` to a path for its git history, newest first: one line per commit, which opens to the full message and the diff. A tracked directory's listing opens it from its first entry, `<(git log)`, and a tracked doc or code page from a line at its top that names its last commit. A commit's hash opens its diff for that path, with a link to all its files. Shares show it without trailers, and only when other users could read the repo. See [doc/history.md](doc/history.md).
 
 ## Install
 
@@ -77,7 +77,7 @@ Each source line renders as its own paragraph, through a small pandoc Lua filter
 mdserve refuses to serve the home directory. A tree exposes everything below it, and home holds `~/.ssh`, `~/.gnupg` and every token file.
 Symlinks inside the tree are followed, absolute ones included. A link that leads out of the tree is followed only into a directory that holds a file named `.mdserve-follow`, or below one, and only when other users could read the target. A file needs the others-read bit and a directory others-read and others-execute, checked from the marker's directory down. So nobody reads through mdserve what `cat` would not show them.
 A store of private files linked into repos, such as lord's `~/.local/share/lord`, opens with one marker in its root. Secrets kept there at mode 600 stay refused. Opening a refused link shows the link, its target and the reason, and the listing marks it refused with the same on hover.
-A loopback server answers only to loopback addresses, `localhost` and names that `/etc/hosts` maps to loopback. Its Content-Security-Policy forbids every script but live reload's, which it allows by hash. Pandoc passes raw HTML through, so a README in a cloned repo could otherwise run code on this origin.
+A loopback server answers only to loopback addresses, `localhost` and names that `/etc/hosts` maps to loopback. Its Content-Security-Policy forbids every script but mdserve's own, which reloads pages and opens history folds, and which it allows by hash. Pandoc passes raw HTML through, so a README in a cloned repo could otherwise run code on this origin.
 
 Each endpoint has a registry directory such as `~/.local/state/mdserve/127.31.1.1-8080/` with a symlink to each lock its server holds. A joining `mdserve` adds a link, and the server sees it through inotify, writes the lock and serves the tree. Where inotify fails the server polls every second. An flock on the directory keeps a tree from joining a server on its way out. `$XDG_STATE_HOME` replaces `~/.local/state` when set.
 
