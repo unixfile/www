@@ -205,7 +205,7 @@ func TestStartDropsLeftovers(t *testing.T) {
 	}
 	staleLock := filepath.Join(stale, lockName(ep))
 	os.WriteFile(staleLock, []byte("url: x\npid: 1\n"), 0o644)
-	reg.add(staleLock)
+	reg.add(staleLock, "")
 	reg.close()
 
 	_, served := start(t, config{dir: dir, ep: ep})

@@ -2,51 +2,145 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 )
 
-// restart replaces the server on c.ep with one running the current binary
-// and serving the same trees. It reads the trees from the registry, sends
-// the server SIGTERM, waits for its locks to go and starts each tree again.
+// restart replaces the server on c.ep, when -a or --share names it, or
+// else every server, with one running the current binary and serving the
+// same trees, as --list and --kill pick their servers.
 func restart(c config) int {
-	pid, dirs, err := servedTrees(c.ep)
+	eps, err := endpoints()
 	if err != nil {
 		return failNow(errnoOf(err), err.Error())
 	}
-	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
-		return failNow(errnoOf(err), "cannot stop the server on "+c.ep.String()+": "+err.Error())
-	}
-	if !waitGone(dirs, c.ep) {
-		return failNow(syscall.ETIMEDOUT, "the server on "+c.ep.String()+" kept its locks")
-	}
-	exe, err := os.Executable()
-	if err != nil {
-		return failNow(errnoOf(err), "cannot find own executable: "+err.Error())
+	named := c.addr != "" || c.sharing
+	if named {
+		eps = []netip.AddrPort{c.ep}
 	}
 	code := 0
-	for _, dir := range dirs {
-		cmd := exec.Command(exe, "-n", "-a", c.ep.String(), "--", dir)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		if err := cmd.Run(); err != nil && code == 0 {
-			code = int(syscall.EIO)
-			var ee *exec.ExitError
-			if errors.As(err, &ee) {
-				code = ee.ExitCode()
-			}
+	for _, ep := range eps {
+		pid, trees, err := servedTrees(ep)
+		if errors.Is(err, syscall.ESRCH) && !named {
+			continue
+		}
+		if err == nil {
+			err = restartServer(ep, pid, trees)
+		}
+		if err != nil && code == 0 {
+			code = failNow(errnoOf(err), err.Error())
+		} else if err != nil {
+			failNow(errnoOf(err), err.Error())
 		}
 	}
 	return code
 }
 
-// servedTrees returns the server's PID and the trees it serves.
-func servedTrees(ep netip.AddrPort) (int, []string, error) {
+// restartServer reads the trees from the registry, sends the server
+// SIGTERM, waits for its locks to go and starts each tree again. A binary
+// that could not bind the server's port leaves the server alone, since
+// stopping it would drop its trees.
+func restartServer(ep netip.AddrPort, pid int, trees []servedTree) error {
+	if ep.Port() < 1024 && !lowPortOK() {
+		return &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
+			", so the server on " + ep.String() + " keeps its old one. Run the installed package's mdserve, which holds cap_net_bind_service"}
+	}
+	if err := stopServer(ep, pid, trees); err != nil {
+		return err
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return &errno{errnoOf(err), "cannot find own executable: " + err.Error()}
+	}
+	var failed error
+	for _, t := range trees {
+		args := []string{"-n", "-a", ep.String()}
+		if shared(ep) {
+			args = []string{"-n", "--share=" + ep.String()}
+		}
+		// The token goes on the command line, where ps shows it; the lock
+		// in the tree already holds it for anyone who can read the tree.
+		if t.token != "" {
+			args = append(args, "--secret="+t.token)
+		}
+		cmd := exec.Command(exe, append(args, "--", t.dir)...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil && failed == nil {
+			code := syscall.EIO
+			var ee *exec.ExitError
+			if errors.As(err, &ee) {
+				code = syscall.Errno(ee.ExitCode())
+			}
+			// The child has printed its own error.
+			failed = &errno{code, "cannot serve " + t.dir + " again on " + ep.String()}
+		}
+	}
+	return failed
+}
+
+// kill stops the server on c.ep when -a or --share names it, else every
+// server, and prints the trees each one served as --list does.
+func kill(c config) int {
+	eps, err := endpoints()
+	if err != nil {
+		return failNow(errnoOf(err), err.Error())
+	}
+	named := c.addr != "" || c.sharing
+	if named {
+		eps = []netip.AddrPort{c.ep}
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	defer w.Flush()
+	code := 0
+	for _, ep := range eps {
+		pid, trees, err := servedTrees(ep)
+		if errors.Is(err, syscall.ESRCH) && !named {
+			continue
+		}
+		if err == nil {
+			err = stopServer(ep, pid, trees)
+		}
+		if err != nil {
+			w.Flush()
+			code = failNow(errnoOf(err), err.Error())
+			continue
+		}
+		for _, t := range trees {
+			fmt.Fprintf(w, "%s\t%s\n", t.url, t.dir)
+		}
+	}
+	return code
+}
+
+// stopServer sends the server on ep SIGTERM and waits until it has removed
+// the locks of trees.
+func stopServer(ep netip.AddrPort, pid int, trees []servedTree) error {
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+		return &errno{errnoOf(err), "cannot stop the server on " + ep.String() + ": " + err.Error()}
+	}
+	dirs := make([]string, len(trees))
+	for i, t := range trees {
+		dirs[i] = t.dir
+	}
+	if !waitGone(dirs, ep) {
+		return &errno{syscall.ETIMEDOUT, "the server on " + ep.String() + " kept its locks"}
+	}
+	return nil
+}
+
+// servedTrees returns the server's PID and the trees it serves, sorted by
+// directory.
+func servedTrees(ep netip.AddrPort) (int, []servedTree, error) {
 	trees, err := liveTrees(ep)
 	if err != nil {
 		return 0, nil, err
@@ -54,12 +148,8 @@ func servedTrees(ep netip.AddrPort) (int, []string, error) {
 	if len(trees) == 0 {
 		return 0, nil, &errno{syscall.ESRCH, "no server runs on " + ep.String()}
 	}
-	dirs := make([]string, len(trees))
-	for i, t := range trees {
-		dirs[i] = t.dir
-	}
-	slices.Sort(dirs)
-	return trees[0].pid, dirs, nil
+	slices.SortFunc(trees, func(a, b servedTree) int { return strings.Compare(a.dir, b.dir) })
+	return trees[0].pid, trees, nil
 }
 
 // waitGone waits for the server to withdraw every tree. It closes its

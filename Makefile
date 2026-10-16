@@ -15,8 +15,12 @@ test:
 clean:
 	rm -rf build
 
+# install and install-deb end by moving running servers to the new binary,
+# so no server keeps old code. A server on port 80 stays put under the
+# binary from make install, which cannot bind it.
 install: build
 	ln -sf $(CURDIR)/build/mdserve $(HOME)/.local/bin/mdserve
+	-build/mdserve --restart
 
 uninstall:
 	rm -f $(HOME)/.local/bin/mdserve
@@ -56,6 +60,7 @@ deb:
 # usually leads PATH, and its binary lacks the capability for port 80.
 install-deb: uninstall deb
 	sudo apt install --reinstall ./$(DEB)
+	-/usr/bin/mdserve --restart
 
 uninstall-deb:
 	sudo apt remove mdserve

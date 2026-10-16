@@ -6,15 +6,21 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"crypto/rand"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"net"
 	"net/netip"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // readyEnv names the descriptor a detached child reports its start on.
@@ -54,28 +60,46 @@ func hasCap(status string, bit uint) bool {
 type config struct {
 	dir     string
 	addr    string
+	sharing bool
+	share   string // the address --share names; "" takes the default route's
+	secret  bool
+	token   string // the secret path's token; "" draws one at random
 	ep      netip.AddrPort
 	fg      bool
 	noopen  bool
 	help    bool
 	restart bool
 	list    bool
+	kill    bool
 }
 
 const usageText = `usage: mdserve [-fnh] [-a ip[:port]] [dir]
-       mdserve --restart [-a ip[:port]]
-       mdserve -l [-a ip[:port]] [dir]
+       mdserve [-fnh] --share[=host[:port]] [--secret[=token]] [dir]
+       mdserve --restart [-a ip[:port] | --share[=host[:port]]]
+       mdserve -l [-a ip[:port] | --share[=host[:port]]] [dir]
+       mdserve --kill [-a ip[:port] | --share[=host[:port]]]
 
   -a, --addr ip[:port]  serve on this loopback address; the port defaults to 80
                         when mdserve may bind it, else 8080
                         (default 127.31.N.1, N = uid - 1000)
+      --share[=host[:port]]
+                        share the tree on the address of the default route,
+                        or on this address or name beyond loopback, eg
+                        192.168.1.5, 0.0.0.0 or mate.peer.home; anyone who
+                        reaches it reads every file in the tree that other
+                        users could read
+      --secret[=token]  serve a shared tree under a random token, or this one,
+                        so only those holding the link reach it
   -f, --foreground      when no server runs on the address yet, serve in the
                         foreground until Ctrl-C
   -n, --no-open         print the URL without opening a browser
-      --restart         replace the server on the address with one running
-                        this binary, serving the same trees
+      --restart         replace every server with one running this binary,
+                        serving the same trees; with -a or --share, only the
+                        server on that address
   -l, --list            print each served tree's URL and directory; with a
                         directory, only the trees at or below it
+      --kill            stop every server and print the trees it served; with
+                        -a or --share, only the server on that address
   -h, --help            print this help
 `
 
@@ -88,6 +112,7 @@ func (c *config) switches() map[string]*bool {
 		"help":       &c.help,
 		"restart":    &c.restart,
 		"list":       &c.list,
+		"kill":       &c.kill,
 	}
 }
 
@@ -129,6 +154,24 @@ func parseArgs(args []string) (config, error) {
 				c.addr = v
 				continue
 			}
+			// --share, like --secret, takes its address only joined; alone
+			// it takes the default route's.
+			if name == "share" {
+				if hasVal && val == "" {
+					return c, &errno{syscall.EINVAL, "option --share= needs an address"}
+				}
+				c.sharing, c.share = true, val
+				continue
+			}
+			// --secret takes its token only joined, as GNU optional
+			// arguments do; without one the token is drawn at random.
+			if name == "secret" {
+				c.secret, c.token = true, val
+				if hasVal && !validToken(val) {
+					return c, &errno{syscall.EINVAL, "bad token " + val + ": want letters, digits, - and _"}
+				}
+				continue
+			}
 			p, ok := sw[name]
 			switch {
 			case !ok:
@@ -163,10 +206,19 @@ func parseArgs(args []string) (config, error) {
 	if c.list && (c.restart || c.fg) {
 		return c, &errno{syscall.EINVAL, "--list takes no --restart or -f"}
 	}
+	if c.kill && (len(dirs) > 0 || c.fg || c.restart || c.list) {
+		return c, &errno{syscall.EINVAL, "--kill takes no directory, -f, --restart or --list"}
+	}
+	if c.addr != "" && c.sharing {
+		return c, &errno{syscall.EINVAL, "-a and --share name one address each; give one"}
+	}
+	if c.secret && (!c.sharing || c.restart || c.list || c.kill) {
+		return c, &errno{syscall.EINVAL, "--secret goes with --share, and not with --restart, --list or --kill"}
+	}
 	switch len(dirs) {
 	case 0:
 		// --list without a directory lists every tree.
-		if !c.list {
+		if !c.list && !c.kill {
 			c.dir = "."
 		}
 	case 1:
@@ -184,18 +236,25 @@ func main() {
 		code := failNow(errnoOf(err), err.Error())
 		io.WriteString(os.Stderr, usageText)
 		os.Exit(code)
-	case c.help:
-		io.WriteString(os.Stdout, usageText)
-		os.Exit(0)
 	}
 	if lowPortOK() {
 		defaultPort = 80
 	}
-	ep, err := endpointFor(c.addr, os.Getuid())
+	if c.help {
+		io.WriteString(os.Stdout, usageText+environment(os.Getuid()))
+		os.Exit(0)
+	}
+	if hint := spacedShare(c); hint != "" {
+		os.Exit(failNow(syscall.ENOENT, hint))
+	}
+	ep, err := endpointOf(c, os.Getuid())
 	if err != nil {
 		os.Exit(failNow(errnoOf(err), err.Error()))
 	}
 	c.ep = ep
+	if c.secret && c.token == "" {
+		c.token = newToken()
+	}
 
 	fd := os.Getenv(readyEnv)
 	switch {
@@ -203,6 +262,8 @@ func main() {
 		os.Exit(restart(c))
 	case c.list:
 		os.Exit(list(c))
+	case c.kill:
+		os.Exit(kill(c))
 	case fd != "":
 		n, _ := strconv.Atoi(fd)
 		os.Exit(run(c, &reporter{pipe: os.NewFile(uintptr(n), "ready")}))
@@ -213,9 +274,64 @@ func main() {
 	}
 }
 
+// Environment variables that set the default addresses.
+const (
+	addrEnv  = "MDSERVE_ADDR"
+	shareEnv = "MDSERVE_SHARE"
+)
+
+// endpointOf returns where c serves. A bare --share takes MDSERVE_SHARE,
+// and a start without -a takes MDSERVE_ADDR; --list, --kill and --restart
+// without an address cover every server, so MDSERVE_ADDR leaves them be.
+// An error from a variable's value names the variable.
+func endpointOf(c config, uid int) (netip.AddrPort, error) {
+	if c.sharing {
+		if c.share == "" && os.Getenv(shareEnv) != "" {
+			ep, err := shareEndpoint(os.Getenv(shareEnv))
+			return ep, fromEnv(shareEnv, err)
+		}
+		return shareEndpoint(c.share)
+	}
+	if c.addr == "" && !c.list && !c.kill && !c.restart && os.Getenv(addrEnv) != "" {
+		ep, err := endpointFor(os.Getenv(addrEnv), uid)
+		return ep, fromEnv(addrEnv, err)
+	}
+	return endpointFor(c.addr, uid)
+}
+
+func fromEnv(name string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &errno{errnoOf(err), name + "=" + os.Getenv(name) + ": " + err.Error()}
+}
+
+// environment is the help's account of the default addresses: each value
+// and where it comes from.
+func environment(uid int) string {
+	addr := "built in"
+	if ep, err := endpointFor("", uid); err == nil {
+		addr = ep.String() + ", built in"
+	}
+	if v := os.Getenv(addrEnv); v != "" {
+		addr = v + ", from " + addrEnv
+	}
+	share := "the default route's address"
+	if a, err := routeAddr(); err == nil {
+		share = a.String() + ", the default route's address"
+	}
+	if v := os.Getenv(shareEnv); v != "" {
+		share = v + ", from " + shareEnv
+	}
+	return "\nenvironment:\n" +
+		"  " + addrEnv + "    default for a start without -a; now " + addr + "\n" +
+		"  " + shareEnv + "   default for a bare --share; now " + share + "\n"
+}
+
 // endpointFor returns where to serve: addr when given, else the user's own
 // 127.31.N.1 with N = uid - 1000, so users on one machine never collide.
-// The port is defaultPort unless addr names one. Only loopback serves; nothing beyond this machine may reach it.
+// The port is defaultPort unless addr names one. -a takes only loopback, so
+// a typo cannot share a tree; --share goes through shareEndpoint.
 func endpointFor(addr string, uid int) (netip.AddrPort, error) {
 	if addr == "" {
 		n := uid - 1000
@@ -224,18 +340,133 @@ func endpointFor(addr string, uid int) (netip.AddrPort, error) {
 		}
 		return netip.AddrPortFrom(netip.AddrFrom4([4]byte{127, 31, byte(n), 1}), defaultPort), nil
 	}
+	ep, err := parseEndpoint(addr, "127.31.1.2")
+	if err != nil {
+		return ep, err
+	}
+	if !ep.Addr().IsLoopback() {
+		return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": -a takes a loopback address; --share takes the others"}
+	}
+	return ep, nil
+}
+
+// shareEndpoint returns where to share: any IPv4 address beyond loopback,
+// 0.0.0.0 included, on defaultPort unless addr names one. With no addr it
+// is the default route's address, so a share needs no address remembered.
+func shareEndpoint(addr string) (netip.AddrPort, error) {
+	if addr == "" {
+		a, err := routeAddr()
+		if err != nil {
+			return netip.AddrPort{}, err
+		}
+		return netip.AddrPortFrom(a, defaultPort), nil
+	}
+	ep, err := parseEndpoint(addr, "192.168.1.5")
+	if err != nil {
+		if ep, err = resolveEndpoint(addr); err != nil {
+			return ep, err
+		}
+	}
+	if ep.Addr().IsLoopback() {
+		return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": --share takes an address beyond loopback; -a takes loopback"}
+	}
+	return ep, nil
+}
+
+// resolveEndpoint reads name[:port] and resolves the name to an IPv4
+// address that an interface here holds; only such an address can be bound.
+func resolveEndpoint(addr string) (netip.AddrPort, error) {
+	name, port := addr, defaultPort
+	if h, p, err := net.SplitHostPort(addr); err == nil {
+		n, err := strconv.ParseUint(p, 10, 16)
+		if err != nil || n == 0 {
+			return netip.AddrPort{}, &errno{syscall.EINVAL, "bad port in " + addr + ": want 1 to 65535"}
+		}
+		name, port = h, uint16(n)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip4", name)
+	if err != nil {
+		return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": want an IPv4 address or a name, eg 192.168.1.5 or mate.peer.home (" + err.Error() + ")"}
+	}
+	for _, ip := range ips {
+		if ifaceOf(ip.Unmap()) != "any" {
+			return netip.AddrPortFrom(ip.Unmap(), port), nil
+		}
+	}
+	return netip.AddrPort{}, &errno{syscall.EADDRNOTAVAIL, fmt.Sprintf("%s resolves to %v, which no interface here holds", name, ips)}
+}
+
+// spacedShare catches --share 192.168.1.5, where the address became the
+// directory: a bare --share with a directory that does not exist but reads
+// or resolves as an address. It returns the hint, or "".
+func spacedShare(c config) string {
+	if !c.sharing || c.share != "" || c.dir == "" {
+		return ""
+	}
+	if _, err := os.Stat(c.dir); !errors.Is(err, fs.ErrNotExist) {
+		return ""
+	}
+	if _, err := parseEndpoint(c.dir, ""); err != nil {
+		if _, err := resolveEndpoint(c.dir); errors.Is(err, syscall.EINVAL) {
+			return ""
+		}
+	}
+	return "no directory " + c.dir + "; to share on that address, write --share=" + c.dir
+}
+
+// routeAddr asks the kernel which source address it would use to reach
+// beyond this machine. Connecting a UDP socket picks the route and sends
+// nothing. 192.0.2.1 is reserved for documentation, so only the default
+// route leads there.
+func routeAddr() (netip.Addr, error) {
+	conn, err := net.Dial("udp4", "192.0.2.1:9")
+	if err != nil {
+		return netip.Addr{}, &errno{errnoOf(err), "no default route to share on (" + err.Error() + "); name an address, eg --share=192.168.1.5"}
+	}
+	defer conn.Close()
+	a := conn.LocalAddr().(*net.UDPAddr).AddrPort().Addr().Unmap()
+	if a.IsLoopback() {
+		return netip.Addr{}, &errno{syscall.ENETUNREACH, "the default route leaves from loopback; name an address, eg --share=192.168.1.5"}
+	}
+	return a, nil
+}
+
+// parseEndpoint reads ip[:port] as an IPv4 address and a port above 0.
+func parseEndpoint(addr, example string) (netip.AddrPort, error) {
 	ep, err := netip.ParseAddrPort(addr)
 	if err != nil {
 		a, aerr := netip.ParseAddr(addr)
 		if aerr != nil {
-			return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": want eg 127.31.1.2 or 127.31.1.2:9000"}
+			return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": want eg " + example + " or " + example + ":9000"}
 		}
 		ep = netip.AddrPortFrom(a, defaultPort)
 	}
-	if !ep.Addr().Is4() || !ep.Addr().IsLoopback() || ep.Port() == 0 {
-		return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": want an IPv4 loopback address and a port above 0"}
+	if !ep.Addr().Is4() || ep.Port() == 0 {
+		return netip.AddrPort{}, &errno{syscall.EINVAL, "bad address " + addr + ": want an IPv4 address and a port above 0"}
 	}
 	return ep, nil
+}
+
+// shared reports whether ep serves beyond this machine.
+func shared(ep netip.AddrPort) bool {
+	return !ep.Addr().IsLoopback()
+}
+
+// newToken draws 128 bits for a secret path, in lower-case base32 so the
+// link survives being read aloud or typed.
+func newToken() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b))
+}
+
+// validToken keeps a token to one URL path segment that needs no escaping.
+func validToken(s string) bool {
+	return s != "" && !strings.ContainsFunc(s, func(c rune) bool {
+		return !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_')
+	})
 }
 
 // errno is an error with the code mdserve exits with.

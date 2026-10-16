@@ -19,11 +19,14 @@ type servedTree struct {
 	ep       netip.AddrPort
 	pid      int
 	dir, url string
+	token    string    // the secret path's token, or ""
 	since    time.Time // when the lock was written
 }
 
-// readTree reads the lock at lockPath and reports whether its server runs.
-func readTree(ep netip.AddrPort, lockPath string) (servedTree, bool) {
+// readTree reads the lock that a registry link targets and reports whether
+// its server runs.
+func readTree(ep netip.AddrPort, target string) (servedTree, bool) {
+	lockPath, token := splitTarget(target)
 	b, err := os.ReadFile(lockPath)
 	if err != nil {
 		return servedTree{}, false
@@ -32,7 +35,7 @@ func readTree(ep netip.AddrPort, lockPath string) (servedTree, bool) {
 	if !l.live(bootID()) {
 		return servedTree{}, false
 	}
-	t := servedTree{ep: ep, pid: l.pid, dir: filepath.Dir(lockPath), url: l.url}
+	t := servedTree{ep: ep, pid: l.pid, dir: filepath.Dir(lockPath), url: l.url, token: token}
 	if info, err := os.Stat(lockPath); err == nil {
 		t.since = info.ModTime()
 	}
@@ -48,8 +51,8 @@ func peekTrees(ep netip.AddrPort) []servedTree {
 	}
 	links, _ := readLinks(dir)
 	var trees []servedTree
-	for _, lockPath := range links {
-		if t, ok := readTree(ep, lockPath); ok {
+	for _, target := range links {
+		if t, ok := readTree(ep, target); ok {
 			trees = append(trees, t)
 		}
 	}
@@ -72,11 +75,12 @@ func liveTrees(ep netip.AddrPort) ([]servedTree, error) {
 		return nil, &errno{errnoOf(err), "cannot read the registry " + reg.dir + ": " + err.Error()}
 	}
 	var trees []servedTree
-	for _, lockPath := range links {
+	for _, target := range links {
+		lockPath, _ := splitTarget(target)
 		if _, ok := findLive(lockPath); !ok {
 			continue
 		}
-		if t, ok := readTree(ep, lockPath); ok {
+		if t, ok := readTree(ep, target); ok {
 			trees = append(trees, t)
 		}
 	}
@@ -84,14 +88,14 @@ func liveTrees(ep netip.AddrPort) ([]servedTree, error) {
 }
 
 // list prints every served tree as its URL and directory, sorted by URL.
-// With -a it reads that address only; with a directory it keeps the trees
-// at or below it.
+// With -a or --share it reads that address only; with a directory it keeps
+// the trees at or below it.
 func list(c config) int {
 	eps, err := endpoints()
 	if err != nil {
 		return failNow(errnoOf(err), err.Error())
 	}
-	if c.addr != "" {
+	if c.addr != "" || c.sharing {
 		eps = slices.DeleteFunc(eps, func(ep netip.AddrPort) bool { return ep != c.ep })
 	}
 	under := ""

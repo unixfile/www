@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/netip"
+	"os"
 	"testing"
 )
 
@@ -27,6 +28,14 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"--restart", "-a", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2", restart: true}},
 		{[]string{"-l"}, config{list: true}},
 		{[]string{"--list", "docs"}, config{dir: "docs", list: true}},
+		{[]string{"--share=0.0.0.0"}, config{dir: ".", sharing: true, share: "0.0.0.0"}},
+		{[]string{"--share"}, config{dir: ".", sharing: true}},
+		{[]string{"--share", "docs"}, config{dir: "docs", sharing: true}},
+		{[]string{"--share=10.0.0.1:9000", "--secret", "docs"}, config{dir: "docs", sharing: true, share: "10.0.0.1:9000", secret: true}},
+		{[]string{"--share=10.0.0.1", "--secret=k3x9"}, config{dir: ".", sharing: true, share: "10.0.0.1", secret: true, token: "k3x9"}},
+		{[]string{"--restart", "--share=10.0.0.1"}, config{dir: ".", sharing: true, share: "10.0.0.1", restart: true}},
+		{[]string{"--kill"}, config{kill: true}},
+		{[]string{"--kill", "--share"}, config{sharing: true, kill: true}},
 	}
 	for _, tc := range ok {
 		got, err := parseArgs(tc.args)
@@ -49,6 +58,17 @@ func TestParseArgs(t *testing.T) {
 		{"--restart", "docs"},
 		{"--restart", "-f"},
 		{"-l", "--restart"},
+		{"--share="},
+		{"--share", "a", "b"},
+		{"-a", "127.31.1.2", "--share"},
+		{"--secret"},
+		{"--share", "--secret=a/b"},
+		{"--share", "--secret="},
+		{"--restart", "--share", "--secret"},
+		{"--kill", "docs"},
+		{"--kill", "-l"},
+		{"--kill", "--restart"},
+		{"--kill", "--share", "--secret"},
 	} {
 		if _, err := parseArgs(args); err == nil {
 			t.Errorf("%q: no error", args)
@@ -93,9 +113,21 @@ func TestOrigin(t *testing.T) {
 	for ep, want := range map[string]string{
 		"127.31.1.1:80":   "http://127.31.1.1",
 		"127.31.1.1:8080": "http://127.31.1.1:8080",
+		"10.0.0.1:80":     "http://10.0.0.1",
 	} {
 		if got := origin(netip.MustParseAddrPort(ep)); got != want {
 			t.Errorf("%s: %s, want %s", ep, got, want)
 		}
+	}
+}
+
+// A server on 0.0.0.0 hands out the machine's name.
+func TestOriginUnspecified(t *testing.T) {
+	name, err := os.Hostname()
+	if err != nil {
+		t.Skip("no hostname")
+	}
+	if got, want := origin(netip.MustParseAddrPort("0.0.0.0:8080")), "http://"+name+":8080"; got != want {
+		t.Errorf("0.0.0.0:8080: %s, want %s", got, want)
 	}
 }

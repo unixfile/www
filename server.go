@@ -54,10 +54,11 @@ const csp = "default-src 'none'; img-src 'self' data:; media-src 'self'; " +
 // server answers for every tree served on one endpoint. A request goes to
 // the tree with the longest prefix of its path.
 type server struct {
-	mu    sync.RWMutex
-	trees []*tree
-	stop  func([]*tree) // withdraws trees; set by the hub
-	about about
+	mu     sync.RWMutex
+	trees  []*tree
+	stop   func([]*tree) // withdraws trees; set by the hub
+	about  about
+	shared bool // on an address beyond loopback: it shows the trees and nothing of the machine
 }
 
 // about describes the server for its index: where it listens, since when,
@@ -90,12 +91,9 @@ func (a about) stale() bool {
 }
 
 // restartCmd is the command that moves this server's trees to the new
-// binary; a server off the user's default address needs -a.
+// binary; with no address it moves every server's.
 func (a about) restartCmd() string {
-	if def, err := endpointFor("", os.Getuid()); err == nil && def == a.ep {
-		return "mdserve --restart"
-	}
-	return "mdserve --restart -a " + a.ep.String()
+	return "mdserve --restart"
 }
 
 // status is the index header's account of the server's age.
@@ -138,6 +136,8 @@ type tree struct {
 	link     string      // registry link
 	linkInfo os.FileInfo // the link this server knows, to tell it from a new join
 	wd       int         // inotify watch on dir, or -1
+	shared   bool        // served beyond loopback: only what other users could read
+	secret   bool        // mounted under a token, and left off the index
 }
 
 func newTree(root *os.Root, dir, prefix, label, filter string) *tree {
@@ -232,6 +232,20 @@ func mount(dir, home string) (prefix, label string) {
 	}
 }
 
+// shareMount returns the prefix and label of a shared tree: its base name,
+// or the token under --secret. Neither tells a visitor where the tree lies.
+func shareMount(dir, token string) (prefix, label string) {
+	label = filepath.Base(dir)
+	switch {
+	case token != "":
+		return "/" + token + "/", label
+	case label == "/":
+		return "/", label
+	default:
+		return "/" + label + "/", label
+	}
+}
+
 func (t *tree) prefixURL() string {
 	return (&url.URL{Path: t.prefix}).String()
 }
@@ -252,20 +266,25 @@ func (s *server) handler() http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		w.Write(b)
 	})
-	mux.HandleFunc("POST /_mdserve/stop", s.handleStop)
+	// A shared server has no buttons: no visitor may stop it.
+	if !s.shared {
+		mux.HandleFunc("POST /_mdserve/stop", s.handleStop)
+	}
 	mux.HandleFunc("GET /", s.handlePath)
-	return guard(mux)
+	return guard(mux, s.shared)
 }
 
 // guard rejects requests for any host but this machine, which defeats DNS
-// rebinding, and sets the headers every response needs.
-func guard(next http.Handler) http.Handler {
+// rebinding, and sets the headers every response needs. A shared server
+// takes any host, since visitors use whatever name reaches it; a secret
+// path is its guard against rebinding.
+func guard(next http.Handler, anyHost bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			host = r.Host
 		}
-		if !localHost(host) {
+		if !anyHost && !localHost(host) {
 			http.Error(w, "mdserve answers only to this machine", http.StatusMisdirectedRequest)
 			return
 		}
@@ -417,6 +436,10 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 // their own server may stop. It answers at / and for paths outside every
 // tree.
 func (s *server) serveIndex(w http.ResponseWriter, status int, msg string) {
+	if s.shared {
+		s.serveSharedIndex(w, status, msg)
+		return
+	}
 	esc := template.HTMLEscapeString
 	var body strings.Builder
 	if msg != "" {
@@ -454,6 +477,28 @@ func (s *server) serveIndex(w http.ResponseWriter, status int, msg string) {
 		Body: template.HTML(body.String()), Status: s.about.status()})
 }
 
+// serveSharedIndex lists the trees shared without a secret, by name alone:
+// no lock paths, buttons or other addresses.
+func (s *server) serveSharedIndex(w http.ResponseWriter, status int, msg string) {
+	esc := template.HTMLEscapeString
+	var body strings.Builder
+	if msg != "" {
+		body.WriteString("<pre class=\"error\">" + esc(msg) + "</pre>\n")
+	}
+	trees := slices.DeleteFunc(s.list(), func(t *tree) bool { return t.secret })
+	if len(trees) == 0 {
+		body.WriteString("<p class=\"mdserve\">No tree is listed here.</p>\n")
+	} else {
+		body.WriteString("<ul class=\"listing\">\n")
+		for _, t := range trees {
+			fmt.Fprintf(&body, "<li><a href=\"%s\">%s/</a></li>\n", esc(t.prefixURL()), esc(t.label))
+		}
+		body.WriteString("</ul>\n")
+	}
+	render(w, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
+		Body: template.HTML(body.String()), Shared: true})
+}
+
 // otherTrees reads the registries of every other address, sorted by URL.
 func (s *server) otherTrees() []servedTree {
 	if !s.about.ep.IsValid() {
@@ -478,7 +523,7 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	info, err := fs.Stat(t.fsys, name)
 	if ref := (*refusal)(nil); errors.As(err, &ref) {
-		t.fail(w, name, http.StatusForbidden, ref.Error())
+		t.fail(w, name, http.StatusForbidden, t.why(ref))
 		return
 	}
 	if err != nil {
@@ -637,9 +682,9 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		ref  *refusal
 	}
 	// Entries reached through a link out of the tree are checked one by
-	// one, since each may be refused.
+	// one, since each may be refused. So is every entry of a shared tree.
 	_, err = t.root.Stat(name)
-	outside := err != nil
+	outside := err != nil || t.shared
 	var items []item
 	readme := ""
 	for _, e := range entries {
@@ -685,6 +730,10 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 			label += "/"
 		}
 		href := (&url.URL{Path: label}).String()
+		if it.ref != nil && t.shared {
+			fmt.Fprintf(&body, "<li class=\"refused\">%s <span class=\"mdserve\">refused</span></li>\n", template.HTMLEscapeString(label))
+			continue
+		}
 		if it.ref != nil {
 			fmt.Fprintf(&body, "<li class=\"refused\"><a href=\"%s\" title=\"%s\">%s</a> <span class=\"mdserve\">refused</span></li>\n",
 				template.HTMLEscapeString(href), template.HTMLEscapeString(it.ref.Error()), template.HTMLEscapeString(label))
@@ -750,6 +799,7 @@ type page struct {
 	Status  string       // the server's age, on the index
 	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
+	Shared  bool // a shared server's page, which has no button
 }
 
 func (t *tree) title(name string) string {
@@ -799,10 +849,20 @@ func render(w http.ResponseWriter, status int, p page) {
 	w.Write(b.Bytes())
 }
 
-// render gives the page this tree's Delete lock button.
+// render gives the page this tree's Delete lock button, unless the tree is
+// shared.
 func (t *tree) render(w http.ResponseWriter, status int, p page) {
-	p.Tree = t.prefix
+	p.Tree, p.Shared = t.prefix, t.shared
 	render(w, status, p)
+}
+
+// why is what a refusal page says: the reason in full, or on a shared tree
+// only that the name is refused, since the reason names paths outside it.
+func (t *tree) why(ref *refusal) string {
+	if t.shared {
+		return "Refused: " + ref.link
+	}
+	return ref.Error()
 }
 
 func (t *tree) fail(w http.ResponseWriter, name string, status int, msg string) {

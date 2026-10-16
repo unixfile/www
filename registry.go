@@ -87,12 +87,18 @@ func (r *registry) linkPath(lockPath string) string {
 
 // add links lockPath into the registry. An old link for the same tree is
 // replaced, so the server can tell a new join from the link it already has.
-func (r *registry) add(lockPath string) (string, os.FileInfo, error) {
+// A shared tree's secret token follows the lock path after a #, which the
+// lock name never holds; the registry is private, so the token stays so.
+func (r *registry) add(lockPath, token string) (string, os.FileInfo, error) {
 	link := r.linkPath(lockPath)
 	if err := os.Remove(link); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return "", nil, err
 	}
-	if err := os.Symlink(lockPath, link); err != nil {
+	target := lockPath
+	if token != "" {
+		target += "#" + token
+	}
+	if err := os.Symlink(target, link); err != nil {
 		return "", nil, err
 	}
 	info, err := os.Lstat(link)
@@ -102,7 +108,32 @@ func (r *registry) add(lockPath string) (string, os.FileInfo, error) {
 	return link, info, nil
 }
 
-// links maps every link in the registry to the lock path it names.
+// splitTarget parses a link's target into the lock path and the token.
+func splitTarget(target string) (lockPath, token string) {
+	if strings.HasSuffix(target, lockSuffix) {
+		return target, ""
+	}
+	i := strings.LastIndex(target, "#")
+	if i < 0 {
+		return target, ""
+	}
+	return target[:i], target[i+1:]
+}
+
+// serves reports whether a live server holds a tree in the registry of ep.
+// The caller holds the lock.
+func (r *registry) serves(ep netip.AddrPort) bool {
+	links, _ := r.links()
+	for _, target := range links {
+		if _, ok := readTree(ep, target); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// links maps every link in the registry to its target, which splitTarget
+// parses.
 func (r *registry) links() (map[string]string, error) {
 	return readLinks(r.dir)
 }

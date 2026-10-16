@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -64,7 +65,10 @@ func run(c config, rep *reporter) int {
 	lockPath := filepath.Join(dir, lockName(c.ep))
 	if l, ok := findLive(lockPath); ok {
 		reg.close()
-		report(rep, l.url)
+		if c.secret {
+			rep.send("note", "already served; --secret applies to a new share. Delete "+lockPath+" and share again to change it.")
+		}
+		report(rep, c.ep, l.url)
 		return 0
 	}
 	if err := syscall.Access(dir, wOK); err != nil {
@@ -75,8 +79,13 @@ func run(c config, rep *reporter) int {
 	switch {
 	case err == nil:
 		return serve(c, rep, ln, reg, dir, home)
+	case errors.Is(err, syscall.EADDRINUSE) && !reg.serves(c.ep):
+		// The registry is locked, so a server of ours on ep is either up
+		// with a tree or gone. Something else holds the address.
+		reg.close()
+		return rep.fail(syscall.EADDRINUSE, taken(c.ep))
 	case errors.Is(err, syscall.EADDRINUSE):
-		return join(c.ep, rep, reg, dir, lockPath)
+		return join(c.ep, rep, reg, dir, lockPath, c.token)
 	default:
 		reg.close()
 		return rep.fail(errnoOf(err), "cannot listen on "+c.ep.String()+": "+err.Error())
@@ -86,8 +95,8 @@ func run(c config, rep *reporter) int {
 // join hands dir to the server already on ep and waits until it writes the
 // lock. The registry stays locked until the link exists, so the server
 // cannot be on its way out.
-func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath string) int {
-	link, _, err := reg.add(lockPath)
+func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath, token string) int {
+	link, _, err := reg.add(lockPath, token)
 	reg.close()
 	if err != nil {
 		return rep.fail(errnoOf(err), "cannot join the server on "+ep.String()+": "+err.Error())
@@ -95,7 +104,7 @@ func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath string)
 	for end := time.Now().Add(joinWait); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
 		if b, err := os.ReadFile(lockPath); err == nil {
 			if l := parseLock(b); l.live(bootID()) {
-				report(rep, l.url)
+				report(rep, ep, l.url)
 				return 0
 			}
 		}
@@ -109,9 +118,38 @@ func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath string)
 }
 
 // origin is the URL of the server on ep. Port 80 is HTTP's own and goes
-// unwritten.
+// unwritten. A server on 0.0.0.0 answers on every address, and the
+// machine's name is the one to hand out.
 func origin(ep netip.AddrPort) string {
-	return originHost(ep.Addr().String(), ep.Port())
+	host := ep.Addr().String()
+	if ep.Addr().IsUnspecified() {
+		if name, err := os.Hostname(); err == nil && name != "" {
+			host = name
+		}
+	}
+	return originHost(host, ep.Port())
+}
+
+// shareOrigin is origin with the address's name when one is known: the
+// reverse lookup's answer, if it resolves back to the address. A visitor
+// on a network with that DNS reads mate.peer.home, not 10.173.42.3.
+func shareOrigin(ep netip.AddrPort) string {
+	if !shared(ep) || ep.Addr().IsUnspecified() {
+		return origin(ep)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	names, _ := net.DefaultResolver.LookupAddr(ctx, ep.Addr().String())
+	for _, name := range names {
+		name = strings.TrimSuffix(name, ".")
+		ips, _ := net.DefaultResolver.LookupNetIP(ctx, "ip4", name)
+		for _, ip := range ips {
+			if ip.Unmap() == ep.Addr() {
+				return originHost(name, ep.Port())
+			}
+		}
+	}
+	return origin(ep)
 }
 
 func originHost(host string, port uint16) string {
@@ -122,10 +160,38 @@ func originHost(host string, port uint16) string {
 }
 
 // report ends a start with the tree's URL alone, the same whether this run
-// started the tree or found it served.
-func report(rep *reporter, url string) {
+// started the tree or found it served. A share adds a note on stderr: a
+// firewall drops other machines before mdserve sees them, and a test from
+// this machine passes through loopback, so only a capture tells.
+func report(rep *reporter, ep netip.AddrPort, url string) {
 	rep.send("url", url)
+	if shared(ep) {
+		port := strconv.Itoa(int(ep.Port()))
+		dest := ep.String()
+		if ep.Addr().IsUnspecified() {
+			dest = "port " + port
+		}
+		rep.send("note", "note: other machines connect to "+dest+"; a firewall here may drop them unseen.")
+		rep.send("note", "      Check with: sudo tcpdump -ni "+ifaceOf(ep.Addr())+" tcp port "+port)
+	}
 	rep.finish()
+}
+
+// ifaceOf names the interface that holds a, or "any" for 0.0.0.0 or an
+// address no interface holds.
+func ifaceOf(a netip.Addr) string {
+	ifs, _ := net.Interfaces()
+	for _, i := range ifs {
+		addrs, _ := i.Addrs()
+		for _, ad := range addrs {
+			if n, ok := ad.(*net.IPNet); ok {
+				if ip, ok := netip.AddrFromSlice(n.IP); ok && ip.Unmap() == a {
+					return i.Name
+				}
+			}
+		}
+	}
+	return "any"
 }
 
 // serve runs the server on ln with dir as its first tree. The caller holds
@@ -144,7 +210,9 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	defer os.Remove(filter)
 	h.dropLeftovers()
 	h.w.add(reg.dir)
-	t, err := h.adopt(filepath.Join(dir, lockName(c.ep)), "")
+	h.srv.shared = shared(c.ep)
+	h.origin = shareOrigin(c.ep)
+	t, err := h.adopt(filepath.Join(dir, lockName(c.ep)), "", c.token)
 	reg.unlock()
 	if err != nil {
 		ln.Close()
@@ -166,8 +234,8 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	}()
 	go h.loop()
 
-	url := origin(c.ep) + t.prefixURL()
-	report(rep, url)
+	url := h.origin + t.prefixURL()
+	report(rep, c.ep, url)
 	if err := h.httpd.Serve(ln); !h.halted.Load() {
 		h.shutdown()
 		<-h.done
@@ -183,6 +251,7 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 // the server with the last tree.
 type hub struct {
 	ep     netip.AddrPort
+	origin string // the URL of this server, a name where it has one
 	home   string
 	filter string
 	reg    *registry
@@ -213,16 +282,17 @@ func (h *hub) unlock() {
 func (h *hub) dropLeftovers() {
 	links, _ := h.reg.links()
 	for link, target := range links {
-		if filepath.Base(target) == lockName(h.ep) {
-			os.Remove(target)
+		if lockPath, _ := splitTarget(target); filepath.Base(lockPath) == lockName(h.ep) {
+			os.Remove(lockPath)
 		}
 		os.Remove(link)
 	}
 }
 
 // adopt serves the tree whose lock is lockPath and writes the lock. link is
-// the registry entry a joining mdserve made, or "" to make one.
-func (h *hub) adopt(lockPath, link string) (*tree, error) {
+// the registry entry a joining mdserve made, or "" to make one. token puts
+// a shared tree under a secret path.
+func (h *hub) adopt(lockPath, link, token string) (*tree, error) {
 	if !filepath.IsAbs(lockPath) || filepath.Base(lockPath) != lockName(h.ep) {
 		return nil, &errno{syscall.EINVAL, "not a lock for " + h.ep.String() + ": " + lockPath}
 	}
@@ -231,20 +301,33 @@ func (h *hub) adopt(lockPath, link string) (*tree, error) {
 		return nil, err
 	}
 	prefix, label := mount(dir, h.home)
+	if h.srv.shared {
+		prefix, label = shareMount(dir, token)
+	}
 	if t := h.srv.byPrefix(prefix); t != nil {
 		return nil, &errno{syscall.EEXIST, "the URL " + prefix + " already serves " + t.dir}
+	}
+	if h.srv.shared {
+		real, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			return nil, err
+		}
+		if bad, mode, ok := othersRead(real, real); !ok {
+			return nil, &errno{syscall.EACCES, fmt.Sprintf("other users cannot read %s (mode %03o), so a share of it would serve nothing", bad, mode.Perm())}
+		}
 	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, err
 	}
 	t := newTree(root, dir, prefix, label, h.filter)
-	if t.lock, err = createLock(lockPath, dir, origin(h.ep)+t.prefixURL()); err != nil {
+	t.shared, t.secret = h.srv.shared, token != ""
+	if t.lock, err = createLock(lockPath, dir, h.origin+t.prefixURL()); err != nil {
 		root.Close()
 		return nil, fmt.Errorf("cannot write lockfile: %w", err)
 	}
 	if link == "" {
-		t.link, t.linkInfo, err = h.reg.add(lockPath)
+		t.link, t.linkInfo, err = h.reg.add(lockPath, token)
 	} else {
 		t.link = link
 		t.linkInfo, err = os.Lstat(link)
@@ -297,7 +380,8 @@ func (h *hub) sync() bool {
 		if served[link] {
 			continue
 		}
-		if _, err := h.adopt(target, link); err != nil {
+		lockPath, token := splitTarget(target)
+		if _, err := h.adopt(lockPath, link, token); err != nil {
 			os.Remove(link)
 		}
 	}

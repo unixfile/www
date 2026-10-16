@@ -19,10 +19,27 @@ const followMarker = ".mdserve-follow"
 // only while it stays inside the tree and never an absolute one. What the
 // root refuses is resolved again: an absolute link back into the tree is
 // served from the tree, and a link out of it is served when a marker lies
-// at or above its target and other users could read the target.
+// at or above its target and other users could read the target. A shared
+// tree also refuses whatever other users could not read inside it.
 type treeFS struct{ t *tree }
 
 func (f treeFS) Open(name string) (fs.File, error) {
+	// A shared tree hides its locks, which name the tree's path.
+	if f.t.shared && isLockName(path.Base(name)) {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+	}
+	file, err := f.open(name)
+	if err != nil || !f.t.shared {
+		return file, err
+	}
+	if ref := f.t.private(name); ref != nil {
+		file.Close()
+		return nil, ref
+	}
+	return file, nil
+}
+
+func (f treeFS) open(name string) (fs.File, error) {
 	file, err := f.t.root.FS().Open(name)
 	if err == nil || !fs.ValidPath(name) {
 		return file, err
@@ -165,6 +182,38 @@ func othersRead(marker, real string) (string, fs.FileMode, bool) {
 		}
 	}
 	return "", 0, true
+}
+
+// private refuses name in a shared tree when other users could not read
+// it, or could not pass a directory on the way. Each step of name is
+// checked where it resolves, from the tree's root or from the marker
+// above a link's target.
+func (t *tree) private(name string) *refusal {
+	parts := []string{"."}
+	if name != "." {
+		parts = strings.Split(name, "/")
+	}
+	for i := range parts {
+		p := path.Join(parts[:i+1]...)
+		real, err := filepath.EvalSymlinks(filepath.Join(t.dir, filepath.FromSlash(p)))
+		if err != nil {
+			return &refusal{link: name, private: true}
+		}
+		base := t.realDir
+		if !within(real, t.realDir) {
+			if base = findMarker(real); base == "" {
+				return &refusal{link: name, target: real}
+			}
+		}
+		if bad, mode, ok := othersRead(base, real); !ok {
+			ref := &refusal{link: name, target: real, private: true, path: bad, mode: mode}
+			if info, err := os.Stat(real); err == nil && p == name {
+				ref.dir = info.IsDir()
+			}
+			return ref
+		}
+	}
+	return nil
 }
 
 // refused reports why name cannot be opened, or nil when it can or fails
