@@ -119,15 +119,17 @@ header button {
 /* What mdserve says is mono, file names in a listing included; what the
    document says is serif. */
 pre, code, header, .mdserve, ul.listing { font-family: ui-monospace, "Iosevka", monospace; }
+/* Code is half the body size, so about 115 columns fit the doc's measure
+   and no page needs to be wider. It never drops below 11px, where small
+   screens set the body at 16px. */
 pre {
-  font-size: 0.7em;
+  font-size: max(0.5em, 11px);
   line-height: 1.35;
   text-align: left;
   hyphens: none;
   overflow-x: auto;
 }
 :not(pre) > code { font-size: 0.85em; }
-body.code { max-width: 120ch; }
 table { border-collapse: collapse; margin: 1.2em 0; }
 th, td { border-bottom: 1px solid var(--rule); padding: 0.2em 0.6em; text-align: left; }
 img { max-width: 100%; }
@@ -149,22 +151,19 @@ header a:hover, ul.listing a:hover, table.locks a:hover, p.latest a:hover, .mdse
 ul.listing li.refused span { color: var(--muted); font-size: 0.8em; }
 /* A history: hash and date are mdserve's and mono, subject and body the
    author's and serif. A page's top line leads to its history. */
-/* Each commit is a fold: one line closed, message and diff open. The page
-   is as wide as a diff; a message keeps a doc's measure. */
-body.log { max-width: 120ch; }
+/* Each commit is a fold: one line closed, message and diff open. */
 ol.log { list-style: none; padding: 0; }
 ol.log > li { margin: 0 0 0.4em; }
 ol.log summary { cursor: pointer; text-align: left; }
-ol.log summary > .mdserve { color: var(--muted); }
+ol.log summary > .mdserve { color: var(--muted); font-size: 0.8em; }
 ol.log details[open] { margin-bottom: 2em; }
-ol.log details > p { max-width: 58ch; margin: 0.45em 0 0.45em 1.2em; text-align: left; }
+ol.log details > p { margin: 0.45em 0 0.45em 1.2em; text-align: left; }
 ol.log div.diffs > p.mdserve:only-child { margin-left: 1.2em; }
 div.commit p.subject { font-weight: bold; margin-top: 0.2em; }
 div.commit p { text-align: left; }
 div.commit p.mdserve { color: var(--muted); margin-bottom: 0; }
 /* A commit's diff: added and removed lines on a faint tint, git's own
    lines muted. */
-body.commit { max-width: 120ch; }
 p.file { margin: 2em 0 0.3em; }
 /* Each line is a block, so its tint spans the page. */
 pre.diff span { display: block; min-height: 1.35em; }
