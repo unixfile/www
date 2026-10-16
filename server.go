@@ -729,7 +729,7 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	readme := ""
 	for _, e := range entries {
 		n := e.Name()
-		if isLockName(n) {
+		if isLockName(n) || t.shared && t.dotted(path.Join(name, n)) {
 			continue
 		}
 		dir := e.IsDir()

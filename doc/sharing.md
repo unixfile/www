@@ -16,7 +16,7 @@ On `0.0.0.0` the printed URL carries the machine's name, since the server answer
 
 A shared tree mounts at its base name, eg `http://192.168.1.69/notes/`. The URL does not reveal where the tree lives on the machine.
 
-The server serves only what other users on the machine could read. A file needs the others-read bit, and every directory from the tree's root down to it needs others-read and others-execute. Links out of the tree follow the `.mdserve-follow` rule as on loopback. Everything else in the tree is served, dot files and `.git` included, so share a directory that holds only what you mean to share.
+The server serves only what other users on the machine could read. A file needs the others-read bit, and every directory from the tree's root down to it needs others-read and others-execute. Links out of the tree follow the `.mdserve-follow` rule as on loopback. Names that begin with a dot are neither listed nor served, at any depth, nor are links that lead to them inside the tree: `.git` holds the history and every deleted file. Everything else in the tree is served, so share a directory that holds only what you mean to share.
 
 A refused entry shows as refused, without the reason, since the reason names paths outside the tree. The index at `/` lists the shared trees by name. It shows no lock paths, no other addresses and no buttons. No page has a Delete lock or Kill server button, so no visitor can stop the server.
 

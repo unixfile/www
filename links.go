@@ -24,8 +24,9 @@ const followMarker = ".mdserve-follow"
 type treeFS struct{ t *tree }
 
 func (f treeFS) Open(name string) (fs.File, error) {
-	// A shared tree hides its locks, which name the tree's path.
-	if f.t.shared && isLockName(path.Base(name)) {
+	// A shared tree hides its locks, which name the tree's path, and its
+	// dot entries, since .git holds the history and deleted files.
+	if f.t.shared && (isLockName(path.Base(name)) || f.t.dotted(name)) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 	}
 	file, err := f.open(name)
@@ -37,6 +38,33 @@ func (f treeFS) Open(name string) (fs.File, error) {
 		return nil, ref
 	}
 	return file, nil
+}
+
+// dotted reports whether name, or where it resolves inside the tree,
+// passes a name that begins with a dot.
+func (t *tree) dotted(name string) bool {
+	if hasDotName(name) {
+		return true
+	}
+	real, err := filepath.EvalSymlinks(filepath.Join(t.dir, filepath.FromSlash(name)))
+	if err != nil || !within(real, t.realDir) {
+		return false
+	}
+	rel, err := filepath.Rel(t.realDir, real)
+	return err == nil && hasDotName(filepath.ToSlash(rel))
+}
+
+// hasDotName reports whether a name on the way to name begins with a dot.
+func hasDotName(name string) bool {
+	if name == "." {
+		return false
+	}
+	for _, part := range strings.Split(name, "/") {
+		if strings.HasPrefix(part, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 func (f treeFS) open(name string) (fs.File, error) {

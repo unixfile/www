@@ -124,6 +124,42 @@ func TestShareHidesLocks(t *testing.T) {
 	}
 }
 
+// .git holds the history and deleted files, so a share hides dot entries
+// at any depth, while loopback shows them.
+func TestShareHidesDotEntries(t *testing.T) {
+	s := shareTree(t)
+	dir := s.byPrefix("/docs/").dir
+	for _, p := range []string{".git/HEAD", "open/.env", ".notes/n.md"} {
+		f := filepath.Join(dir, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		os.Chmod(filepath.Dir(f), 0o755)
+		if err := os.WriteFile(f, []byte(p+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(".git", filepath.Join(dir, "history")); err != nil {
+		t.Fatal(err)
+	}
+	h := s.handler()
+	for _, p := range []string{"/docs/.git/", "/docs/.git/HEAD?raw", "/docs/open/.env?raw", "/docs/.notes/n.md", "/docs/history/HEAD?raw"} {
+		if rec := get(h, p); rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", p, rec.Code)
+		}
+	}
+	for _, p := range []string{"/docs/", "/docs/open/"} {
+		body := get(h, p).Body.String()
+		if strings.Contains(body, ".git") || strings.Contains(body, ".env") || strings.Contains(body, ".notes") || strings.Contains(body, "history") {
+			t.Errorf("%s lists a dot entry:\n%s", p, body)
+		}
+	}
+	s.byPrefix("/docs/").shared = false
+	if rec := get(h, "/docs/.git/HEAD?raw"); rec.Code != http.StatusOK {
+		t.Errorf("loopback .git/HEAD: status %d, want 200", rec.Code)
+	}
+}
+
 func TestShareMount(t *testing.T) {
 	for _, tc := range []struct{ dir, token, prefix, label string }{
 		{"/home/u/scratch/notes", "", "/notes/", "notes"},

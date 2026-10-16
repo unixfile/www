@@ -44,7 +44,7 @@ Two variables set the default addresses. `--help` shows each value and where it 
 
 ## Sharing
 
-`mdserve --share` serves the tree to other machines on the LAN from a server of its own. It serves only what other users could read and shows nothing of the machine around the tree. `--secret` puts the tree under a random token. See [doc/sharing.md](doc/sharing.md).
+`mdserve --share` serves the tree to other machines on the LAN from a server of its own. It serves only what other users could read, hides dot entries such as `.git` and shows nothing of the machine around the tree. `--secret` puts the tree under a random token. See [doc/sharing.md](doc/sharing.md).
 
 ## Install
 
