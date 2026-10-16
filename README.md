@@ -86,6 +86,7 @@ A lock left by a crash is detected on the next start through its PID and the ker
 The stylesheet is mdserve's own. It began as md2html-default's, whose light palette it keeps, and the page colours sit as variables on `:root`.
 Pages load no fonts from the network. STIX Two Text, the serif, comes from the machine when installed and otherwise from the copy built into mdserve, which the browser caches for a year. The mono face is Iosevka where installed, else the system monospace.
 The header names a tree by its base name and shows the full path on hover. Every tree page's breadcrumbs start at `index`, which links `/`. The header, listings and mdserve's own messages are mono; documents keep the serif.
+Every page keeps one width, 58ch of the body font, and keeps space for a scrollbar, so the header holds still from page to page. Code is half the size of the body text, never under 11px, so about 115 columns fit; longer lines scroll.
 
 Add `*.*.*.*-*.lock` to `~/.config/git/ignore` so locks stay out of `git status`.
 
