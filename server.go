@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
@@ -26,6 +28,14 @@ import (
 //go:embed assets/style.css
 var styleCSS []byte
 
+// styleURL names the stylesheet by a hash of its content, so the browser
+// keeps it for a year and a binary with a changed stylesheet links a new
+// URL.
+var styleURL = func() string {
+	sum := sha256.Sum256(styleCSS)
+	return "/_mdserve/style." + hex.EncodeToString(sum[:6]) + ".css"
+}()
+
 //go:embed assets/layout.html
 var layoutHTML string
 
@@ -37,7 +47,8 @@ var layoutHTML string
 var fontFS embed.FS
 
 var layout = template.Must(template.New("layout").Funcs(template.FuncMap{
-	"liveJS": func() template.JS { return template.JS(liveJS) },
+	"liveJS":   func() template.JS { return template.JS(liveJS) },
+	"styleURL": func() string { return styleURL },
 }).Parse(layoutHTML))
 
 // maxCode caps the size of a file shown as a code page; larger files go raw.
@@ -278,8 +289,9 @@ func (t *tree) prefixURL() string {
 
 func (s *server) handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /_mdserve/style.css", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET "+styleURL, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		w.Write(styleCSS)
 	})
 	mux.HandleFunc("GET /_mdserve/fonts/{name}", func(w http.ResponseWriter, r *http.Request) {

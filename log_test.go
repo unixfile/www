@@ -136,7 +136,7 @@ func TestRequestLog(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	s, tr, _ := serveTree(t)
 	h := s.handler()
-	for _, p := range []string{"/_mdserve/style.css", "/favicon.ico", "/_mdserve/live?path=/", "/index.md"} {
+	for _, p := range []string{styleURL, "/favicon.ico", "/_mdserve/live?path=/", "/index.md"} {
 		get(h, p)
 	}
 	tr.prefix, tr.secret = "/s3cr3t/", true
@@ -146,7 +146,7 @@ func TestRequestLog(t *testing.T) {
 	path, _ := logFile()
 	b, _ := os.ReadFile(path)
 	log := string(b)
-	for _, skip := range []string{"style.css", "favicon", "/_mdserve/live", "s3cr3t"} {
+	for _, skip := range []string{"style.", "favicon", "/_mdserve/live", "s3cr3t"} {
 		if strings.Contains(log, skip) {
 			t.Errorf("log holds %s:\n%s", skip, log)
 		}

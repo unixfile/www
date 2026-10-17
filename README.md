@@ -88,7 +88,7 @@ Each endpoint has a registry directory such as `~/.local/state/mdserve/127.31.1.
 
 A lock left by a crash is detected on the next start through its PID and the kernel boot ID, then removed. A new server also clears what a crashed server left in the registry.
 
-The stylesheet is mdserve's own. It began as md2html-default's, whose light palette it keeps, and the page colours sit as variables on `:root`.
+The stylesheet is mdserve's own. It began as md2html-default's, whose light palette it keeps, and the page colours sit as variables on `:root`. The browser loads it once: its URL names a hash of its content, eg `/_mdserve/style.7b94a08e7731.css`, so it is kept for a year, and a changed stylesheet comes under a new URL.
 Pages load no fonts from the network. STIX Two Text, the serif, comes from the machine when installed and otherwise from the copy built into mdserve, which the browser caches for a year. The mono face is Iosevka where installed, else the system monospace.
 With `--stamp`, each page says when its binary was built and how many seconds ago, the commit it was built from and how long the page took to render, eg `built 12:49, 108 s ago, from 1aa282c+modified, rendered in 3.3 ms`. It sits small and faint above the header, so a glance tells which build served the page. `+modified` marks a build from uncommitted code. mdserve's script counts the seconds up while the page is open. Shares leave the stamp out.
 The header names a tree by its base name and shows the full path on hover. Every tree page's breadcrumbs start at `index`, which links `/`. The header, listings and mdserve's own messages are mono; documents keep the serif.

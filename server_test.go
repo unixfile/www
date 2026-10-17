@@ -237,7 +237,7 @@ func TestIndexDeleteReturns(t *testing.T) {
 		t.Errorf("last delete: status %d: %s", rec.Code, rec.Body.String())
 	}
 	// The server closes as this page leaves, so the page carries its style.
-	if body := rec.Body.String(); !strings.Contains(body, "<style>") || strings.Contains(body, "/_mdserve/style.css") {
+	if body := rec.Body.String(); !strings.Contains(body, "<style>") || strings.Contains(body, "/_mdserve/style.") {
 		t.Errorf("stopped page links its stylesheet instead of carrying it")
 	}
 }
@@ -398,5 +398,22 @@ func TestBuildStamp(t *testing.T) {
 		if c.want && !regexp.MustCompile(`s ago, from [^<]+, rendered in [0-9.]+ ms</p>`).MatchString(body) {
 			t.Errorf("stamp lacks commit or render time: %s", body)
 		}
+	}
+}
+
+// The stylesheet's URL names its content, so the browser keeps it for a
+// year, and every page links that URL.
+func TestStylesheetCached(t *testing.T) {
+	s, _, _ := serveTree(t)
+	h := s.handler()
+	rec := get(h, styleURL)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") {
+		t.Errorf("%s: status %d, Cache-Control %q", styleURL, rec.Code, rec.Header().Get("Cache-Control"))
+	}
+	if !regexp.MustCompile(`^/_mdserve/style\.[0-9a-f]{12}\.css$`).MatchString(styleURL) {
+		t.Errorf("stylesheet URL %q does not name a hash", styleURL)
+	}
+	if body := get(h, "/a/").Body.String(); !strings.Contains(body, `<link rel="stylesheet" href="`+styleURL+`">`) {
+		t.Errorf("page does not link %s: %s", styleURL, body)
 	}
 }
