@@ -42,3 +42,14 @@ func TestCodeLexerByName(t *testing.T) {
 		}
 	}
 }
+
+// Task list boxes are not disabled, so they keep the browser's colour.
+func TestTaskBoxes(t *testing.T) {
+	h, err := renderMarkdown([]byte("- [x] done\n- [ ] open\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := string(h); !strings.Contains(body, `<li><input type="checkbox" checked=""> done</li>`) || !strings.Contains(body, `<li><input type="checkbox"> open</li>`) || strings.Contains(body, "disabled") {
+		t.Errorf("task boxes not rendered as pandoc's: %s", body)
+	}
+}

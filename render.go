@@ -12,6 +12,7 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
@@ -28,8 +29,9 @@ var markdown = goldmark.New(
 	goldmark.WithRendererOptions(
 		html.WithUnsafe(),
 		// The lowest priority registers last and wins, so this replaces
-		// goldmark's own fenced code renderer at 1000.
-		renderer.WithNodeRenderers(util.Prioritized(fenceRenderer{}, 100)),
+		// goldmark's fenced code renderer at 1000 and its task list
+		// renderer at 500.
+		renderer.WithNodeRenderers(util.Prioritized(nodeRenderer{}, 100)),
 	),
 )
 
@@ -41,14 +43,31 @@ func renderMarkdown(src []byte) (template.HTML, error) {
 	return template.HTML(out.String()), nil
 }
 
-// fenceRenderer highlights a fenced block whose language chroma knows. A
-// block in any other language is plain <pre><code>.
-type fenceRenderer struct{}
+// nodeRenderer replaces goldmark's rendering of fenced code and task list
+// checkboxes.
+type nodeRenderer struct{}
 
-func (fenceRenderer) RegisterFuncs(r renderer.NodeRendererFuncRegisterer) {
+func (nodeRenderer) RegisterFuncs(r renderer.NodeRendererFuncRegisterer) {
 	r.Register(ast.KindFencedCodeBlock, renderFence)
+	r.Register(east.KindTaskCheckBox, renderCheckBox)
 }
 
+// renderCheckBox leaves out goldmark's disabled attribute, which greys the
+// box out, so a task list looks as it did under pandoc.
+func renderCheckBox(w util.BufWriter, src []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkContinue, nil
+	}
+	if node.(*east.TaskCheckBox).IsChecked {
+		w.WriteString(`<input type="checkbox" checked=""> `)
+	} else {
+		w.WriteString(`<input type="checkbox"> `)
+	}
+	return ast.WalkContinue, nil
+}
+
+// renderFence highlights a fenced block whose language chroma knows. A
+// block in any other language is plain <pre><code>.
 func renderFence(w util.BufWriter, src []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
 		return ast.WalkContinue, nil
