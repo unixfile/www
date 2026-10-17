@@ -202,6 +202,7 @@ func ifaceOf(a netip.Addr) string {
 // server's leftovers are gone.
 func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home string) int {
 	logInfo("server starts on %s: %s", c.ep, build())
+	go warmLexers()
 	showBuilt = c.stamp
 	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(lockMask),
 		done: make(chan struct{}), fresh: map[net.Conn]bool{}}

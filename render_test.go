@@ -53,3 +53,25 @@ func TestTaskBoxes(t *testing.T) {
 		t.Errorf("task boxes not rendered as pandoc's: %s", body)
 	}
 }
+
+// Go is lexed by the standard library's scanner: every byte comes back,
+// and tokens get the classes chroma's Go lexer gives them.
+func TestGoTokens(t *testing.T) {
+	src := "package a\r\n\n//go:embed x\n/* block\n */\nfunc F(s string) int { return len(s) + 0x1F + 0o7 }\nvar r = `raw\nstring` // c\n"
+	var text strings.Builder
+	for _, tok := range goTokens(src) {
+		text.WriteString(tok.Value)
+	}
+	if text.String() != src {
+		t.Fatalf("text not preserved:\n%q\n%q", text.String(), src)
+	}
+	var b strings.Builder
+	highlight(&b, codeLexer("a.go"), src, false)
+	for _, want := range []string{`<span class="pp">//go:embed x</span>`, `<span class="kw">func</span> <span class="fu">F</span>`,
+		`<span class="dt">string</span>`, `<span class="bu">len</span>`, `<span class="bn">0x1F</span>`, `<span class="bn">0o7</span>`,
+		`<span class="st">` + "`raw</span>", `<span class="co">// c</span>`} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("no %s in %s", want, b.String())
+		}
+	}
+}

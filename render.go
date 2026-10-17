@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"html/template"
 	"io"
+	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -96,12 +98,44 @@ func renderFence(w util.BufWriter, src []byte, node ast.Node, entering bool) (as
 
 // codeLexer picks the lexer for a code page by file name, which covers
 // Makefile and Dockerfile as well as extensions, and falls back to plain
-// text.
+// text. lexers.Match tries every glob of every lexer, about 3 ms, so the
+// answer is kept per base name.
 func codeLexer(name string) chroma.Lexer {
-	if l := lexers.Match(name); l != nil {
-		return l
+	base := path.Base(name)
+	if l, ok := lexerByName.Load(base); ok {
+		return l.(chroma.Lexer)
 	}
-	return lexers.Fallback
+	l := lexers.Match(base)
+	if l == nil {
+		l = lexers.Fallback
+	}
+	lexerByName.Store(base, l)
+	return l
+}
+
+var lexerByName sync.Map
+
+// tokenise lexes Go with the standard library's scanner and everything
+// else with chroma.
+func tokenise(lexer chroma.Lexer, code string) []chroma.Token {
+	if lexer == lexers.Go {
+		return goTokens(code)
+	}
+	it, err := chroma.Coalesce(lexer).Tokenise(nil, code)
+	if err != nil {
+		return []chroma.Token{{Type: chroma.Text, Value: code}}
+	}
+	return it.Tokens()
+}
+
+// warmLexers compiles the lexers for common files in the background, so
+// the first code page a server shows does not wait for chroma to build its
+// regular expressions.
+func warmLexers() {
+	for _, name := range []string{"x.sh", "Makefile", "x.py", "x.js", "x.ts", "x.json", "x.yaml", "x.toml",
+		"x.html", "x.css", "x.c", "x.rs", "Dockerfile", "x.md"} {
+		tokenise(codeLexer(name), "x\n")
+	}
 }
 
 // highlight writes code in pandoc's markup with pandoc's short classes, so
@@ -115,14 +149,7 @@ func highlight(w io.Writer, lexer chroma.Lexer, code string, numbered bool) {
 		pre = "sourceCode numberSource " + lang + " numberLines"
 	}
 	io.WriteString(w, `<div class="sourceCode"><pre class="`+strings.Join(strings.Fields(pre), " ")+`"><code class="`+strings.TrimSpace("sourceCode "+lang)+`">`)
-	it, err := chroma.Coalesce(lexer).Tokenise(nil, code)
-	var tokens []chroma.Token
-	if err == nil {
-		tokens = it.Tokens()
-	} else {
-		tokens = []chroma.Token{{Type: chroma.Text, Value: code}}
-	}
-	lines := chroma.SplitTokensIntoLines(tokens)
+	lines := chroma.SplitTokensIntoLines(tokenise(lexer, code))
 	// A final newline ends the last line; it does not start another.
 	if len(lines) > 0 && lineText(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
