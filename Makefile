@@ -6,7 +6,7 @@ build:
 	CGO_ENABLED=0 go build -o build/mdserve .
 
 run: build
-	build/mdserve -f
+	build/mdserve -f --stamp
 
 test:
 	go vet ./...

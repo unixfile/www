@@ -107,7 +107,10 @@ func (a about) status() string {
 }
 
 // built is when the running binary was written, read once at start, so
-// each page can say which build served it.
+// each page can say which build served it. showBuilt, set by --stamp,
+// puts it above the header.
+var showBuilt bool
+
 var built = func() time.Time {
 	exe, err := os.Executable()
 	if err != nil {
@@ -880,7 +883,7 @@ type page struct {
 	Stopped bool
 	Shared  bool   // a shared server's page, which has no button
 	Live    string // the URL of the page's live reload stream, or ""
-	Built   string // when the binary was built, above the header; none on a share
+	Built   string // when the binary was built, above the header, with --stamp; none on a share
 }
 
 func (t *tree) title(name string) string {
@@ -918,7 +921,7 @@ func (t *tree) crumbs(name string) []crumb {
 
 func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Live = liveURL(r)
-	if !p.Shared {
+	if showBuilt && !p.Shared {
 		p.Built = clock(built)
 	}
 	var b bytes.Buffer

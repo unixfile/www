@@ -389,3 +389,18 @@ func TestLocalHost(t *testing.T) {
 		}
 	}
 }
+
+// The build stamp shows only with --stamp, and never on a share.
+func TestBuildStamp(t *testing.T) {
+	s, tr, _ := serveTree(t)
+	defer func() { showBuilt = false }()
+	for _, c := range []struct{ show, shared, want bool }{
+		{false, false, false}, {true, false, true}, {true, true, false},
+	} {
+		showBuilt, tr.shared = c.show, c.shared
+		body := get(s.handler(), "/a/").Body.String()
+		if got := strings.Contains(body, `<p class="built">`); got != c.want {
+			t.Errorf("stamp=%v shared=%v: shown=%v", c.show, c.shared, got)
+		}
+	}
+}

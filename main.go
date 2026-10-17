@@ -67,6 +67,7 @@ type config struct {
 	ep      netip.AddrPort
 	fg      bool
 	noopen  bool
+	stamp   bool // show the build time above each page's header
 	help    bool
 	restart bool
 	list    bool
@@ -93,6 +94,8 @@ const usageText = `usage: mdserve [-fnh] [-a ip[:port]] [dir]
   -f, --foreground      when no server runs on the address yet, serve in the
                         foreground until Ctrl-C
   -n, --no-open         print the URL without opening a browser
+      --stamp           show the binary's build time, small and faint, above
+                        each page's header
       --restart         replace every server with one running this binary,
                         serving the same trees; with -a or --share, only the
                         server on that address
@@ -109,6 +112,7 @@ func (c *config) switches() map[string]*bool {
 	return map[string]*bool{
 		"foreground": &c.fg,
 		"no-open":    &c.noopen,
+		"stamp":      &c.stamp,
 		"help":       &c.help,
 		"restart":    &c.restart,
 		"list":       &c.list,

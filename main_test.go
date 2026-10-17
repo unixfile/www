@@ -15,6 +15,7 @@ func TestParseArgs(t *testing.T) {
 	}{
 		{nil, config{dir: "."}},
 		{[]string{"-fn"}, config{dir: ".", fg: true, noopen: true}},
+		{[]string{"-f", "--stamp"}, config{dir: ".", fg: true, stamp: true}},
 		{[]string{"-f", "-n", "docs"}, config{dir: "docs", fg: true, noopen: true}},
 		{[]string{"docs", "--foreground", "--no-open"}, config{dir: "docs", fg: true, noopen: true}},
 		{[]string{"-a", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},

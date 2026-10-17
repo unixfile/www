@@ -30,6 +30,7 @@ To reach the server by name, add a line such as `127.31.1.1 mdserve` to `/etc/ho
 - `--secret[=token]`: serve a shared tree under a random token, or the one given, so only those holding the link reach it
 - `-f`, `--foreground`: when no server runs on the address yet, serve in the foreground until Ctrl-C
 - `-n`, `--no-open`: print the URL without opening a browser
+- `--stamp`: show the binary's build time, small and faint, above each page's header. `make run` sets it; `--restart` leaves it off
 - `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; with `-a` or `--share`, only the server on that address
 - `-l`, `--list`: print each served tree's URL and directory, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it
 - `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
@@ -61,7 +62,7 @@ mdserve needs pandoc 2.15 or later and git.
 `make deb` builds a Debian package in `build/`, such as `mdserve_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on pandoc and git. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
 `make install-deb` builds the package while sudo asks for the password, then installs it with `sudo apt install`, which pulls in pandoc and git. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
 
-To try a change without installing it, `make run` builds `build/mdserve` and serves this directory in the foreground on port 8080, beside an installed server on port 80. Stop it with Ctrl-C before the next run; a run that finds a server on 8080 hands its tree to that server, which keeps the old code.
+To try a change without installing it, `make run` builds `build/mdserve` and serves this directory in the foreground on port 8080 with `--stamp`, beside an installed server on port 80. Stop it with Ctrl-C before the next run; a run that finds a server on 8080 hands its tree to that server, which keeps the old code.
 
 The package grants `/usr/bin/mdserve` one capability, `cap_net_bind_service`, so it can bind port 80 while running as the user. `getcap /usr/bin/mdserve` shows it. With it mdserve serves on port 80 and URLs carry no port; without it, as after `make install`, the port is 8080. mdserve also takes port 80 where the machine lets every user bind low ports.
 
@@ -89,7 +90,7 @@ A lock left by a crash is detected on the next start through its PID and the ker
 
 The stylesheet is mdserve's own. It began as md2html-default's, whose light palette it keeps, and the page colours sit as variables on `:root`.
 Pages load no fonts from the network. STIX Two Text, the serif, comes from the machine when installed and otherwise from the copy built into mdserve, which the browser caches for a year. The mono face is Iosevka where installed, else the system monospace.
-Above the header, small and faint, each page names when its binary was built, so a glance tells which build served it. Shares leave it out.
+With `--stamp`, each page names when its binary was built, small and faint above the header, so a glance tells which build served it. Shares leave it out.
 The header names a tree by its base name and shows the full path on hover. Every tree page's breadcrumbs start at `index`, which links `/`. The header, listings and mdserve's own messages are mono; documents keep the serif.
 Every page keeps one width, 58ch of the body font, and keeps space for a scrollbar, so the header holds still from page to page. Code is half the size of the body text, never under 11px, so about 115 columns fit; longer lines scroll.
 
