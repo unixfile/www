@@ -121,6 +121,14 @@ var built = func() time.Time {
 	return info.ModTime()
 }()
 
+// stamp is the build time as a page shows it: the time of day, and the
+// seconds since, which live.js counts on from Millis.
+type stamp struct {
+	Clock  string
+	Millis int64
+	Ago    int
+}
+
 // clock gives the time of day, with the date when it is not today.
 func clock(t time.Time) string {
 	if t.IsZero() {
@@ -816,7 +824,7 @@ type page struct {
 	Stopped bool
 	Shared  bool   // a shared server's page, which has no button
 	Live    string // the URL of the page's live reload stream, or ""
-	Built   string // when the binary was built, above the header, with --stamp; none on a share
+	Built   *stamp // when the binary was built, above the header, with --stamp; none on a share
 }
 
 func (t *tree) title(name string) string {
@@ -854,8 +862,8 @@ func (t *tree) crumbs(name string) []crumb {
 
 func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Live = liveURL(r)
-	if showBuilt && !p.Shared {
-		p.Built = clock(built)
+	if showBuilt && !p.Shared && !built.IsZero() {
+		p.Built = &stamp{Clock: clock(built), Millis: built.UnixMilli(), Ago: int(time.Since(built).Seconds())}
 	}
 	var b bytes.Buffer
 	if err := layout.ExecuteTemplate(&b, "page", p); err != nil {

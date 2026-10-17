@@ -30,7 +30,7 @@ To reach the server by name, add a line such as `127.31.1.1 mdserve` to `/etc/ho
 - `--secret[=token]`: serve a shared tree under a random token, or the one given, so only those holding the link reach it
 - `-f`, `--foreground`: when no server runs on the address yet, serve in the foreground until Ctrl-C
 - `-n`, `--no-open`: print the URL without opening a browser
-- `--stamp`: show the binary's build time, small and faint, above each page's header. `make run` sets it; `--restart` leaves it off
+- `--stamp`: show the binary's build time and the seconds since, small and faint, above each page's header. `make run` sets it; `--restart` leaves it off
 - `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; with `-a` or `--share`, only the server on that address
 - `-l`, `--list`: print each served tree's URL and directory, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it
 - `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
@@ -90,7 +90,7 @@ A lock left by a crash is detected on the next start through its PID and the ker
 
 The stylesheet is mdserve's own. It began as md2html-default's, whose light palette it keeps, and the page colours sit as variables on `:root`.
 Pages load no fonts from the network. STIX Two Text, the serif, comes from the machine when installed and otherwise from the copy built into mdserve, which the browser caches for a year. The mono face is Iosevka where installed, else the system monospace.
-With `--stamp`, each page names when its binary was built, small and faint above the header, so a glance tells which build served it. Shares leave it out.
+With `--stamp`, each page names when its binary was built and how many seconds ago, small and faint above the header, so a glance tells which build served it and how fresh it is. mdserve's script counts the seconds up while the page is open. Shares leave it out.
 The header names a tree by its base name and shows the full path on hover. Every tree page's breadcrumbs start at `index`, which links `/`. The header, listings and mdserve's own messages are mono; documents keep the serif.
 Every page keeps one width, 58ch of the body font, and keeps space for a scrollbar, so the header holds still from page to page. Code is half the size of the body text, never under 11px, so about 115 columns fit; longer lines scroll.
 

@@ -26,6 +26,19 @@
 	document.addEventListener("visibilitychange", sync);
 	sync();
 
+	// The build stamp counts the seconds since the binary was built. The
+	// script runs in the head, so the stamp is found once the page is parsed.
+	document.addEventListener("DOMContentLoaded", () => {
+		const ago = document.querySelector("p.built[data-built] > span");
+		if (!ago) return;
+		const at = Number(ago.parentNode.dataset.built);
+		const tick = () => {
+			ago.textContent = Math.max(0, Math.floor((Date.now() - at) / 1000));
+		};
+		tick();
+		setInterval(tick, 1000);
+	});
+
 	// A history's fold loads its commit's diff from the commit page the
 	// first time it opens. toggle does not bubble, so it is caught on the
 	// way down.

@@ -94,8 +94,8 @@ const usageText = `usage: mdserve [-fnh] [-a ip[:port]] [dir]
   -f, --foreground      when no server runs on the address yet, serve in the
                         foreground until Ctrl-C
   -n, --no-open         print the URL without opening a browser
-      --stamp           show the binary's build time, small and faint, above
-                        each page's header
+      --stamp           show the binary's build time and the seconds since,
+                        small and faint, above each page's header
       --restart         replace every server with one running this binary,
                         serving the same trees; with -a or --share, only the
                         server on that address

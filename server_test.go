@@ -390,7 +390,7 @@ func TestBuildStamp(t *testing.T) {
 	} {
 		showBuilt, tr.shared = c.show, c.shared
 		body := get(s.handler(), "/a/").Body.String()
-		if got := strings.Contains(body, `<p class="built">`); got != c.want {
+		if got := strings.Contains(body, `<p class="built" data-built="`); got != c.want {
 			t.Errorf("stamp=%v shared=%v: shown=%v", c.show, c.shared, got)
 		}
 	}
