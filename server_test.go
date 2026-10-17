@@ -16,7 +16,7 @@ func serveTree(t *testing.T) (*server, *tree, string) {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		"index.md":             "# Title\nline one\nline two\n\n[code](a/b.go)\n\nsee https://example.com/x\n",
+		"index.md":             "# Title\nline one\nline two\n- item\n\n[code](a/b.go)\n\nsee https://example.com/x\n",
 		"a/b.go":               "package a\n\nfunc F() {}\n",
 		"a/README.md":          "Readme of a\n",
 		"a/page.html":          "<script>alert(1)</script>\n",
@@ -133,13 +133,17 @@ func TestListingSkipsLockAndReadme(t *testing.T) {
 	}
 }
 
-// Lines of a doc join into one paragraph, as standard Markdown has them.
+// Lines of a doc join into one paragraph, as standard Markdown has them,
+// and a dash after a line starts a list.
 func TestLinesJoin(t *testing.T) {
 	needPandoc(t)
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/index.md").Body.String()
 	if !strings.Contains(body, "<p>line one line two</p>") {
 		t.Errorf("lines not joined into one paragraph: %s", body)
+	}
+	if !strings.Contains(body, "<ul>\n<li>item</li>") {
+		t.Errorf("a dash after a line does not start a list: %s", body)
 	}
 }
 

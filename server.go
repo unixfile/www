@@ -846,10 +846,10 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 
 // pandoc converts on every request; there is no cache yet. The request
 // context kills pandoc when the browser goes away. Lines join into
-// paragraphs as standard Markdown has them. Bare URLs become links, as on
-// GitHub.
+// paragraphs as standard Markdown has them. Bare URLs become links, and a
+// list may follow a line with no blank line between, as on GitHub.
 func (t *tree) pandoc(ctx context.Context, input []byte, doc bool) (template.HTML, error) {
-	args := []string{"--sandbox", "--preserve-tabs", "-f", "markdown+autolink_bare_uris", "-t", "html5"}
+	args := []string{"--sandbox", "--preserve-tabs", "-f", "markdown+autolink_bare_uris+lists_without_preceding_blankline", "-t", "html5"}
 	cmd := exec.CommandContext(ctx, "pandoc", args...)
 	cmd.Stdin = bytes.NewReader(input)
 	var out, stderr bytes.Buffer
