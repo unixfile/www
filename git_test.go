@@ -370,3 +370,19 @@ func TestWarmCachesFirstPages(t *testing.T) {
 		}
 	}
 }
+
+// A repo's fsmonitor program never runs, even for a command that reads
+// the index.
+func TestGitRunsNoFsmonitor(t *testing.T) {
+	_, dir := repoTree(t)
+	ran := filepath.Join(t.TempDir(), "ran")
+	mon := filepath.Join(dir, ".git", "mon.sh")
+	os.WriteFile(mon, []byte("#!/bin/sh\ntouch "+ran+"\n"), 0o755)
+	if out, err := exec.Command("git", "-C", dir, "config", "core.fsmonitor", mon).CombinedOutput(); err != nil {
+		t.Fatalf("git config: %v\n%s", err, out)
+	}
+	git(t.Context(), dir, "status")
+	if _, err := os.Stat(ran); err == nil {
+		t.Error("git ran the repo's fsmonitor")
+	}
+}

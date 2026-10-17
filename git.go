@@ -47,12 +47,13 @@ type commit struct {
 }
 
 // git runs git in dir. A repo's .git/config can name programs for git to
-// run, so the options that would start one are off, and git may not fetch
-// a partial clone's missing objects. Pathspecs are literal, and no GIT_
+// run, so the options that would start one are off, fsmonitor among them
+// whichever command runs, and git may not fetch a partial clone's missing
+// objects. Pathspecs are literal, and no GIT_
 // variable from mdserve's own environment leaks in. git's safe.directory
 // check refuses repos that other users own.
 func git(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	args = append([]string{"-c", "protocol.allow=never", "-c", "core.quotePath=false", "--no-pager", "--literal-pathspecs"}, args...)
+	args = append([]string{"-c", "protocol.allow=never", "-c", "core.fsmonitor=false", "-c", "core.quotePath=false", "--no-pager", "--literal-pathspecs"}, args...)
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	for _, kv := range os.Environ() {
