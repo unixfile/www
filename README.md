@@ -59,7 +59,7 @@ mdserve logs every run, server event and page request to the systemd journal: `j
 mdserve needs pandoc 2.15 or later and git.
 `make install` links `build/mdserve` into `~/.local/bin`.
 `make deb` builds a Debian package in `build/`, such as `mdserve_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on pandoc and git. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
-`make install-deb` builds the package and installs it with `sudo apt install`, which pulls in pandoc and git. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
+`make install-deb` builds the package while sudo asks for the password, then installs it with `sudo apt install`, which pulls in pandoc and git. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
 
 To try a change without installing it, `make run` builds `build/mdserve` and serves this directory in the foreground on port 8080, beside an installed server on port 80. Stop it with Ctrl-C before the next run; a run that finds a server on 8080 hands its tree to that server, which keeps the old code.
 
