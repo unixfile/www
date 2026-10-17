@@ -179,10 +179,10 @@ func TestStopRefusesOtherSites(t *testing.T) {
 	stopped := make(chan struct{}, 1)
 	s.stop = func([]*tree, string) { stopped <- struct{}{} }
 	h := s.handler()
-	if rec := do(h, "POST", "/_mdserve/stop", "Sec-Fetch-Site", "cross-site"); rec.Code != http.StatusForbidden {
+	if rec := do(h, "POST", ownPath+"stop", "Sec-Fetch-Site", "cross-site"); rec.Code != http.StatusForbidden {
 		t.Errorf("cross-site stop: status %d, want 403", rec.Code)
 	}
-	if rec := do(h, "POST", "/_mdserve/stop", "Origin", "http://evil.example"); rec.Code != http.StatusForbidden {
+	if rec := do(h, "POST", ownPath+"stop", "Origin", "http://evil.example"); rec.Code != http.StatusForbidden {
 		t.Errorf("foreign origin stop: status %d, want 403", rec.Code)
 	}
 	select {
@@ -190,12 +190,12 @@ func TestStopRefusesOtherSites(t *testing.T) {
 		t.Fatal("refused stop still stopped the server")
 	case <-time.After(50 * time.Millisecond):
 	}
-	if rec := do(h, "POST", "/_mdserve/stop", "Origin", "null"); rec.Code != http.StatusForbidden {
+	if rec := do(h, "POST", ownPath+"stop", "Origin", "null"); rec.Code != http.StatusForbidden {
 		t.Errorf("null origin without Sec-Fetch-Site: status %d, want 403", rec.Code)
 	}
 	// A browser may send Origin: null on its own same-origin form post.
 	for _, origin := range []string{"http://127.31.1.1:8080", "null"} {
-		rec := do(h, "POST", "/_mdserve/stop", "Sec-Fetch-Site", "same-origin", "Origin", origin)
+		rec := do(h, "POST", ownPath+"stop", "Sec-Fetch-Site", "same-origin", "Origin", origin)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("same-origin stop with Origin %s: status %d", origin, rec.Code)
 		}
@@ -221,7 +221,7 @@ func TestIndexDeleteReturns(t *testing.T) {
 		}
 	}
 	post := func(form string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest("POST", "/_mdserve/stop", strings.NewReader(form))
+		req := httptest.NewRequest("POST", ownPath+"stop", strings.NewReader(form))
 		req.Host = "127.31.1.1:8080"
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rec := httptest.NewRecorder()
@@ -237,7 +237,7 @@ func TestIndexDeleteReturns(t *testing.T) {
 		t.Errorf("last delete: status %d: %s", rec.Code, rec.Body.String())
 	}
 	// The server closes as this page leaves, so the page carries its style.
-	if body := rec.Body.String(); !strings.Contains(body, "<style>") || strings.Contains(body, "/_mdserve/style.") {
+	if body := rec.Body.String(); !strings.Contains(body, "<style>") || strings.Contains(body, ownPath+"style.") {
 		t.Errorf("stopped page links its stylesheet instead of carrying it")
 	}
 }
@@ -246,11 +246,11 @@ func TestIndexDeleteReturns(t *testing.T) {
 // font directory.
 func TestFonts(t *testing.T) {
 	s, _, _ := serveTree(t)
-	rec := get(s.handler(), "/_mdserve/fonts/STIXTwoText-Regular.otf")
+	rec := get(s.handler(), ownPath+"fonts/STIXTwoText-Regular.otf")
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "font/otf" || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") || rec.Body.Len() < 1000 {
 		t.Errorf("font: status %d type %q cache %q size %d", rec.Code, rec.Header().Get("Content-Type"), rec.Header().Get("Cache-Control"), rec.Body.Len())
 	}
-	for _, p := range []string{"/_mdserve/fonts/STIXTwoText-OFL.txt", "/_mdserve/fonts/..%2Fstyle.css", "/_mdserve/fonts/nope.otf"} {
+	for _, p := range []string{ownPath + "fonts/STIXTwoText-OFL.txt", ownPath + "fonts/..%2Fstyle.css", ownPath + "fonts/nope.otf"} {
 		if rec := get(s.handler(), p); rec.Code == http.StatusOK {
 			t.Errorf("%s: status 200, want 404", p)
 		}
@@ -352,7 +352,7 @@ func TestStopWithdrawsOneTree(t *testing.T) {
 	if !strings.Contains(body, `<input type="hidden" name="tree" value="/other/">`) {
 		t.Fatalf("tree page lacks its stop form: %s", body)
 	}
-	req := httptest.NewRequest("POST", "/_mdserve/stop", strings.NewReader("tree=%2Fother%2F"))
+	req := httptest.NewRequest("POST", ownPath+"stop", strings.NewReader("tree=%2Fother%2F"))
 	req.Host = "127.31.1.1:8080"
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -367,7 +367,7 @@ func TestStopWithdrawsOneTree(t *testing.T) {
 
 func TestLocalHost(t *testing.T) {
 	hosts := filepath.Join(t.TempDir(), "hosts")
-	os.WriteFile(hosts, []byte("127.31.1.1 docs docs.local # mdserve\n192.168.1.5 nas\n# 127.0.0.1 commented\n"), 0o644)
+	os.WriteFile(hosts, []byte("127.31.1.1 docs docs.local # "+progName+"\n192.168.1.5 nas\n# 127.0.0.1 commented\n"), 0o644)
 	old := hostsFile
 	hostsFile = hosts
 	t.Cleanup(func() { hostsFile = old })
@@ -410,7 +410,7 @@ func TestStylesheetCached(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") {
 		t.Errorf("%s: status %d, Cache-Control %q", styleURL, rec.Code, rec.Header().Get("Cache-Control"))
 	}
-	if !regexp.MustCompile(`^/_mdserve/style\.[0-9a-f]{12}\.css$`).MatchString(styleURL) {
+	if !regexp.MustCompile(`^` + regexp.QuoteMeta(ownPath) + `style\.[0-9a-f]{12}\.css$`).MatchString(styleURL) {
 		t.Errorf("stylesheet URL %q does not name a hash", styleURL)
 	}
 	if body := get(h, "/a/").Body.String(); !strings.Contains(body, `<link rel="stylesheet" href="`+styleURL+`">`) {

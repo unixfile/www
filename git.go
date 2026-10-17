@@ -321,7 +321,7 @@ func (t *tree) logLine(ctx context.Context, name string) string {
 	if c == nil {
 		return ""
 	}
-	return fmt.Sprintf("<p class=\"mdserve latest\"><a href=\"?log\">%s</a> %s %s</p>\n",
+	return fmt.Sprintf("<p class=\"own latest\"><a href=\"?log\">%s</a> %s %s</p>\n",
 		template.HTMLEscapeString(logLabel), commitLine(c), template.HTMLEscapeString(c.subject))
 }
 
@@ -345,18 +345,18 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 		if dir && name != "." {
 			shown += "/"
 		}
-		body.WriteString("<p class=\"mdserve\">No commit touches " + esc(shown) + ".</p>\n")
+		body.WriteString("<p class=\"own\">No commit touches " + esc(shown) + ".</p>\n")
 	}
 	if len(log) > maxLog {
 		log = log[:maxLog]
-		fmt.Fprintf(&body, "<p class=\"mdserve\">The %d newest commits. <code>git log</code> lists the rest.</p>\n", maxLog)
+		fmt.Fprintf(&body, "<p class=\"own\">The %d newest commits. <code>git log</code> lists the rest.</p>\n", maxLog)
 	}
 	// git walks every commit back to the ones that touched name, unless
 	// the repo's commit-graph tells it which paths each commit changed.
 	// mdserve leaves the repo alone and names the command instead. A share
 	// says nothing, since its viewer cannot run it.
 	if took > slowGit && !t.shared && t.lacksPathFilters(r.Context(), name) {
-		fmt.Fprintf(&body, "<p class=\"mdserve\">git took %d ms for this history. "+
+		fmt.Fprintf(&body, "<p class=\"own\">git took %d ms for this history. "+
 			"<code>git commit-graph write --reachable --changed-paths</code> in the repo makes it several times faster.</p>\n",
 			took.Milliseconds())
 	}
@@ -367,12 +367,12 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	for i := range log {
 		c := &log[i]
 		show := esc("?commit=" + c.hash)
-		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"mdserve\">%s</span> <span class=\"subject\">%s</span></summary>\n",
+		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"own\">%s</span> <span class=\"subject\">%s</span></summary>\n",
 			show, commitLine(c), esc(c.subject))
 		for _, para := range paragraphs(c.body) {
 			body.WriteString("<p>" + para + "</p>\n")
 		}
-		fmt.Fprintf(&body, "<div class=\"diffs\"><p class=\"mdserve\"><a href=\"%s\">diff</a></p></div>\n</details></li>\n", show)
+		fmt.Fprintf(&body, "<div class=\"diffs\"><p class=\"own\"><a href=\"%s\">diff</a></p></div>\n</details></li>\n", show)
 	}
 	body.WriteString("</ol>\n")
 	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "log", Body: template.HTML(body.String())})
@@ -522,7 +522,7 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 	crumbs[len(crumbs)-1].Label = c.short
 	esc := template.HTMLEscapeString
 	var body strings.Builder
-	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"mdserve\">%s</p>\n<p class=\"subject\">%s</p>\n", commitLine(c), esc(c.subject))
+	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"own\">%s</p>\n<p class=\"subject\">%s</p>\n", commitLine(c), esc(c.subject))
 	for _, para := range paragraphs(c.body) {
 		body.WriteString("<p>" + para + "</p>\n")
 	}
@@ -534,18 +534,18 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 	}
 	switch {
 	case name != "." && len(diffs) == 0:
-		fmt.Fprintf(&body, "<p class=\"mdserve\">It does not change %s. <a href=\"%s\">All files</a></p>\n", esc(shown), esc(all))
+		fmt.Fprintf(&body, "<p class=\"own\">It does not change %s. <a href=\"%s\">All files</a></p>\n", esc(shown), esc(all))
 	case name != ".":
-		fmt.Fprintf(&body, "<p class=\"mdserve\">Changes to %s. <a href=\"%s\">All files</a></p>\n", esc(shown), esc(all))
+		fmt.Fprintf(&body, "<p class=\"own\">Changes to %s. <a href=\"%s\">All files</a></p>\n", esc(shown), esc(all))
 	case len(diffs) == 0:
-		body.WriteString("<p class=\"mdserve\">It changes no file here.</p>\n")
+		body.WriteString("<p class=\"own\">It changes no file here.</p>\n")
 	}
 	for _, d := range diffs {
 		label := esc(d.name)
 		if _, err := fs.Stat(t.fsys, d.name); err == nil {
 			label = fmt.Sprintf("<a href=\"%s\">%s</a>", esc((&url.URL{Path: t.prefix + d.name}).String()), label)
 		}
-		fmt.Fprintf(&body, "<p class=\"mdserve file\">%s</p>\n<pre class=\"diff\">", label)
+		fmt.Fprintf(&body, "<p class=\"own file\">%s</p>\n<pre class=\"diff\">", label)
 		for _, line := range d.lines {
 			class := "meta"
 			switch {
@@ -563,7 +563,7 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 		body.WriteString("</pre>\n")
 	}
 	if cut {
-		fmt.Fprintf(&body, "<p class=\"mdserve\">The diff stops at %d KiB. <code>git show %s</code> shows the rest.</p>\n", maxDiff>>10, esc(c.short))
+		fmt.Fprintf(&body, "<p class=\"own\">The diff stops at %d KiB. <code>git show %s</code> shows the rest.</p>\n", maxDiff>>10, esc(c.short))
 	}
 	body.WriteString("</div>\n")
 	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "commit", Body: template.HTML(body.String())})

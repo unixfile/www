@@ -67,6 +67,8 @@ mdserve needs git.
 
 To try a change without installing it, `make run` builds `build/mdserve` and serves this directory in the foreground on port 8080 with `--stamp`, beside an installed server on port 80. Stop it with Ctrl-C before the next run; a run that finds a server on 8080 hands its tree to that server, which keeps the old code.
 
+The program's name lives in the file `NAME`. The binary, its paths, environment variables, journal tag and URLs, the Makefile and the Debian package all take it from there, and a test fails on any other copy outside prose and `go.mod`.
+
 The package grants `/usr/bin/mdserve` one capability, `cap_net_bind_service`, so it can bind port 80 while running as the user. `getcap /usr/bin/mdserve` shows it. With it mdserve serves on port 80 and URLs carry no port; without it, as after `make install`, the port is 8080. mdserve also takes port 80 where the machine lets every user bind low ports.
 
 ## Notes

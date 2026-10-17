@@ -137,7 +137,7 @@ func endpoints() ([]netip.AddrPort, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(filepath.Join(base, "mdserve"))
+	entries, err := os.ReadDir(filepath.Join(base, progName))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

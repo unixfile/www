@@ -98,9 +98,9 @@ func journalEntry(prio int, ep, msg string) []byte {
 	}
 	field("MESSAGE", msg)
 	field("PRIORITY", fmt.Sprint(prio))
-	field("SYSLOG_IDENTIFIER", "mdserve")
+	field("SYSLOG_IDENTIFIER", progName)
 	if ep != "" {
-		field("MDSERVE_ENDPOINT", ep)
+		field(envPrefix+"ENDPOINT", ep)
 	}
 	return b.Bytes()
 }
@@ -111,7 +111,7 @@ func logFile() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "mdserve", "log"), nil
+	return filepath.Join(base, progName, "log"), nil
 }
 
 // appendLogFile writes one line: time, PID, endpoint, priority and the
@@ -171,7 +171,7 @@ func logSink() *os.File {
 		defer c.Close()
 		// The stream's header: identifier, unit, priority, level prefix,
 		// and forwarding to syslog, kmsg and console.
-		if _, err := c.Write([]byte("mdserve\n\n3\n0\n0\n0\n0\n")); err == nil {
+		if _, err := c.Write([]byte(progName + "\n\n3\n0\n0\n0\n0\n")); err == nil {
 			if f, err := c.File(); err == nil {
 				return f
 			}
@@ -194,7 +194,7 @@ func logSink() *os.File {
 func build() string {
 	exe, err := os.Executable()
 	if err != nil {
-		exe = "mdserve"
+		exe = progName
 	}
 	return exe + " " + buildRev()
 }
@@ -228,7 +228,7 @@ func buildRev() string {
 // commandLine quotes args for the log as a shell would need them, with a
 // secret token hidden.
 func commandLine(args []string) string {
-	out := []string{"mdserve"}
+	out := []string{progName}
 	for _, a := range args {
 		switch {
 		case strings.HasPrefix(a, "--secret=") && a != "--secret=":
@@ -249,9 +249,9 @@ func logRun(args []string) {
 
 // logHelp tells --help where the log is.
 func logHelp() string {
-	where := "  journalctl --user -t mdserve\n"
+	where := "  journalctl --user -t " + progName + "\n"
 	if info, err := os.Stat(journalSocket); err != nil || info.Mode().Type() != os.ModeSocket {
-		where = "  " + filepath.Join("$XDG_STATE_HOME", "mdserve", "log") + "\n"
+		where = "  " + filepath.Join("$XDG_STATE_HOME", progName, "log") + "\n"
 		if p, err := logFile(); err == nil {
 			where = "  " + p + "\n"
 		}

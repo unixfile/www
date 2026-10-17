@@ -1,0 +1,8 @@
+#!/bin/sh
+# Let @NAME@ bind port 80 on its loopback address. The capability is
+# visible with getcap /usr/bin/@NAME@; without it @NAME@ serves on 8080.
+set -e
+if [ "$1" = configure ]; then
+	setcap cap_net_bind_service=+ep /usr/bin/@NAME@ ||
+		echo "@NAME@: setcap failed; @NAME@ will serve on port 8080" >&2
+fi

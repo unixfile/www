@@ -160,7 +160,7 @@ func TestTreesShareOneServer(t *testing.T) {
 	if code := status(t, base+two+"/b.txt?raw"); code != http.StatusOK {
 		t.Fatalf("second tree went with the first: status %d", code)
 	}
-	reg := filepath.Join(os.Getenv("XDG_STATE_HOME"), "mdserve", endpointName(ep))
+	reg := filepath.Join(os.Getenv("XDG_STATE_HOME"), progName, endpointName(ep))
 	if _, err := os.Lstat(filepath.Join(reg, linkName(one))); err == nil {
 		t.Error("withdrawn tree keeps its registry link")
 	}
@@ -250,7 +250,7 @@ func TestStopButtonEndsLastTree(t *testing.T) {
 	ep := testEndpoint(t)
 	dir := t.TempDir()
 	_, served := start(t, config{dir: dir, ep: ep})
-	resp, err := http.PostForm("http://"+ep.String()+"/_mdserve/stop", map[string][]string{"tree": {dir + "/"}})
+	resp, err := http.PostForm("http://"+ep.String()+ownPath+"stop", map[string][]string{"tree": {dir + "/"}})
 	if err != nil {
 		t.Fatal(err)
 	}

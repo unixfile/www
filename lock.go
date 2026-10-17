@@ -115,7 +115,7 @@ func createLock(path, root, url string) (*lock, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = fmt.Fprintf(f, "# mdserve is serving this directory. Delete this file to stop serving it.\n"+
+	_, err = fmt.Fprintf(f, "# "+progName+" is serving this directory. Delete this file to stop serving it.\n"+
 		"url: %s\nroot: %s\npid: %d\nstarted: %s\nboot_id: %s\n",
 		url, root, os.Getpid(), time.Now().Format(time.RFC3339), bootID())
 	if cerr := f.Close(); err == nil {

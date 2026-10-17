@@ -14,7 +14,7 @@ import (
 // TestMain keeps the tests' entries out of the user's journal and state
 // directory.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "mdserve-test-")
+	dir, err := os.MkdirTemp("", progName+"-test-")
 	if err != nil {
 		panic(err)
 	}
@@ -70,7 +70,7 @@ func TestJournalEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := buf[:n]
-	for _, want := range []string{"PRIORITY=3\n", "SYSLOG_IDENTIFIER=mdserve\n", "MDSERVE_ENDPOINT=127.31.1.1-80\n"} {
+	for _, want := range []string{"PRIORITY=3\n", "SYSLOG_IDENTIFIER=" + progName + "\n", envPrefix + "ENDPOINT=127.31.1.1-80\n"} {
 		if !bytes.Contains(got, []byte(want)) {
 			t.Errorf("entry lacks %q:\n%q", want, got)
 		}
@@ -123,7 +123,7 @@ func TestLogFileRotates(t *testing.T) {
 
 func TestCommandLine(t *testing.T) {
 	got := commandLine([]string{"-n", "--share", "--secret=abc", "my docs", "it's"})
-	want := `mdserve -n --share --secret=<token> 'my docs' 'it'\''s'`
+	want := progName + ` -n --share --secret=<token> 'my docs' 'it'\''s'`
 	if got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
@@ -136,7 +136,7 @@ func TestRequestLog(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	s, tr, _ := serveTree(t)
 	h := s.handler()
-	for _, p := range []string{styleURL, "/favicon.ico", "/_mdserve/live?path=/", "/index.md"} {
+	for _, p := range []string{styleURL, "/favicon.ico", ownPath + "live?path=/", "/index.md"} {
 		get(h, p)
 	}
 	tr.prefix, tr.secret = "/s3cr3t/", true
@@ -146,7 +146,7 @@ func TestRequestLog(t *testing.T) {
 	path, _ := logFile()
 	b, _ := os.ReadFile(path)
 	log := string(b)
-	for _, skip := range []string{"style.", "favicon", "/_mdserve/live", "s3cr3t"} {
+	for _, skip := range []string{"style.", "favicon", ownPath + "live", "s3cr3t"} {
 		if strings.Contains(log, skip) {
 			t.Errorf("log holds %s:\n%s", skip, log)
 		}

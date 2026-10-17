@@ -53,7 +53,7 @@ func restart(c config) int {
 func restartServer(ep netip.AddrPort, pid int, trees []servedTree) error {
 	if ep.Port() < 1024 && !lowPortOK() {
 		return &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
-			", so the server on " + ep.String() + " keeps its old one. Run the installed package's mdserve, which holds cap_net_bind_service"}
+			", so the server on " + ep.String() + " keeps its old one. Run the installed package's " + progName + ", which holds cap_net_bind_service"}
 	}
 	if err := stopServer(ep, pid, trees); err != nil {
 		return err

@@ -86,7 +86,7 @@ func TestShareListingHidesReasons(t *testing.T) {
 	if !strings.Contains(body, `<li class="refused">secret <span`) || !strings.Contains(body, `<li class="refused">shut/ <span`) {
 		t.Errorf("listing does not mark private entries as refused:\n%s", body)
 	}
-	if strings.Contains(body, "title=\"secret") || strings.Contains(body, "/_mdserve/stop") {
+	if strings.Contains(body, "title=\"secret") || strings.Contains(body, ownPath+"stop") {
 		t.Errorf("listing carries a reason or a stop button:\n%s", body)
 	}
 }
@@ -97,7 +97,7 @@ func TestShareIndexListsOnlyOpenTrees(t *testing.T) {
 	if !strings.Contains(body, `<a href="/docs/">docs/</a>`) {
 		t.Errorf("index does not list docs:\n%s", body)
 	}
-	if strings.Contains(body, "s3cret") || strings.Contains(body, "hid") || strings.Contains(body, "/_mdserve/stop") {
+	if strings.Contains(body, "s3cret") || strings.Contains(body, "hid") || strings.Contains(body, ownPath+"stop") {
 		t.Errorf("index shows the secret tree or a button:\n%s", body)
 	}
 }
@@ -107,7 +107,7 @@ func TestShareTakesAnyHostAndNoStop(t *testing.T) {
 	if rec := get(h, "/docs/pub.txt?raw", "Host", "laptop.lan"); rec.Code != http.StatusOK {
 		t.Errorf("Host laptop.lan: status %d, want 200", rec.Code)
 	}
-	if rec := do(h, "POST", "/_mdserve/stop"); rec.Code == http.StatusOK {
+	if rec := do(h, "POST", ownPath+"stop"); rec.Code == http.StatusOK {
 		t.Error("a shared server answered a stop")
 	}
 }
@@ -309,6 +309,6 @@ func TestEnvironmentDefaults(t *testing.T) {
 	}
 	t.Setenv(addrEnv, "10.0.0.1")
 	if _, err := endpointOf(config{dir: "."}, 1000); err == nil || !strings.HasPrefix(err.Error(), addrEnv+"=10.0.0.1: ") {
-		t.Errorf("non-loopback MDSERVE_ADDR: %v, want an error naming it", err)
+		t.Errorf("non-loopback "+envPrefix+"ADDR: %v, want an error naming it", err)
 	}
 }

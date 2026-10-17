@@ -117,7 +117,7 @@ func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath, token 
 		}
 	}
 	os.Remove(link)
-	return rep.fail(syscall.ETIMEDOUT, ep.String()+" is taken, but no mdserve there took "+dir)
+	return rep.fail(syscall.ETIMEDOUT, ep.String()+" is taken, but no "+progName+" there took "+dir)
 }
 
 // origin is the URL of the server on ep. Port 80 is HTTP's own and goes

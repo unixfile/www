@@ -91,7 +91,7 @@ func TestScriptAllowedByHash(t *testing.T) {
 			t.Errorf("CSP has %q, want %q", d, want)
 		}
 	}
-	if !strings.Contains(m[1], "/_mdserve/live?path=%2Fmissing&amp;v=") {
+	if !strings.Contains(m[1], ownPath+"live?path=%2Fmissing&amp;v=") {
 		t.Errorf("stream URL %q", m[1])
 	}
 }

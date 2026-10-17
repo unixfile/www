@@ -13,7 +13,7 @@ import (
 // followMarker marks a directory that links out of a tree may reach. lord
 // keeps csi and .claude in a store outside the repo; one marker in the
 // store root opens them all.
-const followMarker = ".mdserve-follow"
+var followMarker = "." + progName + "-follow"
 
 // treeFS opens a tree's files through its os.Root, which follows a link
 // only while it stays inside the tree and never an absolute one. What the
@@ -124,14 +124,14 @@ func (r *refusal) Error() string {
 		if !r.dir {
 			where = "the target's directory or one above it"
 		}
-		return msg + "mdserve follows such links only into a directory that holds " +
+		return msg + progName + " follows such links only into a directory that holds " +
 			followMarker + ", or below one. Create it in " + where + "."
 	}
 	what := "it"
 	if r.path != r.target {
 		what = r.path
 	}
-	return msg + fmt.Sprintf("Other users cannot read %s (mode %03o), so mdserve does not serve it.", what, r.mode.Perm())
+	return msg + fmt.Sprintf("Other users cannot read %s (mode %03o), so "+progName+" does not serve it.", what, r.mode.Perm())
 }
 
 // follow decides whether name, which resolves to real outside the tree,

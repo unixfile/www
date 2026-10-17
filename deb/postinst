@@ -1,8 +1,0 @@
-#!/bin/sh
-# Let mdserve bind port 80 on its loopback address. The capability is
-# visible with getcap /usr/bin/mdserve; without it mdserve serves on 8080.
-set -e
-if [ "$1" = configure ]; then
-	setcap cap_net_bind_service=+ep /usr/bin/mdserve ||
-		echo "mdserve: setcap failed; mdserve will serve on port 8080" >&2
-fi

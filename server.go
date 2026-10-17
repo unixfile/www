@@ -33,7 +33,7 @@ var styleCSS []byte
 // URL.
 var styleURL = func() string {
 	sum := sha256.Sum256(styleCSS)
-	return "/_mdserve/style." + hex.EncodeToString(sum[:6]) + ".css"
+	return ownPath + "style." + hex.EncodeToString(sum[:6]) + ".css"
 }()
 
 //go:embed assets/layout.html
@@ -49,6 +49,7 @@ var fontFS embed.FS
 var layout = template.Must(template.New("layout").Funcs(template.FuncMap{
 	"liveJS":   func() template.JS { return template.JS(liveJS) },
 	"styleURL": func() string { return styleURL },
+	"ownPath":  func() string { return ownPath },
 }).Parse(layoutHTML))
 
 // maxCode caps the size of a file shown as a code page; larger files go raw.
@@ -104,7 +105,7 @@ func (a about) stale() bool {
 // restartCmd is the command that moves this server's trees to the new
 // binary; with no address it moves every server's.
 func (a about) restartCmd() string {
-	return "mdserve --restart"
+	return progName + " --restart"
 }
 
 // status is the index header's account of the server's age. The build
@@ -294,7 +295,7 @@ func (s *server) handler() http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		w.Write(styleCSS)
 	})
-	mux.HandleFunc("GET /_mdserve/fonts/{name}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET "+ownPath+"fonts/{name}", func(w http.ResponseWriter, r *http.Request) {
 		b, err := fontFS.ReadFile("assets/fonts/" + path.Base(r.PathValue("name")))
 		if err != nil {
 			http.NotFound(w, r)
@@ -306,9 +307,9 @@ func (s *server) handler() http.Handler {
 	})
 	// A shared server has no buttons: no visitor may stop it.
 	if !s.shared {
-		mux.HandleFunc("POST /_mdserve/stop", s.handleStop)
+		mux.HandleFunc("POST "+ownPath+"stop", s.handleStop)
 	}
-	mux.HandleFunc("GET /_mdserve/live", s.handleLive)
+	mux.HandleFunc("GET "+ownPath+"live", s.handleLive)
 	mux.HandleFunc("GET /", s.handlePath)
 	return s.logged(guard(mux, s.shared))
 }
@@ -319,7 +320,7 @@ func (s *server) handler() http.Handler {
 func (s *server) logged(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/favicon.ico" || strings.HasPrefix(p, "/_mdserve/") && p != "/_mdserve/stop" {
+		if p == "/favicon.ico" || strings.HasPrefix(p, ownPath) && p != ownPath+"stop" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -377,7 +378,7 @@ func guard(next http.Handler, anyHost bool) http.Handler {
 			host = r.Host
 		}
 		if !anyHost && !localHost(host) {
-			http.Error(w, "mdserve answers only to this machine", http.StatusMisdirectedRequest)
+			http.Error(w, progName+" answers only to this machine", http.StatusMisdirectedRequest)
 			return
 		}
 		h := w.Header()
@@ -450,10 +451,10 @@ func hostsEntries() []hostsEntry {
 // localhost, so the request must come from a page of this server.
 func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
-		http.Error(w, "stop must come from an mdserve page", http.StatusForbidden)
+		http.Error(w, "stop must come from an "+progName+" page", http.StatusForbidden)
 		return
 	}
-	trees, crumbs, what, why := s.list(), []crumb{{Label: "mdserve"}}, "Stopped mdserve", "Kill server button"
+	trees, crumbs, what, why := s.list(), []crumb{{Label: progName}}, "Stopped "+progName, "Kill server button"
 	if prefix := r.PostFormValue("tree"); prefix != "" {
 		t := s.byPrefix(prefix)
 		if t == nil {
@@ -477,13 +478,13 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 		what += "s"
 	}
 	render(w, r, http.StatusOK, page{
-		Title:  "mdserve stopped",
+		Title:  progName + " stopped",
 		Crumbs: crumbs,
 		Kind:   "stopped",
 		// The server may close its listener before the browser asks for
 		// the stylesheet, so the page carries it.
 		Style:   template.CSS(styleCSS),
-		Body:    template.HTML("<p class=\"mdserve\">" + template.HTMLEscapeString(what) + ". Close this tab.</p>"),
+		Body:    template.HTML("<p class=\"own\">" + template.HTMLEscapeString(what) + ". Close this tab.</p>"),
 		Stopped: true,
 	})
 	// stop only withdraws; the hub shuts down on its own goroutine, since
@@ -542,34 +543,34 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 		body.WriteString("<pre class=\"error\">" + esc(msg) + "</pre>\n")
 	}
 	if s.about.stale() {
-		body.WriteString("<p class=\"mdserve warn\">The binary changed after this server started. Run <code>" + esc(s.about.restartCmd()) + "</code>.</p>\n")
+		body.WriteString("<p class=\"own warn\">The binary changed after this server started. Run <code>" + esc(s.about.restartCmd()) + "</code>.</p>\n")
 	}
 	trees := s.list()
 	if len(trees) == 0 {
-		body.WriteString("<p class=\"mdserve\">No tree is served.</p>\n")
+		body.WriteString("<p class=\"own\">No tree is served.</p>\n")
 	} else {
-		body.WriteString("<table class=\"locks mdserve\">\n")
+		body.WriteString("<table class=\"locks own\">\n")
 		for _, t := range trees {
 			lockPath, since := "", ""
 			if t.lock != nil {
 				lockPath, since = t.lock.path, "since "+clock(t.lock.info.ModTime())
 			}
 			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">%s</span></td>"+
-				"<td><form method=\"post\" action=\"/_mdserve/stop\"><input type=\"hidden\" name=\"tree\" value=\"%s\">"+
+				"<td><form method=\"post\" action=\""+ownPath+"stop\"><input type=\"hidden\" name=\"tree\" value=\"%s\">"+
 				"<input type=\"hidden\" name=\"from\" value=\"index\"><button>Delete lock</button></form></td></tr>\n",
 				esc(t.prefixURL()), esc(lockPath), segments(t.label), since, esc(t.prefix))
 		}
 		body.WriteString("</table>\n")
 	}
 	if others := s.otherTrees(); len(others) > 0 {
-		body.WriteString("<h2 class=\"mdserve\">Other addresses</h2>\n<table class=\"locks mdserve\">\n")
+		body.WriteString("<h2 class=\"own\">Other addresses</h2>\n<table class=\"locks own\">\n")
 		for _, t := range others {
 			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">since %s</span></td></tr>\n",
 				esc(t.url), esc(filepath.Join(t.dir, lockName(t.ep))), segments(t.url), clock(t.since))
 		}
 		body.WriteString("</table>\n")
 	}
-	render(w, r, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
+	render(w, r, status, page{Title: progName, Crumbs: []crumb{{Label: "index"}}, Kind: "index",
 		Body: template.HTML(body.String()), Status: s.about.status()})
 }
 
@@ -603,7 +604,7 @@ func (s *server) serveSharedIndex(w http.ResponseWriter, r *http.Request, status
 	}
 	trees := slices.DeleteFunc(s.list(), func(t *tree) bool { return t.secret })
 	if len(trees) == 0 {
-		body.WriteString("<p class=\"mdserve\">No tree is listed here.</p>\n")
+		body.WriteString("<p class=\"own\">No tree is listed here.</p>\n")
 	} else {
 		body.WriteString("<ul class=\"listing\">\n")
 		for _, t := range trees {
@@ -611,7 +612,7 @@ func (s *server) serveSharedIndex(w http.ResponseWriter, r *http.Request, status
 		}
 		body.WriteString("</ul>\n")
 	}
-	render(w, r, status, page{Title: "mdserve", Crumbs: []crumb{{Label: "index"}}, Kind: "index",
+	render(w, r, status, page{Title: progName, Crumbs: []crumb{{Label: "index"}}, Kind: "index",
 		Body: template.HTML(body.String()), Shared: true})
 }
 
@@ -817,11 +818,11 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		}
 		href := (&url.URL{Path: label}).String()
 		if it.ref != nil && t.shared {
-			fmt.Fprintf(&body, "<li class=\"refused\">%s <span class=\"mdserve\">refused</span></li>\n", template.HTMLEscapeString(label))
+			fmt.Fprintf(&body, "<li class=\"refused\">%s <span class=\"own\">refused</span></li>\n", template.HTMLEscapeString(label))
 			continue
 		}
 		if it.ref != nil {
-			fmt.Fprintf(&body, "<li class=\"refused\"><a href=\"%s\" title=\"%s\">%s</a> <span class=\"mdserve\">refused</span></li>\n",
+			fmt.Fprintf(&body, "<li class=\"refused\"><a href=\"%s\" title=\"%s\">%s</a> <span class=\"own\">refused</span></li>\n",
 				template.HTMLEscapeString(href), template.HTMLEscapeString(it.ref.Error()), template.HTMLEscapeString(label))
 			continue
 		}

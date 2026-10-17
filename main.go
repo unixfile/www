@@ -24,7 +24,7 @@ import (
 )
 
 // readyEnv names the descriptor a detached child reports its start on.
-const readyEnv = "MDSERVE_READY_FD"
+var readyEnv = envPrefix + "READY_FD"
 
 // defaultPort is 8080 until main finds that this process may bind port 80.
 var defaultPort uint16 = 8080
@@ -75,14 +75,14 @@ type config struct {
 	kill    bool
 }
 
-const usageText = `usage: mdserve [-fnh] [-a ip[:port]] [dir]
-       mdserve [-fnh] --share[=host[:port]] [--secret[=token]] [dir]
-       mdserve --restart [-a ip[:port] | --share[=host[:port]]]
-       mdserve -l [-a ip[:port] | --share[=host[:port]]] [dir]
-       mdserve --kill [-a ip[:port] | --share[=host[:port]]]
+var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnh] [-a ip[:port]] [dir]
+       @NAME@ [-fnh] --share[=host[:port]] [--secret[=token]] [dir]
+       @NAME@ --restart [-a ip[:port] | --share[=host[:port]]]
+       @NAME@ -l [-a ip[:port] | --share[=host[:port]]] [dir]
+       @NAME@ --kill [-a ip[:port] | --share[=host[:port]]]
 
   -a, --addr ip[:port]  serve on this loopback address; the port defaults to 80
-                        when mdserve may bind it, else 8080
+                        when @NAME@ may bind it, else 8080
                         (default 127.31.N.1, N = uid - 1000)
       --share[=host[:port]]
                         share the tree on the address of the default route,
@@ -108,7 +108,7 @@ const usageText = `usage: mdserve [-fnh] [-a ip[:port]] [dir]
       --kill            stop every server and print the trees it served; with
                         -a or --share, only the server on that address
   -h, --help            print this help
-`
+`, "@NAME@", progName)
 
 // switches maps each long boolean option to its field; shorts names the
 // ones with a short form.
@@ -310,9 +310,9 @@ func noteRun() {
 }
 
 // Environment variables that set the default addresses.
-const (
-	addrEnv  = "MDSERVE_ADDR"
-	shareEnv = "MDSERVE_SHARE"
+var (
+	addrEnv  = envPrefix + "ADDR"
+	shareEnv = envPrefix + "SHARE"
 )
 
 // endpointOf returns where c serves. A bare --share takes MDSERVE_SHARE,

@@ -161,7 +161,7 @@ func (s *server) withLive(r *http.Request) *http.Request {
 		return r
 	}
 	q := url.Values{"path": {r.URL.Path}, "v": {s.live.id + "." + s.version(r.URL.Path)}}
-	return r.WithContext(context.WithValue(r.Context(), liveKey{}, "/_mdserve/live?"+q.Encode()))
+	return r.WithContext(context.WithValue(r.Context(), liveKey{}, ownPath+"live?"+q.Encode()))
 }
 
 func liveURL(r *http.Request) string {

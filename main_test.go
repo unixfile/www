@@ -104,10 +104,10 @@ func TestWithin(t *testing.T) {
 // CAP_NET_BIND_SERVICE is bit 10 of the effective set.
 func TestHasCap(t *testing.T) {
 	for status, want := range map[string]bool{
-		"Name:\tmdserve\nCapInh:\t0000000000000000\nCapEff:\t0000000000000400\n": true,
-		"CapEff:\t000001ffffffffff\n":                                            true,
-		"CapPrm:\t0000000000000400\nCapEff:\t0000000000000000\n":                 false,
-		"Name:\tmdserve\n": false,
+		"Name:\t" + progName + "\nCapInh:\t0000000000000000\nCapEff:\t0000000000000400\n": true,
+		"CapEff:\t000001ffffffffff\n":                            true,
+		"CapPrm:\t0000000000000400\nCapEff:\t0000000000000000\n": false,
+		"Name:\t" + progName + "\n":                              false,
 	} {
 		if got := hasCap(status, capNetBindService); got != want {
 			t.Errorf("%q: %v, want %v", status, got, want)

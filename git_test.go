@@ -84,9 +84,9 @@ func TestHistoryPage(t *testing.T) {
 	// fold also links in its place.
 	c := head(t, dir, "HEAD")
 	for _, want := range []string{
-		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"mdserve\"><a class=\"hash\" href=\"?commit=" + c + `"`,
+		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"own\"><a class=\"hash\" href=\"?commit=" + c + `"`,
 		`</span> <span class="subject">Rename the package &lt;b&gt;</span></summary>`,
-		`<div class="diffs"><p class="mdserve"><a href="?commit=` + c + `">diff</a></p></div>` + "\n</details></li>",
+		`<div class="diffs"><p class="own"><a href="?commit=` + c + `">diff</a></p></div>` + "\n</details></li>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("no %q:\n%s", want, body)
@@ -145,7 +145,7 @@ func TestPageTopNamesLastCommit(t *testing.T) {
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<p class="mdserve latest"><a href="?log">&lt;(git log)</a> <a class="hash" href="?commit=`) || !strings.Contains(body, "</span> "+subject+"</p>") {
+		if !strings.Contains(body, `<p class="own latest"><a href="?log">&lt;(git log)</a> <a class="hash" href="?commit=`) || !strings.Contains(body, "</span> "+subject+"</p>") {
 			t.Errorf("%s: no top line with %q:\n%s", p, subject, body)
 		}
 	}
@@ -262,9 +262,9 @@ func TestCommitPage(t *testing.T) {
 		"Rename the package &lt;b&gt;",
 		`<span class="del">-func F() {}</span><span class="add">+package b</span>`,
 		`<a href="/?commit=` + c + `">All files</a>`,
-		`<p class="mdserve file"><a href="/a/b.go">a/b.go</a></p>`,
+		`<p class="own file"><a href="/a/b.go">a/b.go</a></p>`,
 		`<a href="/a/b.go?log">&lt;(git log)</a>`,
-		"</div>\n<div class=\"diffs\">\n<p class=\"mdserve\">Changes to a/b.go.",
+		"</div>\n<div class=\"diffs\">\n<p class=\"own\">Changes to a/b.go.",
 		"</pre>\n</div>\n",
 	} {
 		if !strings.Contains(body, want) {

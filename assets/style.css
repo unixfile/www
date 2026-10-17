@@ -1,4 +1,4 @@
-/* mdserve's stylesheet. It began as md2html-default's and is mdserve's
+/* The program's stylesheet. It began as md2html-default's and is the program's
    own now; the light palette is the user's design. */
 
 /* The page colours. The syntax colours below are pandoc's. */
@@ -15,35 +15,35 @@
   --removed: #f8e6e2;
 }
 
-/* STIX Two Text from the machine, else from mdserve, never from the
+/* STIX Two Text from the machine, else from the program, never from the
    network. */
 @font-face {
   font-family: "STIX Two Text";
   font-style: normal;
   font-weight: 400;
   src: local("STIX Two Text Regular"), local("STIXTwoText-Regular"),
-       url("/_mdserve/fonts/STIXTwoText-Regular.otf") format("opentype");
+       url("fonts/STIXTwoText-Regular.otf") format("opentype");
 }
 @font-face {
   font-family: "STIX Two Text";
   font-style: italic;
   font-weight: 400;
   src: local("STIX Two Text Italic"), local("STIXTwoText-Italic"),
-       url("/_mdserve/fonts/STIXTwoText-Italic.otf") format("opentype");
+       url("fonts/STIXTwoText-Italic.otf") format("opentype");
 }
 @font-face {
   font-family: "STIX Two Text";
   font-style: normal;
   font-weight: 700;
   src: local("STIX Two Text Bold"), local("STIXTwoText-Bold"),
-       url("/_mdserve/fonts/STIXTwoText-Bold.otf") format("opentype");
+       url("fonts/STIXTwoText-Bold.otf") format("opentype");
 }
 @font-face {
   font-family: "STIX Two Text";
   font-style: italic;
   font-weight: 700;
   src: local("STIX Two Text Bold Italic"), local("STIXTwoText-BoldItalic"),
-       url("/_mdserve/fonts/STIXTwoText-BoldItalic.otf") format("opentype");
+       url("fonts/STIXTwoText-BoldItalic.otf") format("opentype");
 }
 /* The header holds still from page to page: every page keeps one width,
    and the scrollbar's space is kept on short pages too, so the centred
@@ -128,9 +128,9 @@ header button {
   padding: 0.15em 0.7em;
   cursor: pointer;
 }
-/* What mdserve says is mono, file names in a listing included; what the
+/* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
-pre, code, header, .mdserve, ul.listing, p.built { font-family: ui-monospace, "Iosevka", monospace; }
+pre, code, header, .own, ul.listing, p.built { font-family: ui-monospace, "Iosevka", monospace; }
 /* Code is half the body size, so about 115 columns fit the doc's measure
    and no page needs to be wider. It never drops below 11px, where small
    screens set the body at 16px. */
@@ -150,7 +150,7 @@ th, td { border-bottom: 1px solid var(--rule); padding: 0.2em 0.6em; text-align:
 img { max-width: 100%; }
 ul.listing { list-style: none; padding: 0; text-align: left; }
 ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
-/* mdserve's own links, in the header, listings and the index, are quiet,
+/* The program's own links, in the header, listings and the index, are quiet,
    not lost: the text colour with a faint underline, which tells a link
    from the current crumb or a refused entry on a share. The underline
    turns full under the pointer, and a visited link turns grey. */
@@ -160,23 +160,23 @@ ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
 main a { color: inherit; text-decoration-color: var(--muted); }
 main a:visited { text-decoration-color: var(--rule); }
 main a:hover { text-decoration-color: currentColor; }
-header a, ul.listing a, table.locks a, p.latest a, .mdserve a { color: inherit; text-decoration-color: var(--rule); }
-header a:visited, ul.listing a:visited, table.locks a:visited, p.latest a:visited, .mdserve a:visited { color: var(--muted); }
-header a:hover, ul.listing a:hover, table.locks a:hover, p.latest a:hover, .mdserve a:hover { text-decoration-color: currentColor; }
+header a, ul.listing a, table.locks a, p.latest a, .own a { color: inherit; text-decoration-color: var(--rule); }
+header a:visited, ul.listing a:visited, table.locks a:visited, p.latest a:visited, .own a:visited { color: var(--muted); }
+header a:hover, ul.listing a:hover, table.locks a:hover, p.latest a:hover, .own a:hover { text-decoration-color: currentColor; }
 ul.listing li.refused span { color: var(--muted); font-size: 0.8em; }
-/* A history: hash and date are mdserve's and mono, subject and body the
+/* A history: hash and date are the program's and mono, subject and body the
    author's and serif. A page's top line leads to its history. */
 /* Each commit is a fold: one line closed, message and diff open. */
 ol.log { list-style: none; padding: 0; }
 ol.log > li { margin: 0 0 0.4em; }
 ol.log summary { cursor: pointer; text-align: left; }
-ol.log summary > .mdserve { color: var(--muted); font-size: 0.8em; }
+ol.log summary > .own { color: var(--muted); font-size: 0.8em; }
 ol.log details[open] { margin-bottom: 2em; }
 ol.log details > p { margin: 0.45em 0 0.45em 1.2em; text-align: left; }
-ol.log div.diffs > p.mdserve:only-child { margin-left: 1.2em; }
+ol.log div.diffs > p.own:only-child { margin-left: 1.2em; }
 div.commit p.subject { font-weight: bold; margin-top: 0.2em; }
 div.commit p { text-align: left; }
-div.commit p.mdserve { color: var(--muted); margin-bottom: 0; }
+div.commit p.own { color: var(--muted); margin-bottom: 0; }
 /* A commit's diff: added and removed lines on a faint tint, git's own
    lines muted. */
 p.file { margin: 2em 0 0.3em; }
@@ -191,10 +191,10 @@ pre.error { white-space: pre-wrap; color: var(--danger); }
 header .age { color: var(--muted); }
 /* Kill server reaches every tree, so it alone wears the danger colour. */
 header button.kill { background: var(--danger); border-color: var(--danger); color: var(--page); }
-p.mdserve { font-size: 0.8em; text-align: left; hyphens: none; }
+p.own { font-size: 0.8em; text-align: left; hyphens: none; }
 p.warn { color: var(--danger); }
-p.mdserve code { font-size: inherit; }
-h2.mdserve { font-size: 0.8em; font-weight: normal; color: var(--muted); margin-top: 2.5em; }
+p.own code { font-size: inherit; }
+h2.own { font-size: 0.8em; font-weight: normal; color: var(--muted); margin-top: 2.5em; }
 table.locks { font-size: 0.8em; width: 100%; }
 table.locks td { overflow-wrap: anywhere; vertical-align: baseline; }
 table.locks td:first-child { padding-left: 0; }

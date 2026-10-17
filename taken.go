@@ -17,7 +17,7 @@ func taken(ep netip.AddrPort) string {
 	for _, l := range holders(ep) {
 		name := l.String()
 		if len(peekTrees(l)) > 0 {
-			name = "the mdserve on " + name
+			name = "the " + progName + " on " + name
 		}
 		names = append(names, name)
 	}
@@ -25,7 +25,7 @@ func taken(ep netip.AddrPort) string {
 	if len(names) > 0 {
 		msg += " by " + strings.Join(names, ", ")
 	} else {
-		msg += ", and no mdserve of yours serves there"
+		msg += ", and no " + progName + " of yours serves there"
 	}
 	if ep.Addr().IsUnspecified() {
 		msg += ". 0.0.0.0 claims the port on every address; share on one address, eg --share, or on another port, eg --share=0.0.0.0:8081"

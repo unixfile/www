@@ -36,7 +36,7 @@ func registryDir(ep netip.AddrPort) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "mdserve", endpointName(ep)), nil
+	return filepath.Join(base, progName, endpointName(ep)), nil
 }
 
 func openRegistry(ep netip.AddrPort) (*registry, error) {
