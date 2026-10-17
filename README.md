@@ -2,6 +2,8 @@
 
 Browse trees of Markdown docs in the browser, rendered on each request, with their git history.
 
+It is fast. A page from a running server takes one to three milliseconds, a server starts in about 40 ms, and a test in `make test` fails any page that takes over five.
+
 ## Usage
 
 ```
@@ -77,6 +79,8 @@ Below the prefix, URLs mirror the file tree, so relative links in the docs work 
 A code page anchors lines as GitHub does, so `main.go#L42` lands on line 42 and highlights it. Bare URLs in a doc become links.
 
 A server keeps git's answers so most pages run no git at all: which repo each directory lies in, and the histories pages show. It reads HEAD from the repo's files, and a history is kept under the commit HEAD names, so a new commit misses the cache and nothing shown goes stale. A `.git` that appears or goes makes the server ask git again. `--cache` sets the memory for it.
+The cache holds only what someone has visited, with one exception. When a tree joins, the server asks git in the background for what its listing and its README show, since those open first. The log says how long that took.
+In a large repo git can take a second for a history, because it reads every commit back to the ones that touched the path. When it takes over 100 ms, the history page says so and names `git commit-graph write --reachable --changed-paths`, which builds git's index of the paths each commit changed and makes such histories several times faster. mdserve never writes to the repo itself.
 
 Open pages reload when what they show changes. A doc or code page reloads when its file is written, a listing when a name in it changes, any page in a repo when its HEAD moves, and the index when a tree joins or leaves. A page whose file or tree is gone waits two seconds for it to return, then reloads to say so. A page whose server stops reloads after three seconds without it, so the browser says the server is gone; a restart takes about 60 ms, and its new server reloads the page first. Each page holds a server-sent events stream while its tab is visible; a hidden tab lets go, since a browser opens at most six connections to one host, and checks again when shown. The server watches the directory of each open page and its repo's git directory through inotify, since editors save by renaming a new file over the old one, and polls every second where inotify fails.
 

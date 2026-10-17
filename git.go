@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -28,6 +29,10 @@ const maxLog = 500
 
 // gitWait bounds a git run that no request waits on.
 const gitWait = 5 * time.Second
+
+// slowGit is how long git may take for a history before its page names
+// the command that speeds it up.
+var slowGit = 100 * time.Millisecond
 
 // errNoHistory is what a share says in place of git's errors, which name
 // paths on the machine.
@@ -145,6 +150,78 @@ func (t *tree) commits(out []byte) []commit {
 	return log
 }
 
+// lacksPathFilters reports whether the repo name lies in has no
+// commit-graph with changed-path filters, the index git reads to skip
+// commits that left a path alone. A split graph counts by its newest
+// layer, which holds the commits a history reads first.
+func (t *tree) lacksPathFilters(ctx context.Context, name string) bool {
+	dir, _, err := t.gitPlace(name)
+	if err != nil {
+		return false
+	}
+	r := repoAt(ctx, dir)
+	if r.complaint != "" {
+		return false
+	}
+	info := filepath.Join(r.common, "objects", "info")
+	graph := filepath.Join(info, "commit-graph")
+	if chain, err := os.ReadFile(filepath.Join(info, "commit-graphs", "commit-graph-chain")); err == nil {
+		lines := strings.Fields(string(chain))
+		if len(lines) > 0 {
+			graph = filepath.Join(info, "commit-graphs", "graph-"+lines[len(lines)-1]+".graph")
+		}
+	}
+	return !hasChunk(graph, "BIDX")
+}
+
+// hasChunk reports whether the commit-graph file at p holds the chunk id.
+// Its header is the signature CGPH, three bytes and the chunk count; the
+// table of contents that follows has a 12-byte row per chunk: the id and
+// its offset.
+func hasChunk(p, id string) bool {
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, 8)
+	if _, err := io.ReadFull(f, head); err != nil || string(head[:4]) != "CGPH" {
+		return false
+	}
+	toc := make([]byte, 12*int(head[6]))
+	if _, err := io.ReadFull(f, toc); err != nil {
+		return false
+	}
+	for i := 0; i < len(toc); i += 12 {
+		if string(toc[i:i+4]) == id {
+			return true
+		}
+	}
+	return false
+}
+
+// warm asks git, in the background, what a new tree's first pages need:
+// the top lines of its listing and of its README, the page most often
+// opened next. Later visits find the answers cached.
+func (t *tree) warm() {
+	ctx, cancel := context.WithTimeout(context.Background(), gitWait)
+	defer cancel()
+	start := time.Now()
+	names := []string{"."}
+	if entries, err := fs.ReadDir(t.fsys, "."); err == nil {
+		for _, e := range entries {
+			if n := strings.ToLower(e.Name()); !e.IsDir() && (n == "readme.md" || n == "readme.markdown") {
+				names = append(names, e.Name())
+				break
+			}
+		}
+	}
+	for _, name := range names {
+		t.lastCommit(ctx, name)
+	}
+	logInfo("warmed git answers for %s in %d ms: %s", t.dir, time.Since(start).Milliseconds(), strings.Join(names, ", "))
+}
+
 // gitErr is err, or on a share errNoHistory.
 func (t *tree) gitErr(err error) error {
 	if t.shared {
@@ -252,7 +329,9 @@ func (t *tree) logLine(ctx context.Context, name string) string {
 func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir bool) {
 	crumbs := append(t.pageCrumbs(name, dir), crumb{Label: logLabel})
 	title := "git log " + t.title(name)
+	start := time.Now()
 	log, err := t.gitLog(r.Context(), name, maxLog+1)
+	took := time.Since(start)
 	if err != nil {
 		t.render(w, r, http.StatusNotFound, page{Title: title, Crumbs: crumbs, Kind: "error",
 			Body: template.HTML("<pre class=\"error\">" + template.HTMLEscapeString(err.Error()) + "</pre>")})
@@ -270,6 +349,15 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	if len(log) > maxLog {
 		log = log[:maxLog]
 		fmt.Fprintf(&body, "<p class=\"mdserve\">The %d newest commits. <code>git log</code> lists the rest.</p>\n", maxLog)
+	}
+	// git walks every commit back to the ones that touched name, unless
+	// the repo's commit-graph tells it which paths each commit changed.
+	// mdserve leaves the repo alone and names the command instead. A share
+	// says nothing, since its viewer cannot run it.
+	if took > slowGit && !t.shared && t.lacksPathFilters(r.Context(), name) {
+		fmt.Fprintf(&body, "<p class=\"mdserve\">git took %d ms for this history. "+
+			"<code>git commit-graph write --reachable --changed-paths</code> in the repo makes it several times faster.</p>\n",
+			took.Milliseconds())
 	}
 	// Each commit folds out to its message and its diff. The diff comes
 	// from the commit page when the fold opens, through the one script;

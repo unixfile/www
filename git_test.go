@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -312,5 +313,60 @@ func TestShareDiffSkipsDots(t *testing.T) {
 	body := get(s.handler(), "/docs/?commit="+head(t, dir, "HEAD")).Body.String()
 	if !strings.Contains(body, "+docs/pub.txt") || strings.Contains(body, "hidden") {
 		t.Errorf("share diff:\n%s", body)
+	}
+}
+
+// A history that git was slow to give names the command that writes
+// changed-path filters, until the repo has them. A share never names it.
+func TestSlowHistoryNamesCommitGraph(t *testing.T) {
+	s, dir := repoTree(t)
+	h := s.handler()
+	defer func(d time.Duration) { slowGit = d }(slowGit)
+	slowGit = -1
+	hint := "git commit-graph write --reachable --changed-paths"
+	if body := get(h, "/?log").Body.String(); !strings.Contains(body, hint) {
+		t.Errorf("no hint without filters:\n%s", body)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit-graph", "write", "--reachable", "--changed-paths").CombinedOutput(); err != nil {
+		t.Fatalf("commit-graph: %v\n%s", err, out)
+	}
+	if body := get(h, "/index.md?log").Body.String(); strings.Contains(body, hint) {
+		t.Errorf("hint with filters:\n%s", body)
+	}
+	os.Remove(filepath.Join(dir, ".git", "objects", "info", "commit-graph"))
+	if out, err := exec.Command("git", "-C", dir, "commit-graph", "write", "--reachable", "--split").CombinedOutput(); err != nil {
+		t.Fatalf("commit-graph: %v\n%s", err, out)
+	}
+	if body := get(h, "/a/?log").Body.String(); !strings.Contains(body, hint) {
+		t.Errorf("no hint for a split graph without filters:\n%s", body)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit-graph", "write", "--reachable", "--split=replace", "--changed-paths").CombinedOutput(); err != nil {
+		t.Fatalf("commit-graph: %v\n%s", err, out)
+	}
+	if body := get(h, "/a/b.go?log").Body.String(); strings.Contains(body, hint) {
+		t.Errorf("hint for a split graph with filters:\n%s", body)
+	}
+}
+
+// A new tree's listing and README have their top lines cached before the
+// first visit.
+func TestWarmCachesFirstPages(t *testing.T) {
+	_, dir := repoTree(t)
+	os.WriteFile(filepath.Join(dir, "ReadMe.md"), []byte("# Hi\n"), 0o644)
+	commitAll(t, dir, "Add a readme")
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	tr := newTree(root, dir, "/", "w")
+	tr.warm()
+	r := repoAt(t.Context(), dir)
+	for _, name := range []string{".", "ReadMe.md"} {
+		d, spec, _ := tr.gitPlace(name)
+		key := fmt.Sprintf("log\x00%s\x00%s\x00%s\x00%s\x00%d\x00%t", r.gitDir, r.head(t.Context()), d, spec, 1, false)
+		if _, ok := gitCache.get(key); !ok {
+			t.Errorf("%s: top line not cached", name)
+		}
 	}
 }
