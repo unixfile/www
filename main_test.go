@@ -16,6 +16,8 @@ func TestParseArgs(t *testing.T) {
 		{nil, config{dir: "."}},
 		{[]string{"-fn"}, config{dir: ".", fg: true, noopen: true}},
 		{[]string{"-f", "--stamp"}, config{dir: ".", fg: true, stamp: true}},
+		{[]string{"--cache=64M"}, config{dir: ".", cache: "64M"}},
+		{[]string{"--cache", "0"}, config{dir: ".", cache: "0"}},
 		{[]string{"-f", "-n", "docs"}, config{dir: "docs", fg: true, noopen: true}},
 		{[]string{"docs", "--foreground", "--no-open"}, config{dir: "docs", fg: true, noopen: true}},
 		{[]string{"-a", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
@@ -70,6 +72,9 @@ func TestParseArgs(t *testing.T) {
 		{"--kill", "-l"},
 		{"--kill", "--restart"},
 		{"--kill", "--share", "--secret"},
+		{"--cache=lots"},
+		{"--cache=-1M"},
+		{"--cache"},
 	} {
 		if _, err := parseArgs(args); err == nil {
 			t.Errorf("%q: no error", args)

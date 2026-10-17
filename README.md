@@ -31,6 +31,7 @@ To reach the server by name, add a line such as `127.31.1.1 mdserve` to `/etc/ho
 - `-f`, `--foreground`: when no server runs on the address yet, serve in the foreground until Ctrl-C
 - `-n`, `--no-open`: print the URL without opening a browser
 - `--stamp`: show the binary's build time, the seconds since, its commit and the page's render time, small and faint, above each page's header. `make run` sets it; `--restart` leaves it off
+- `--cache size`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
 - `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; with `-a` or `--share`, only the server on that address
 - `-l`, `--list`: print each served tree's URL and directory, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it
 - `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
@@ -74,6 +75,8 @@ The addresses keep users out of each other's way, not out of each other's trees.
 URLs start with the served directory's path relative to home, eg `http://127.31.1.1:8080/scratch/github.com/unixfile/webstack/index.md`, so a URL names its tree. A directory outside home uses its absolute path.
 Below the prefix, URLs mirror the file tree, so relative links in the docs work unchanged. An absolute link such as `/x.md` points outside the prefix and gives 404. A `.md` file renders as a page, a directory as a listing of its names, a text file as a highlighted code page with linkable lines, and anything else raw. Add `?raw` to any URL for the file itself. A tree inside another served tree answers for its own paths.
 A code page anchors lines as GitHub does, so `main.go#L42` lands on line 42 and highlights it. Bare URLs in a doc become links.
+
+A server keeps git's answers so most pages run no git at all: which repo each directory lies in, and the histories pages show. It reads HEAD from the repo's files, and a history is kept under the commit HEAD names, so a new commit misses the cache and nothing shown goes stale. A `.git` that appears or goes makes the server ask git again. `--cache` sets the memory for it.
 
 Open pages reload when what they show changes. A doc or code page reloads when its file is written, a listing when a name in it changes, any page in a repo when its HEAD moves, and the index when a tree joins or leaves. A page whose file or tree is gone waits two seconds for it to return, then reloads to say so. A page whose server stops reloads after three seconds without it, so the browser says the server is gone; a restart takes about 60 ms, and its new server reloads the page first. Each page holds a server-sent events stream while its tab is visible; a hidden tab lets go, since a browser opens at most six connections to one host, and checks again when shown. The server watches the directory of each open page and its repo's git directory through inotify, since editors save by renaming a new file over the old one, and polls every second where inotify fails.
 

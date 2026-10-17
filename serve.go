@@ -204,6 +204,11 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	logInfo("server starts on %s: %s", c.ep, build())
 	go warmLexers()
 	showBuilt = c.stamp
+	gitCache = newCache(defaultCache)
+	if c.cache != "" {
+		n, _ := parseSize(c.cache)
+		gitCache = newCache(n)
+	}
 	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(lockMask),
 		done: make(chan struct{}), fresh: map[net.Conn]bool{}}
 	defer h.w.close()

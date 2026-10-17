@@ -67,7 +67,8 @@ type config struct {
 	ep      netip.AddrPort
 	fg      bool
 	noopen  bool
-	stamp   bool // show the build time above each page's header
+	stamp   bool   // show the build time above each page's header
+	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
 	help    bool
 	restart bool
 	list    bool
@@ -97,6 +98,8 @@ const usageText = `usage: mdserve [-fnh] [-a ip[:port]] [dir]
       --stamp           show the binary's build time, the seconds since, its
                         commit and the page's render time, small and faint,
                         above each page's header
+      --cache size      memory a new server may spend on cached git answers,
+                        eg 64M; 0 caches nothing (default 32M)
       --restart         replace every server with one running this binary,
                         serving the same trees; with -a or --share, only the
                         server on that address
@@ -175,6 +178,17 @@ func parseArgs(args []string) (config, error) {
 				if hasVal && !validToken(val) {
 					return c, &errno{syscall.EINVAL, "bad token " + val + ": want letters, digits, - and _"}
 				}
+				continue
+			}
+			if name == "cache" {
+				v, err := value(&i, "--cache", val)
+				if err != nil {
+					return c, err
+				}
+				if _, err := parseSize(v); err != nil {
+					return c, err
+				}
+				c.cache = v
 				continue
 			}
 			p, ok := sw[name]

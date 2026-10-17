@@ -96,12 +96,29 @@ func (t *tree) gitLog(ctx context.Context, name string, n int) ([]commit, error)
 	if t.shared && !openRepo(ctx, dir) {
 		return nil, errNoHistory
 	}
+	// A history is fixed by the commit HEAD names, so it is kept under
+	// that commit and a new one misses the cache.
+	var key string
+	if r := repoAt(ctx, dir); r.complaint == "" {
+		key = fmt.Sprintf("log\x00%s\x00%s\x00%s\x00%s\x00%d\x00%t", r.gitDir, r.head(ctx), dir, spec, n, t.shared)
+		if v, ok := gitCache.get(key); ok {
+			return v.([]commit), nil
+		}
+	}
 	out, err := git(ctx, dir, "log", "--no-ext-diff", "--no-textconv", "--no-show-signature", "--no-color",
 		"-z", "--format="+commitFormat, "-n", fmt.Sprint(n), "--", spec)
 	if err != nil {
 		return nil, t.gitErr(err)
 	}
-	return t.commits(out), nil
+	log := t.commits(out)
+	if key != "" {
+		size := int64(0)
+		for _, c := range log {
+			size += int64(len(c.hash)+len(c.short)+len(c.subject)+len(c.body)) + 64
+		}
+		gitCache.put(key, log, size)
+	}
+	return log, nil
 }
 
 // commitFormat is how git prints a commit for commits to read.
@@ -204,12 +221,11 @@ func (t *tree) gitHead(name string) (gitDir, state string) {
 	if t.shared && !openRepo(ctx, dir) {
 		return "", ""
 	}
-	out, err := git(ctx, dir, "rev-parse", "--absolute-git-dir", "HEAD")
-	if err != nil {
-		return "", string(out) + err.Error()
+	r := repoAt(ctx, dir)
+	if r.complaint != "" {
+		return "", r.complaint
 	}
-	gitDir, _, _ = strings.Cut(string(out), "\n")
-	return gitDir, string(out)
+	return r.gitDir, r.gitDir + "\n" + r.head(ctx)
 }
 
 // commitLine is a commit's hash and date, as a history and a page's top
