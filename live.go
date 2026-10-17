@@ -154,7 +154,7 @@ func (l *live) close() {
 type liveKey struct{}
 
 // withLive gives the request the URL of its page's stream. The version is
-// taken before the page is read, so a change while pandoc runs still
+// taken before the page is read, so a change while the page renders still
 // reloads the page.
 func (s *server) withLive(r *http.Request) *http.Request {
 	if s.live == nil {

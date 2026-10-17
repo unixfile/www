@@ -12,6 +12,23 @@ License: OFL-1.1
 Comment: STIX Two Text, embedded in the binary and served to the browser
  when the font is not installed.
 
+Files: github.com/yuin/goldmark/*
+Copyright: 2019 Yusuke Inuzuka
+License: Expat
+Comment: goldmark, the Markdown renderer, statically linked into the binary.
+
+Files: github.com/alecthomas/chroma/v2/*
+Copyright: 2017 Alec Thomas
+License: Expat
+Comment: chroma, the syntax lexer, statically linked into the binary.
+
+Files: github.com/dlclark/regexp2/v2/*
+Copyright: Doug Clark
+ Microsoft Corporation
+License: Expat
+Comment: regexp2, chroma's regular expression engine, statically linked
+ into the binary. Parts are ported from Microsoft's dotnet/corefx.
+
 License: Expat
 @EXPAT@
 

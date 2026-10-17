@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -664,7 +662,7 @@ func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body, err := t.pandoc(r.Context(), b, true)
+	body, err := renderMarkdown(b)
 	if err != nil {
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
@@ -685,58 +683,10 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 		t.serveRaw(w, r, name, info)
 		return
 	}
-	fence := strings.Repeat("`", max(3, longestRun(b, '`')+1))
-	var md bytes.Buffer
-	fmt.Fprintf(&md, "%s{%s .numberLines}\n", fence, langClass(name))
-	md.Write(b)
-	if len(b) > 0 && b[len(b)-1] != '\n' {
-		md.WriteByte('\n')
-	}
-	md.WriteString(fence + "\n")
-	body, err := t.pandoc(r.Context(), md.Bytes(), false)
-	if err != nil {
-		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
-		return
-	}
-	body = template.HTML(t.logLine(r.Context(), name) + lineAnchors.Replace(string(body)))
-	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: body, Raw: true})
-}
-
-// lineAnchors renames pandoc's line ids from cb1-42 to L42, the form GitHub
-// uses, so links such as main.go#L42 written for GitHub land on the line.
-// Pandoc escapes quotes in code, so file content cannot match.
-var lineAnchors = strings.NewReplacer(`id="cb1-`, `id="L`, `href="#cb1-`, `href="#L`)
-
-// langClass returns the pandoc class that picks a highlighter. Pandoc
-// matches a file extension as well as a language name.
-func langClass(name string) string {
-	base := strings.ToLower(path.Base(name))
-	switch base {
-	case "makefile", "gnumakefile", "justfile":
-		return ".makefile"
-	case "dockerfile", "containerfile":
-		return ".dockerfile"
-	}
-	ext := strings.TrimPrefix(path.Ext(base), ".")
-	if ext == "" || strings.ContainsFunc(ext, func(c rune) bool {
-		return !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '+' || c == '_' || c == '-')
-	}) {
-		return ""
-	}
-	return "." + ext
-}
-
-func longestRun(b []byte, c byte) int {
-	best, n := 0, 0
-	for _, x := range b {
-		if x == c {
-			n++
-			best = max(best, n)
-		} else {
-			n = 0
-		}
-	}
-	return best
+	var body strings.Builder
+	body.WriteString(t.logLine(r.Context(), name))
+	highlight(&body, codeLexer(name), string(b), true)
+	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String()), Raw: true})
 }
 
 // serveRaw sends the file itself. Text goes as plain text, so a stray .html
@@ -842,23 +792,6 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		Kind:   "dir",
 		Body:   template.HTML(body.String()),
 	})
-}
-
-// pandoc converts on every request; there is no cache yet. The request
-// context kills pandoc when the browser goes away. Lines join into
-// paragraphs as standard Markdown has them. Bare URLs become links, and a
-// list may follow a line with no blank line between, as on GitHub.
-func (t *tree) pandoc(ctx context.Context, input []byte, doc bool) (template.HTML, error) {
-	args := []string{"--sandbox", "--preserve-tabs", "-f", "markdown+autolink_bare_uris+lists_without_preceding_blankline", "-t", "html5"}
-	cmd := exec.CommandContext(ctx, "pandoc", args...)
-	cmd.Stdin = bytes.NewReader(input)
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("pandoc: %v: %s", err, strings.TrimSpace(stderr.String()))
-	}
-	return template.HTML(out.String()), nil
 }
 
 type crumb struct {

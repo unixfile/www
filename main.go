@@ -1,5 +1,5 @@
 // Command mdserve browses trees of Markdown docs in the browser. It renders
-// each page through pandoc when requested and mirrors the file tree in its
+// each page with goldmark when requested and mirrors the file tree in its
 // URLs. Trees on one address share a server, which lives while their locks
 // exist.
 package main

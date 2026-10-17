@@ -209,7 +209,8 @@ table.locks button { font: inherit; color: inherit; background: none; border: 1p
 /* the line a #L42 link points at */
 pre > code.sourceCode > span:target { background: var(--target); }
 
-/* Pandoc's highlighting style, as pandoc 3.9 emits it for standalone HTML */
+/* Pandoc's highlighting style, as pandoc 3.9 emits it for standalone HTML.
+   render.go emits the same markup and classes from chroma's tokens. */
 pre > code.sourceCode { white-space: pre; position: relative; }
 pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
 pre > code.sourceCode > span:empty { height: 1.2em; }

@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -67,13 +66,6 @@ func do(h http.Handler, method, path string, hdr ...string) *httptest.ResponseRe
 	return rec
 }
 
-func needPandoc(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("pandoc"); err != nil {
-		t.Skip("pandoc not installed")
-	}
-}
-
 func TestForeignHostRejected(t *testing.T) {
 	s, _, _ := serveTree(t)
 	if rec := get(s.handler(), "/", "Host", "evil.example:7417"); rec.Code != http.StatusMisdirectedRequest {
@@ -119,7 +111,6 @@ func TestDirectoryRedirectsToSlash(t *testing.T) {
 }
 
 func TestListingSkipsLockAndReadme(t *testing.T) {
-	needPandoc(t)
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/").Body.String()
 	if strings.Contains(body, "8080.lock") {
@@ -136,10 +127,9 @@ func TestListingSkipsLockAndReadme(t *testing.T) {
 // Lines of a doc join into one paragraph, as standard Markdown has them,
 // and a dash after a line starts a list.
 func TestLinesJoin(t *testing.T) {
-	needPandoc(t)
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/index.md").Body.String()
-	if !strings.Contains(body, "<p>line one line two</p>") {
+	if !strings.Contains(body, "<p>line one\nline two</p>") {
 		t.Errorf("lines not joined into one paragraph: %s", body)
 	}
 	if !strings.Contains(body, "<ul>\n<li>item</li>") {
@@ -148,7 +138,6 @@ func TestLinesJoin(t *testing.T) {
 }
 
 func TestBareURLIsLink(t *testing.T) {
-	needPandoc(t)
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/index.md").Body.String()
 	if !strings.Contains(body, `<a href="https://example.com/x"`) {
@@ -157,14 +146,13 @@ func TestBareURLIsLink(t *testing.T) {
 }
 
 func TestCodePageIsHighlighted(t *testing.T) {
-	needPandoc(t)
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/a/b.go").Body.String()
 	if !strings.Contains(body, `class="sourceCode`) || !strings.Contains(body, `<span id="L3"><a href="#L3">`) {
 		t.Errorf("no highlighted code with GitHub line anchors: %s", body)
 	}
-	if strings.Contains(body, "cb1-") {
-		t.Errorf("pandoc line ids left in: %s", body)
+	if !strings.Contains(body, `<span class="kw">package</span>`) {
+		t.Errorf("Go keyword not classed as pandoc does: %s", body)
 	}
 }
 
@@ -288,7 +276,6 @@ func TestMount(t *testing.T) {
 
 // The served tree lives under its home-relative prefix; / lists the trees.
 func TestPrefixedTree(t *testing.T) {
-	needPandoc(t)
 	s, tr, _ := serveTree(t)
 	tr.prefix, tr.label = "/scratch/my docs/", "~/scratch/my docs"
 	h := s.handler()

@@ -140,7 +140,6 @@ func TestHistoryRedirectKeepsQuery(t *testing.T) {
 
 // Doc and code pages name their last commit at the top.
 func TestPageTopNamesLastCommit(t *testing.T) {
-	needPandoc(t)
 	s, _ := repoTree(t)
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {

@@ -61,7 +61,7 @@ func TestJournalEntry(t *testing.T) {
 	defer pc.Close()
 	useJournal(t, sock)
 	setLogEndpoint("127.31.1.1-80")
-	logErr("E5: pandoc: exit 1\nline two")
+	logErr("E5: git: exit 1\nline two")
 
 	pc.SetReadDeadline(time.Now().Add(2 * time.Second))
 	buf := make([]byte, 65536)
@@ -76,7 +76,7 @@ func TestJournalEntry(t *testing.T) {
 		}
 	}
 	// A message with a newline goes as its length and bytes.
-	msg := "E5: pandoc: exit 1\nline two"
+	msg := "E5: git: exit 1\nline two"
 	var want bytes.Buffer
 	want.WriteString("MESSAGE\n")
 	binary.Write(&want, binary.LittleEndian, uint64(len(msg)))

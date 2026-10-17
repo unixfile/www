@@ -54,7 +54,7 @@ deb:
 	chmod -R u=rwX,go=rX $(STAGE)
 	dpkg-deb --root-owner-group --build $(STAGE) $(DEB)
 
-# install-deb installs the package through apt, which pulls in pandoc.
+# install-deb installs the package through apt, which pulls in git.
 # --reinstall replaces a build of the same commit, which apt would skip as
 # already installed. The link from make install goes first: ~/.local/bin
 # usually leads PATH, and its binary lacks the capability for port 80.

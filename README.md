@@ -1,6 +1,6 @@
 # mdserve
 
-Browse trees of Markdown docs in the browser, rendered by pandoc on each request, with their git history.
+Browse trees of Markdown docs in the browser, rendered on each request, with their git history.
 
 ## Usage
 
@@ -57,10 +57,10 @@ mdserve logs every run, server event and page request to the systemd journal: `j
 
 ## Install
 
-mdserve needs pandoc 2.15 or later and git.
+mdserve needs git.
 `make install` links `build/mdserve` into `~/.local/bin`.
-`make deb` builds a Debian package in `build/`, such as `mdserve_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on pandoc and git. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
-`make install-deb` builds the package while sudo asks for the password, then installs it with `sudo apt install`, which pulls in pandoc and git. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
+`make deb` builds a Debian package in `build/`, such as `mdserve_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on git. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
+`make install-deb` builds the package while sudo asks for the password, then installs it with `sudo apt install`, which pulls in git. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
 
 To try a change without installing it, `make run` builds `build/mdserve` and serves this directory in the foreground on port 8080 with `--stamp`, beside an installed server on port 80. Stop it with Ctrl-C before the next run; a run that finds a server on 8080 hands its tree to that server, which keeps the old code.
 
@@ -77,12 +77,12 @@ A code page anchors lines as GitHub does, so `main.go#L42` lands on line 42 and 
 
 Open pages reload when what they show changes. A doc or code page reloads when its file is written, a listing when a name in it changes, any page in a repo when its HEAD moves, and the index when a tree joins or leaves. A page whose file or tree is gone waits two seconds for it to return, then reloads to say so. A page whose server stops reloads after three seconds without it, so the browser says the server is gone; a restart takes about 60 ms, and its new server reloads the page first. Each page holds a server-sent events stream while its tab is visible; a hidden tab lets go, since a browser opens at most six connections to one host, and checks again when shown. The server watches the directory of each open page and its repo's git directory through inotify, since editors save by renaming a new file over the old one, and polls every second where inotify fails.
 
-Docs follow standard Markdown: lines join into a paragraph, and a blank line starts the next. A line that starts with a dash begins a list even right after text, as on GitHub. Every gap between blocks is the same, whether the block is a paragraph, list, table or code. Headings sit close to their text.
+Docs follow CommonMark with GitHub's extensions, rendered by goldmark: tables, strikethrough, task lists, bare URLs as links, footnotes and definition lists. Lines join into a paragraph, and a blank line starts the next. A line that starts with a dash begins a list even right after text. Straight quotes and dashes turn typographic. Code in a fenced block with a known language is highlighted by chroma, as are code pages, whose language follows the file name. Every gap between blocks is the same, whether the block is a paragraph, list, table or code. Headings sit close to their text.
 
 mdserve refuses to serve the home directory. A tree exposes everything below it, and home holds `~/.ssh`, `~/.gnupg` and every token file.
 Symlinks inside the tree are followed, absolute ones included. A link that leads out of the tree is followed only into a directory that holds a file named `.mdserve-follow`, or below one, and only when other users could read the target. A file needs the others-read bit and a directory others-read and others-execute, checked from the marker's directory down. So nobody reads through mdserve what `cat` would not show them.
 A store of private files linked into repos, such as lord's `~/.local/share/lord`, opens with one marker in its root. Secrets kept there at mode 600 stay refused. Opening a refused link shows the link, its target and the reason, and the listing marks it refused with the same on hover.
-A loopback server answers only to loopback addresses, `localhost` and names that `/etc/hosts` maps to loopback. Its Content-Security-Policy forbids every script but mdserve's own, which reloads pages and opens history folds, and which it allows by hash. Pandoc passes raw HTML through, so a README in a cloned repo could otherwise run code on this origin.
+A loopback server answers only to loopback addresses, `localhost` and names that `/etc/hosts` maps to loopback. Its Content-Security-Policy forbids every script but mdserve's own, which reloads pages and opens history folds, and which it allows by hash. Raw HTML in a doc passes through, so a README in a cloned repo could otherwise run code on this origin.
 
 Each endpoint has a registry directory such as `~/.local/state/mdserve/127.31.1.1-8080/` with a symlink to each lock its server holds. A joining `mdserve` adds a link, and the server sees it through inotify, writes the lock and serves the tree. Where inotify fails the server polls every second. An flock on the directory keeps a tree from joining a server on its way out. `$XDG_STATE_HOME` replaces `~/.local/state` when set.
 
@@ -99,3 +99,4 @@ Add `*.*.*.*-*.lock` to `~/.config/git/ignore` so locks stay out of `git status`
 ## Licence
 
 MIT, see `LICENSE`. The embedded STIX Two Text fonts are under the SIL Open Font License, in `assets/fonts/STIXTwoText-OFL.txt`.
+The binary links in three Go modules, all under the MIT licence: goldmark by Yusuke Inuzuka, chroma by Alec Thomas and regexp2 by Doug Clark, which ports parts of Microsoft's dotnet/corefx. The package's copyright file carries their notices.
