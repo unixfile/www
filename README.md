@@ -22,7 +22,7 @@ When something other than your mdserve on that address holds the port, `mdserve`
 The server exits when its last lock is gone. SIGTERM stops it at once and removes every lock, as does the Kill server button on the index at `/`.
 A running server keeps the binary it started with. `mdserve --restart` moves every server's trees to the current binary, and `make install` and `make install-deb` run it for you; open tabs reload onto the new binary. A binary without the capability for port 80, such as the one from `make install`, leaves a port-80 server on its old binary and says so.
 
-The index at `/` lists the server's locks: each tree with the time its lock was written and a Delete lock button, and the lock's path on hover. Trees on other addresses follow as plain links, since only their own server may stop them. The header shows when the server started and when its binary was built, and a warning appears when the binary on disk has changed since.
+The index at `/` lists the server's locks: each tree with the time its lock was written and a Delete lock button, and the lock's path on hover. Trees on other addresses follow as plain links, since only their own server may stop them. The header shows when the server started, and a warning appears when the binary on disk has changed since.
 To reach the server by name, add a line such as `127.31.1.1 mdserve` to `/etc/hosts`. Type the name with its slash, eg `mdserve/`, or the browser searches for it.
 
 - `-a`, `--addr ip[:port]`: serve on another loopback address; the port defaults to 80 where mdserve may bind it, else 8080
@@ -76,7 +76,7 @@ A code page anchors lines as GitHub does, so `main.go#L42` lands on line 42 and 
 
 Open pages reload when what they show changes. A doc or code page reloads when its file is written, a listing when a name in it changes, any page in a repo when its HEAD moves, and the index when a tree joins or leaves. A page whose file or tree is gone waits two seconds for it to return, then reloads to say so. A page whose server stops reloads after three seconds without it, so the browser says the server is gone; a restart takes about 60 ms, and its new server reloads the page first. Each page holds a server-sent events stream while its tab is visible; a hidden tab lets go, since a browser opens at most six connections to one host, and checks again when shown. The server watches the directory of each open page and its repo's git directory through inotify, since editors save by renaming a new file over the old one, and polls every second where inotify fails.
 
-Each source line renders as its own paragraph, through a small pandoc Lua filter. Every gap between paragraphs is the same, whether a newline or a blank line made it, and headings sit close to their text. The line-centric spec format puts one rule per line, which standard Markdown joins into one paragraph.
+Each source line renders as its own paragraph, through a small pandoc Lua filter. Every gap between blocks is the same, whether a newline or a blank line made it and whether the block is a paragraph, list, table or code. Headings sit close to their text. The line-centric spec format puts one rule per line, which standard Markdown joins into one paragraph.
 
 mdserve refuses to serve the home directory. A tree exposes everything below it, and home holds `~/.ssh`, `~/.gnupg` and every token file.
 Symlinks inside the tree are followed, absolute ones included. A link that leads out of the tree is followed only into a directory that holds a file named `.mdserve-follow`, or below one, and only when other users could read the target. A file needs the others-read bit and a directory others-read and others-execute, checked from the marker's directory down. So nobody reads through mdserve what `cat` would not show them.
@@ -89,6 +89,7 @@ A lock left by a crash is detected on the next start through its PID and the ker
 
 The stylesheet is mdserve's own. It began as md2html-default's, whose light palette it keeps, and the page colours sit as variables on `:root`.
 Pages load no fonts from the network. STIX Two Text, the serif, comes from the machine when installed and otherwise from the copy built into mdserve, which the browser caches for a year. The mono face is Iosevka where installed, else the system monospace.
+Above the header, small and faint, each page names when its binary was built, so a glance tells which build served it. Shares leave it out.
 The header names a tree by its base name and shows the full path on hover. Every tree page's breadcrumbs start at `index`, which links `/`. The header, listings and mdserve's own messages are mono; documents keep the serif.
 Every page keeps one width, 58ch of the body font, and keeps space for a scrollbar, so the header holds still from page to page. Code is half the size of the body text, never under 11px, so about 115 columns fit; longer lines scroll.
 

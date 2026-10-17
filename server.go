@@ -100,17 +100,28 @@ func (a about) restartCmd() string {
 	return "mdserve --restart"
 }
 
-// status is the index header's account of the server's age.
+// status is the index header's account of the server's age. The build
+// time is on every page, above the header.
 func (a about) status() string {
 	if a.started.IsZero() {
 		return ""
 	}
-	s := "up since " + clock(a.started)
-	if a.exeInfo != nil {
-		s += ", built " + clock(a.exeInfo.ModTime())
-	}
-	return s
+	return "up since " + clock(a.started)
 }
+
+// built is when the running binary was written, read once at start, so
+// each page can say which build served it.
+var built = func() time.Time {
+	exe, err := os.Executable()
+	if err != nil {
+		return time.Time{}
+	}
+	info, err := os.Stat(exe)
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
+}()
 
 // clock gives the time of day, with the date when it is not today.
 func clock(t time.Time) string {
@@ -894,6 +905,7 @@ type page struct {
 	Stopped bool
 	Shared  bool   // a shared server's page, which has no button
 	Live    string // the URL of the page's live reload stream, or ""
+	Built   string // when the binary was built, above the header; none on a share
 }
 
 func (t *tree) title(name string) string {
@@ -931,6 +943,9 @@ func (t *tree) crumbs(name string) []crumb {
 
 func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Live = liveURL(r)
+	if !p.Shared {
+		p.Built = clock(built)
+	}
 	var b bytes.Buffer
 	if err := layout.ExecuteTemplate(&b, "page", p); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

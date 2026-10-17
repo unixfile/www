@@ -10,6 +10,7 @@
   --danger: #902000;
   --target: #fff3b0;
   --gutter: #aaaaaa;
+  --faint: #b8b8b8;
   --added: #e4f2e4;
   --removed: #f8e6e2;
 }
@@ -60,9 +61,11 @@ body {
   hyphens: auto;
   padding: 0 1em;
 }
-/* Every gap between paragraphs is the same, whether a newline or a blank
-   line made it. Headings sit close to their text. */
-p { margin: 0.7em 0; }
+/* Every gap between blocks is the same, whether a newline or a blank line
+   made it and whether the block is a paragraph, list, table or code.
+   Headings sit close to their text. */
+p, ul, ol, table, div.sourceCode { margin: 0.7em 0; }
+li > ul, li > ol { margin: 0; }
 h1, h2, h3, h4, h5, h6 {
   font-family: "STIX Two Text", Georgia, serif;
   font-weight: bold;
@@ -74,9 +77,10 @@ h1, h2, h3, h4, h5, h6 {
 h1 { font-size: 1.3em; }
 h2 { font-size: 1.1em; }
 h3 { font-size: 1em; font-style: italic; font-weight: normal; }
-h1 + p, h2 + p, h3 + p, h4 + p, h5 + p, h6 + p { margin-top: 0.1em; }
+/* :is(*, div.sourceCode) outranks the div.sourceCode rule. */
+:is(h1, h2, h3, h4, h5, h6) + :is(*, div.sourceCode) { margin-top: 0.1em; }
 blockquote {
-  margin: 1.2em 0 1.2em 2em;
+  margin: 0.7em 0 0.7em 2em;
   padding-left: 1em;
   border-left: 2px solid currentColor;
   opacity: 0.75;
@@ -102,6 +106,9 @@ header {
   margin-bottom: 1.5em;
 }
 header nav { flex: 1 1 auto; min-width: 0; }
+/* The build stamp sits above the header, small and faint, so a glance
+   tells which build served the page. */
+p.built { font-size: 0.45em; color: var(--faint); margin: -1.6em 0 0.6em; text-align: left; }
 /* A crumb, or a name in a path on the index, stays whole: lines break
    between names, after the slash, and inside a name only when it alone is
    wider than the column. */
@@ -124,11 +131,14 @@ header button {
 }
 /* What mdserve says is mono, file names in a listing included; what the
    document says is serif. */
-pre, code, header, .mdserve, ul.listing { font-family: ui-monospace, "Iosevka", monospace; }
+pre, code, header, .mdserve, ul.listing, p.built { font-family: ui-monospace, "Iosevka", monospace; }
 /* Code is half the body size, so about 115 columns fit the doc's measure
    and no page needs to be wider. It never drops below 11px, where small
    screens set the body at 16px. */
+/* A code block has no margin of its own, since its em is half the body's:
+   the blocks around it make the gap. */
 pre {
+  margin: 0;
   font-size: max(0.5em, 11px);
   line-height: 1.35;
   text-align: left;
@@ -136,7 +146,7 @@ pre {
   overflow-x: auto;
 }
 :not(pre) > code { font-size: 0.85em; }
-table { border-collapse: collapse; margin: 1.2em 0; }
+table { border-collapse: collapse; }
 th, td { border-bottom: 1px solid var(--rule); padding: 0.2em 0.6em; text-align: left; }
 img { max-width: 100%; }
 ul.listing { list-style: none; padding: 0; text-align: left; }
@@ -206,7 +216,6 @@ pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
 pre > code.sourceCode > span:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode > span { color: inherit; text-decoration: inherit; }
-div.sourceCode { margin: 1em 0; }
 pre.sourceCode { margin: 0; }
 @media screen {
 div.sourceCode { overflow: auto; }
