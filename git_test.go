@@ -32,7 +32,7 @@ func commitAll(t *testing.T, dir, msg string) {
 func repoTree(t *testing.T) (*server, string) {
 	t.Helper()
 	needGit(t)
-	s, _, dir := serveTree(t, false)
+	s, _, dir := serveTree(t)
 	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v\n%s", err, out)
 	}
@@ -157,7 +157,7 @@ func TestPageTopNamesLastCommit(t *testing.T) {
 // Outside a repo nothing leads to history, and the page says why.
 func TestNoRepoNoHistory(t *testing.T) {
 	needGit(t)
-	s, _, _ := serveTree(t, false)
+	s, _, _ := serveTree(t)
 	h := s.handler()
 	if body := get(h, "/").Body.String(); strings.Contains(body, "?log") {
 		t.Errorf("history entry outside a repo:\n%s", body)

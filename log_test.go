@@ -134,7 +134,7 @@ func TestCommandLine(t *testing.T) {
 func TestRequestLog(t *testing.T) {
 	useJournal(t, "")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	s, tr, _ := serveTree(t, true)
+	s, tr, _ := serveTree(t)
 	h := s.handler()
 	for _, p := range []string{"/_mdserve/style.css", "/favicon.ico", "/_mdserve/live?path=/", "/index.md"} {
 		get(h, p)
@@ -163,7 +163,7 @@ func TestRequestLog(t *testing.T) {
 func TestRequestLogShared(t *testing.T) {
 	useJournal(t, "")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	s, tr, _ := serveTree(t, true)
+	s, tr, _ := serveTree(t)
 	s.shared, tr.shared = true, true
 	get(s.handler(), "/index.md")
 	path, _ := logFile()

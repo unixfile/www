@@ -61,9 +61,8 @@ body {
   hyphens: auto;
   padding: 0 1em;
 }
-/* Every gap between blocks is the same, whether a newline or a blank line
-   made it and whether the block is a paragraph, list, table or code.
-   Headings sit close to their text. */
+/* Every gap between blocks is the same, whether the block is a paragraph,
+   list, table or code. Headings sit close to their text. */
 p, ul, ol, table, div.sourceCode { margin: 0.7em 0; }
 li > ul, li > ol { margin: 0; }
 h1, h2, h3, h4, h5, h6 {

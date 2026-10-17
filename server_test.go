@@ -12,7 +12,7 @@ import (
 )
 
 // serveTree builds a small doc tree and returns a server holding it at /.
-func serveTree(t *testing.T, breaks bool) (*server, *tree, string) {
+func serveTree(t *testing.T) (*server, *tree, string) {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
@@ -31,27 +31,19 @@ func serveTree(t *testing.T, breaks bool) (*server, *tree, string) {
 		}
 	}
 	os.Symlink("/etc", filepath.Join(dir, "escape"))
-	filter := ""
-	if breaks {
-		var err error
-		if filter, err = writeFilter(); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { os.Remove(filter) })
-	}
 	s := newServer()
-	tr := addTree(t, s, dir, "/", filepath.Base(dir), filter)
+	tr := addTree(t, s, dir, "/", filepath.Base(dir))
 	return s, tr, dir
 }
 
-func addTree(t *testing.T, s *server, dir, prefix, label, filter string) *tree {
+func addTree(t *testing.T, s *server, dir, prefix, label string) *tree {
 	t.Helper()
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { root.Close() })
-	tr := newTree(root, dir, prefix, label, filter)
+	tr := newTree(root, dir, prefix, label)
 	s.add(tr)
 	return tr
 }
@@ -83,7 +75,7 @@ func needPandoc(t *testing.T) {
 }
 
 func TestForeignHostRejected(t *testing.T) {
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	if rec := get(s.handler(), "/", "Host", "evil.example:7417"); rec.Code != http.StatusMisdirectedRequest {
 		t.Fatalf("status %d, want 421", rec.Code)
 	}
@@ -95,7 +87,7 @@ func TestForeignHostRejected(t *testing.T) {
 }
 
 func TestEveryResponseForbidsScripts(t *testing.T) {
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	rec := get(s.handler(), "/a/page.html?raw")
 	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "default-src 'none'") {
 		t.Errorf("no CSP: %v", rec.Header())
@@ -110,7 +102,7 @@ func TestEveryResponseForbidsScripts(t *testing.T) {
 
 // Rendered pages stay out of the back/forward cache; raw files revalidate.
 func TestCacheHeaders(t *testing.T) {
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	for p, want := range map[string]string{"/missing": "no-store", "/bin.dat": "no-cache"} {
 		if cc := get(s.handler(), p).Header().Get("Cache-Control"); cc != want {
 			t.Errorf("%s: Cache-Control %q, want %q", p, cc, want)
@@ -119,7 +111,7 @@ func TestCacheHeaders(t *testing.T) {
 }
 
 func TestDirectoryRedirectsToSlash(t *testing.T) {
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	rec := get(s.handler(), "/a")
 	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/a/" {
 		t.Fatalf("status %d location %q, want 301 to /a/", rec.Code, rec.Header().Get("Location"))
@@ -128,7 +120,7 @@ func TestDirectoryRedirectsToSlash(t *testing.T) {
 
 func TestListingSkipsLockAndReadme(t *testing.T) {
 	needPandoc(t)
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/").Body.String()
 	if strings.Contains(body, "8080.lock") {
 		t.Error("listing shows the lockfile")
@@ -141,22 +133,19 @@ func TestListingSkipsLockAndReadme(t *testing.T) {
 	}
 }
 
-// Each source line of a doc is its own paragraph; without the filter they join.
-func TestLinesAreParagraphs(t *testing.T) {
+// Lines of a doc join into one paragraph, as standard Markdown has them.
+func TestLinesJoin(t *testing.T) {
 	needPandoc(t)
-	for _, lines := range []bool{true, false} {
-		s, _, _ := serveTree(t, lines)
-		body := get(s.handler(), "/index.md").Body.String()
-		split := strings.Contains(body, "<p>line one</p>") && strings.Contains(body, "<p>line two</p>")
-		if split != lines {
-			t.Errorf("lines=%v: split into paragraphs=%v: %s", lines, split, body)
-		}
+	s, _, _ := serveTree(t)
+	body := get(s.handler(), "/index.md").Body.String()
+	if !strings.Contains(body, "<p>line one line two</p>") {
+		t.Errorf("lines not joined into one paragraph: %s", body)
 	}
 }
 
 func TestBareURLIsLink(t *testing.T) {
 	needPandoc(t)
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/index.md").Body.String()
 	if !strings.Contains(body, `<a href="https://example.com/x"`) {
 		t.Errorf("bare URL not linked: %s", body)
@@ -165,7 +154,7 @@ func TestBareURLIsLink(t *testing.T) {
 
 func TestCodePageIsHighlighted(t *testing.T) {
 	needPandoc(t)
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/a/b.go").Body.String()
 	if !strings.Contains(body, `class="sourceCode`) || !strings.Contains(body, `<span id="L3"><a href="#L3">`) {
 		t.Errorf("no highlighted code with GitHub line anchors: %s", body)
@@ -176,7 +165,7 @@ func TestCodePageIsHighlighted(t *testing.T) {
 }
 
 func TestBinaryGoesRaw(t *testing.T) {
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	rec := get(s.handler(), "/bin.dat")
 	if ct := rec.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/") {
 		t.Errorf("binary served as %q", ct)
@@ -184,7 +173,7 @@ func TestBinaryGoesRaw(t *testing.T) {
 }
 
 func TestNoEscapeFromRoot(t *testing.T) {
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	for _, p := range []string{"/../../etc/passwd", "/escape/passwd", "/escape/"} {
 		if rec := get(s.handler(), p); rec.Code == http.StatusOK {
 			t.Errorf("%s: status 200, want refusal", p)
@@ -193,7 +182,7 @@ func TestNoEscapeFromRoot(t *testing.T) {
 }
 
 func TestStopRefusesOtherSites(t *testing.T) {
-	s, _, _ := serveTree(t, true)
+	s, _, _ := serveTree(t)
 	stopped := make(chan struct{}, 1)
 	s.stop = func([]*tree, string) { stopped <- struct{}{} }
 	h := s.handler()
@@ -228,9 +217,9 @@ func TestStopRefusesOtherSites(t *testing.T) {
 // Delete lock on the index returns to the index while other trees remain;
 // the last tree's button ends on the stopped page.
 func TestIndexDeleteReturns(t *testing.T) {
-	s, tr, dir := serveTree(t, false)
+	s, tr, dir := serveTree(t)
 	tr.prefix, tr.label = "/notes/", "~/notes"
-	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other", "")
+	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other")
 	var got []*tree
 	s.stop = func(ts []*tree, _ string) {
 		got = ts
@@ -263,7 +252,7 @@ func TestIndexDeleteReturns(t *testing.T) {
 // The fonts come from mdserve, cached for a year; nothing else leaves the
 // font directory.
 func TestFonts(t *testing.T) {
-	s, _, _ := serveTree(t, false)
+	s, _, _ := serveTree(t)
 	rec := get(s.handler(), "/_mdserve/fonts/STIXTwoText-Regular.otf")
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "font/otf" || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") || rec.Body.Len() < 1000 {
 		t.Errorf("font: status %d type %q cache %q size %d", rec.Code, rec.Header().Get("Content-Type"), rec.Header().Get("Cache-Control"), rec.Body.Len())
@@ -296,7 +285,7 @@ func TestMount(t *testing.T) {
 // The served tree lives under its home-relative prefix; / lists the trees.
 func TestPrefixedTree(t *testing.T) {
 	needPandoc(t)
-	s, tr, _ := serveTree(t, true)
+	s, tr, _ := serveTree(t)
 	tr.prefix, tr.label = "/scratch/my docs/", "~/scratch/my docs"
 	h := s.handler()
 	rec := get(h, "/scratch/my%20docs")
@@ -315,9 +304,9 @@ func TestPrefixedTree(t *testing.T) {
 // The index at / lists every served tree with a button that deletes its
 // lock, and offers to stop them all.
 func TestIndexListsTrees(t *testing.T) {
-	s, tr, dir := serveTree(t, false)
+	s, tr, dir := serveTree(t)
 	tr.prefix, tr.label = "/notes/", "~/notes"
-	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other", "")
+	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other")
 	rec := get(s.handler(), "/")
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK || !strings.Contains(body, `<a href="/notes/" title=""><span class="seg">~/</span><wbr><span class="seg">notes</span></a>`) || !strings.Contains(body, `<a href="/other/" title=""><span class="seg">~/</span><wbr><span class="seg">other</span></a>`) {
@@ -350,8 +339,8 @@ func TestSegments(t *testing.T) {
 
 // A tree inside another answers for its own paths.
 func TestNestedTreeWins(t *testing.T) {
-	s, _, dir := serveTree(t, false)
-	addTree(t, s, filepath.Join(dir, "a"), "/a/", "inner", "")
+	s, _, dir := serveTree(t)
+	addTree(t, s, filepath.Join(dir, "a"), "/a/", "inner")
 	body := get(s.handler(), "/a/b.go?raw").Body.String()
 	if body != "package a\n\nfunc F() {}\n" {
 		t.Errorf("nested tree served %q", body)
@@ -363,8 +352,8 @@ func TestNestedTreeWins(t *testing.T) {
 
 // A tree's button withdraws that tree only.
 func TestStopWithdrawsOneTree(t *testing.T) {
-	s, tr, dir := serveTree(t, false)
-	other := addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other", "")
+	s, tr, dir := serveTree(t)
+	other := addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other")
 	var got []*tree
 	s.stop = func(ts []*tree, _ string) { got = ts }
 	body := get(s.handler(), "/other/").Body.String()

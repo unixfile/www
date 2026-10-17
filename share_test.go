@@ -47,7 +47,7 @@ func shareTree(t *testing.T) *server {
 	s.shared = true
 	for _, tc := range []struct{ dir, token string }{{dir, ""}, {hid, "s3cret"}} {
 		prefix, label := shareMount(tc.dir, tc.token)
-		tr := addTree(t, s, tc.dir, prefix, label, "")
+		tr := addTree(t, s, tc.dir, prefix, label)
 		tr.shared, tr.secret = true, tc.token != ""
 	}
 	return s

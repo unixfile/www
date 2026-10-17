@@ -30,9 +30,6 @@ var styleCSS []byte
 //go:embed assets/layout.html
 var layoutHTML string
 
-//go:embed assets/lines.lua
-var linesLua []byte
-
 // fontFS holds STIX Two Text, which the stylesheet takes from the machine
 // when installed and from here otherwise. A changed font needs a new file
 // name, since browsers keep these for a year.
@@ -146,7 +143,6 @@ type tree struct {
 	label    string // the tree as the first breadcrumb, eg ~/scratch/notes
 	fsys     fs.FS
 	root     *os.Root
-	filter   string      // path of lines.lua, or "" to join lines as standard Markdown does
 	lock     *lock       // nil only in tests
 	link     string      // registry link
 	linkInfo os.FileInfo // the link this server knows, to tell it from a new join
@@ -155,12 +151,12 @@ type tree struct {
 	secret   bool        // mounted under a token, and left off the index
 }
 
-func newTree(root *os.Root, dir, prefix, label, filter string) *tree {
+func newTree(root *os.Root, dir, prefix, label string) *tree {
 	real, err := filepath.EvalSymlinks(dir)
 	if err != nil {
 		real = dir
 	}
-	t := &tree{dir: dir, realDir: real, prefix: prefix, label: label, root: root, filter: filter, wd: -1}
+	t := &tree{dir: dir, realDir: real, prefix: prefix, label: label, root: root, wd: -1}
 	t.fsys = treeFS{t}
 	return t
 }
@@ -214,24 +210,6 @@ func (s *server) lookup(path string) *tree {
 		}
 	}
 	return best
-}
-
-// writeFilter puts lines.lua where pandoc can read it; pandoc takes a
-// filter only as a path. The caller removes the file.
-func writeFilter() (string, error) {
-	f, err := os.CreateTemp("", "mdserve-*.lua")
-	if err != nil {
-		return "", err
-	}
-	_, err = f.Write(linesLua)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		os.Remove(f.Name())
-		return "", err
-	}
-	return f.Name(), nil
 }
 
 // mount returns the URL prefix and label for dir. Inside home the prefix is
@@ -864,14 +842,11 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 }
 
 // pandoc converts on every request; there is no cache yet. The request
-// context kills pandoc when the browser goes away. A doc gets lines.lua,
-// so each source line becomes a paragraph; a code page does not. Bare URLs
-// become links, as on GitHub.
+// context kills pandoc when the browser goes away. Lines join into
+// paragraphs as standard Markdown has them. Bare URLs become links, as on
+// GitHub.
 func (t *tree) pandoc(ctx context.Context, input []byte, doc bool) (template.HTML, error) {
 	args := []string{"--sandbox", "--preserve-tabs", "-f", "markdown+autolink_bare_uris", "-t", "html5"}
-	if doc && t.filter != "" {
-		args = append(args, "--lua-filter", t.filter)
-	}
 	cmd := exec.CommandContext(ctx, "pandoc", args...)
 	cmd.Stdin = bytes.NewReader(input)
 	var out, stderr bytes.Buffer

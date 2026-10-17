@@ -206,13 +206,6 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 		done: make(chan struct{}), fresh: map[net.Conn]bool{}}
 	defer h.w.close()
 	defer reg.close()
-	filter, err := writeFilter()
-	if err != nil {
-		ln.Close()
-		return rep.fail(errnoOf(err), "cannot write pandoc filter: "+err.Error())
-	}
-	h.filter = filter
-	defer os.Remove(filter)
 	h.dropLeftovers()
 	h.w.add(reg.dir)
 	h.srv.shared = shared(c.ep)
@@ -279,7 +272,6 @@ type hub struct {
 	ep     netip.AddrPort
 	origin string // the URL of this server, a name where it has one
 	home   string
-	filter string
 	reg    *registry
 	w      *watcher
 	srv    *server
@@ -362,7 +354,7 @@ func (h *hub) adopt(lockPath, link, token string) (*tree, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := newTree(root, dir, prefix, label, h.filter)
+	t := newTree(root, dir, prefix, label)
 	t.shared, t.secret = h.srv.shared, token != ""
 	if t.lock, err = createLock(lockPath, dir, h.origin+t.prefixURL()); err != nil {
 		root.Close()

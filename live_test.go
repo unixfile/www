@@ -20,7 +20,7 @@ import (
 // streams flush.
 func liveTree(t *testing.T) (*server, *tree, string, *httptest.Server) {
 	t.Helper()
-	s, tr, dir := serveTree(t, false)
+	s, tr, dir := serveTree(t)
 	s.live = newLive()
 	t.Cleanup(s.live.close)
 	ts := httptest.NewServer(s.handler())
@@ -99,7 +99,7 @@ func TestScriptAllowedByHash(t *testing.T) {
 // A raw file is not a page and gets no script; nor does a server without
 // live reload.
 func TestNoScriptWithoutLive(t *testing.T) {
-	s, _, _ := serveTree(t, false)
+	s, _, _ := serveTree(t)
 	if strings.Contains(get(s.handler(), "/missing").Body.String(), "<script") {
 		t.Error("script without live reload")
 	}
@@ -225,7 +225,7 @@ func TestLiveWaitsForGoneTree(t *testing.T) {
 
 // The index reloads when a tree joins.
 func TestLiveIndexSeesTrees(t *testing.T) {
-	s, _, _ := serveTree(t, false)
+	s, _, _ := serveTree(t)
 	s.trees[0].prefix = "/one/"
 	s.live = newLive()
 	t.Cleanup(s.live.close)
@@ -233,7 +233,7 @@ func TestLiveIndexSeesTrees(t *testing.T) {
 	t.Cleanup(ts.Close)
 	lines := stream(t, s, ts, "/")
 	time.Sleep(50 * time.Millisecond)
-	addTree(t, s, t.TempDir(), "/two/", "two", "")
+	addTree(t, s, t.TempDir(), "/two/", "two")
 	if !reloads(lines, 2*time.Second) {
 		t.Fatal("index kept after a tree joined")
 	}
