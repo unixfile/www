@@ -196,6 +196,12 @@ func build() string {
 	if err != nil {
 		exe = "mdserve"
 	}
+	return exe + " " + buildRev()
+}
+
+// buildRev names the commit the binary was built from, eg 54cca2a, with
+// +modified for a build from uncommitted code.
+func buildRev() string {
 	rev, modified := "", false
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range info.Settings {
@@ -216,7 +222,7 @@ func build() string {
 	if modified {
 		rev += "+modified"
 	}
-	return exe + " " + rev
+	return rev
 }
 
 // commandLine quotes args for the log as a shell would need them, with a

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -381,7 +382,8 @@ func TestLocalHost(t *testing.T) {
 	}
 }
 
-// The build stamp shows only with --stamp, and never on a share.
+// The build stamp shows only with --stamp, and never on a share. It names
+// the commit and the render time.
 func TestBuildStamp(t *testing.T) {
 	s, tr, _ := serveTree(t)
 	defer func() { showBuilt = false }()
@@ -392,6 +394,9 @@ func TestBuildStamp(t *testing.T) {
 		body := get(s.handler(), "/a/").Body.String()
 		if got := strings.Contains(body, `<p class="built" data-built="`); got != c.want {
 			t.Errorf("stamp=%v shared=%v: shown=%v", c.show, c.shared, got)
+		}
+		if c.want && !regexp.MustCompile(`s ago, from [^<]+, rendered in [0-9.]+ ms</p>`).MatchString(body) {
+			t.Errorf("stamp lacks commit or render time: %s", body)
 		}
 	}
 }

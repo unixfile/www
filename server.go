@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -109,6 +110,8 @@ func (a about) status() string {
 // puts it above the header.
 var showBuilt bool
 
+var buildCommit = buildRev()
+
 var built = func() time.Time {
 	exe, err := os.Executable()
 	if err != nil {
@@ -121,12 +124,31 @@ var built = func() time.Time {
 	return info.ModTime()
 }()
 
-// stamp is the build time as a page shows it: the time of day, and the
-// seconds since, which live.js counts on from Millis.
+// stamp is the build as a page shows it: the time of day, the seconds
+// since, which live.js counts on from Millis, the commit, and how long
+// the page took to render.
 type stamp struct {
-	Clock  string
-	Millis int64
-	Ago    int
+	Clock    string
+	Millis   int64
+	Ago      int
+	Commit   string
+	Rendered string
+}
+
+type startKey struct{}
+
+// rendered says how long the request has taken so far, in milliseconds
+// with a decimal below 10, since most docs render in under one.
+func rendered(r *http.Request) string {
+	start, ok := r.Context().Value(startKey{}).(time.Time)
+	if !ok {
+		return ""
+	}
+	ms := float64(time.Since(start).Microseconds()) / 1000
+	if ms < 10 {
+		return fmt.Sprintf("%.1f ms", ms)
+	}
+	return fmt.Sprintf("%.0f ms", ms)
 }
 
 // clock gives the time of day, with the date when it is not today.
@@ -475,6 +497,7 @@ func sameOrigin(r *http.Request) bool {
 // handlePath maps the URL path one to one onto the file tree, so relative
 // links in the docs work unchanged.
 func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(context.WithValue(r.Context(), startKey{}, time.Now()))
 	if _, raw := r.URL.Query()["raw"]; !raw {
 		r = s.withLive(r)
 	}
@@ -863,7 +886,8 @@ func (t *tree) crumbs(name string) []crumb {
 func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Live = liveURL(r)
 	if showBuilt && !p.Shared && !built.IsZero() {
-		p.Built = &stamp{Clock: clock(built), Millis: built.UnixMilli(), Ago: int(time.Since(built).Seconds())}
+		p.Built = &stamp{Clock: clock(built), Millis: built.UnixMilli(), Ago: int(time.Since(built).Seconds()),
+			Commit: buildCommit, Rendered: rendered(r)}
 	}
 	var b bytes.Buffer
 	if err := layout.ExecuteTemplate(&b, "page", p); err != nil {
