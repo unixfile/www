@@ -148,6 +148,15 @@ pre {
 table { border-collapse: collapse; }
 th, td { border-bottom: 1px solid var(--rule); padding: 0.2em 0.6em; text-align: left; }
 img { max-width: 100%; }
+/* A graph dot drew sits centred and never wider than the column. dot draws
+   in black on a white sheet; the page's own colours replace both, so a
+   graph reads in either theme. */
+div.graph { margin: 0.7em 0; text-align: center; }
+div.graph svg { max-width: 100%; height: auto; }
+div.graph svg polygon[fill="white"] { fill: none; }
+div.graph svg [stroke="black"] { stroke: var(--text); }
+div.graph svg [fill="black"] { fill: var(--text); }
+div.graph svg text { fill: var(--text); font-family: "STIX Two Text", Georgia, serif; }
 ul.listing { list-style: none; padding: 0; text-align: left; }
 ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
 /* The program's own links, in the header, listings and the index, are quiet,

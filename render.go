@@ -107,8 +107,10 @@ func renderCheckBox(w util.BufWriter, src []byte, node ast.Node, entering bool) 
 	return ast.WalkContinue, nil
 }
 
-// renderFence highlights a fenced block whose language chroma knows. A
-// block in any other language is plain <pre><code>.
+// renderFence draws a Graphviz block through dot and highlights a fenced
+// block whose language chroma knows. A graph dot cannot draw shows as code
+// under a line that says why; a block in any other language is plain
+// <pre><code>.
 func renderFence(w util.BufWriter, src []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
 		return ast.WalkContinue, nil
@@ -122,6 +124,14 @@ func renderFence(w util.BufWriter, src []byte, node ast.Node, entering bool) (as
 	}
 	var lexer chroma.Lexer
 	if lang := n.Language(src); lang != nil {
+		if isGraph(string(lang)) {
+			svg, err := drawGraph(code.String())
+			if err == nil {
+				w.WriteString(string(svg) + "\n")
+				return ast.WalkSkipChildren, nil
+			}
+			w.WriteString(`<p class="own warn">` + template.HTMLEscapeString(err.Error()) + "</p>\n")
+		}
 		lexer = lexers.Get(string(lang))
 	}
 	if lexer == nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -89,5 +90,28 @@ func TestBrokenLinks(t *testing.T) {
 	}
 	if !strings.Contains(s, `<a href="gone.md#top" class="broken" title="missing: gone.md">`) {
 		t.Errorf("gone.md not marked: %s", s)
+	}
+}
+
+// A dot fence becomes inline SVG when dot is installed, and code with the
+// reason otherwise.
+func TestGraphFence(t *testing.T) {
+	h, err := renderMarkdown([]byte("```dot\ndigraph { a -> b }\n```\n"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(h)
+	if _, err := exec.LookPath("dot"); err != nil {
+		if !strings.Contains(s, "dot is not installed") {
+			t.Errorf("no reason given: %s", s)
+		}
+		return
+	}
+	if !strings.Contains(s, `<div class="graph"><svg`) || strings.Contains(s, "<?xml") {
+		t.Errorf("not inline SVG: %.200s", s)
+	}
+	h, _ = renderMarkdown([]byte("```dot\ndigraph { a -> }\n```\n"), nil)
+	if s := string(h); !strings.Contains(s, `class="own warn"`) || !strings.Contains(s, "<pre") {
+		t.Errorf("bad graph not shown as code with a reason: %s", s)
 	}
 }
