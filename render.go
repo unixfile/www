@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"html/template"
 	"io"
 	"net/url"
@@ -217,6 +218,26 @@ func highlight(w io.Writer, lexer chroma.Lexer, code string, numbered bool) {
 		io.WriteString(w, "</span>")
 	}
 	io.WriteString(w, "</code></pre></div>")
+}
+
+// codeCache keeps highlighted code pages by lexer and content hash. Chroma
+// lexes most languages at about 70 µs a line, so a large Python or
+// JavaScript file takes far over the page budget; from the cache a page
+// takes as long as a Go one.
+var codeCache = newCache(16 << 20)
+
+// highlightPage is highlight for a code page, through codeCache.
+func highlightPage(lexer chroma.Lexer, b []byte) string {
+	sum := sha256.Sum256(b)
+	key := langName(lexer) + "\x00" + string(sum[:])
+	if h, ok := codeCache.get(key); ok {
+		return h.(string)
+	}
+	var out strings.Builder
+	highlight(&out, lexer, string(b), true)
+	h := out.String()
+	codeCache.put(key, h, int64(len(h)))
+	return h
 }
 
 // writeLine writes one line's tokens, merging neighbours of one class.

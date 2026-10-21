@@ -758,7 +758,7 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 	}
 	var body strings.Builder
 	body.WriteString(t.logLine(r.Context(), name))
-	highlight(&body, codeLexer(name), string(b), true)
+	body.WriteString(highlightPage(codeLexer(name), b))
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String()), Raw: true})
 }
 
