@@ -68,7 +68,7 @@ type config struct {
 	ep      netip.AddrPort
 	fg      bool
 	noopen  bool
-	persist bool // write a persistent lock, so the tree is served after reboot
+	persist bool   // write a persistent lock, so the tree is served after reboot
 	stamp   bool   // show the build time above each page's header
 	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
 	help    bool

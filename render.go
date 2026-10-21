@@ -165,11 +165,15 @@ func codeLexer(name string) chroma.Lexer {
 
 var lexerByName sync.Map
 
-// tokenise lexes Go with the standard library's scanner and everything
-// else with chroma.
+// tokenise lexes Go with the standard library's scanner, Python,
+// JavaScript and shell with the program's own lexers, and everything else
+// with chroma.
 func tokenise(lexer chroma.Lexer, code string) []chroma.Token {
 	if lexer == lexers.Go {
 		return goTokens(code)
+	}
+	if own := ownLexers[lexer]; own != nil {
+		return own(ensureLF(code))
 	}
 	it, err := chroma.Coalesce(lexer).Tokenise(nil, code)
 	if err != nil {
