@@ -716,13 +716,28 @@ func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body, err := renderMarkdown(b)
+	body, err := renderMarkdown(b, t.missing(name))
 	if err != nil {
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	body = template.HTML(t.logLine(r.Context(), name)) + body
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
+}
+
+// missing reports, for the doc name, whether a relative link names
+// nothing the reader could open. A link that climbs out of the tree may
+// land in another tree, so it counts as found.
+func (t *tree) missing(name string) func(string) bool {
+	dir := path.Dir(name)
+	return func(dest string) bool {
+		target := path.Join(dir, dest)
+		if target == ".." || strings.HasPrefix(target, "../") {
+			return false
+		}
+		_, err := fs.Stat(t.fsys, target)
+		return errors.Is(err, fs.ErrNotExist)
+	}
 }
 
 // serveCode shows a text file as a highlighted code page with numbered,

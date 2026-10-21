@@ -8,7 +8,7 @@ import (
 // A fence in a known language gets pandoc's markup without line numbers;
 // any other fence is plain.
 func TestFences(t *testing.T) {
-	h, err := renderMarkdown([]byte("```go\nx := 1\n```\n\n```nosuch\n<b>\n```\n"))
+	h, err := renderMarkdown([]byte("```go\nx := 1\n```\n\n```nosuch\n<b>\n```\n"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestCodeLexerByName(t *testing.T) {
 
 // Task list boxes are not disabled, so they keep the browser's colour.
 func TestTaskBoxes(t *testing.T) {
-	h, err := renderMarkdown([]byte("- [x] done\n- [ ] open\n"))
+	h, err := renderMarkdown([]byte("- [x] done\n- [ ] open\n"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,5 +73,21 @@ func TestGoTokens(t *testing.T) {
 		if !strings.Contains(b.String(), want) {
 			t.Errorf("no %s in %s", want, b.String())
 		}
+	}
+}
+
+// A relative link to a missing path is marked; others are left alone.
+func TestBrokenLinks(t *testing.T) {
+	missing := func(dest string) bool { return dest == "gone.md" || dest == "a b.md" }
+	h, err := renderMarkdown([]byte("[x](gone.md#top) [y](here.md) [z](https://example.com/gone.md) [w](a%20b.md) [v](#gone.md) [u](/gone.md)\n"), missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(h)
+	if n := strings.Count(s, `class="broken"`); n != 2 {
+		t.Errorf("%d broken links, want 2: %s", n, s)
+	}
+	if !strings.Contains(s, `<a href="gone.md#top" class="broken" title="missing: gone.md">`) {
+		t.Errorf("gone.md not marked: %s", s)
 	}
 }

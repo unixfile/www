@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"html/template"
 	"io"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
 
@@ -37,12 +39,49 @@ var markdown = goldmark.New(
 	),
 )
 
-func renderMarkdown(src []byte) (template.HTML, error) {
+// renderMarkdown renders a doc. missing, when given, reports whether a
+// relative link's path, unescaped and without query or fragment, names
+// nothing; such a link gets the class broken and a title that says so.
+func renderMarkdown(src []byte, missing func(dest string) bool) (template.HTML, error) {
+	doc := markdown.Parser().Parse(text.NewReader(src))
+	if missing != nil {
+		markBroken(doc, missing)
+	}
 	var out bytes.Buffer
-	if err := markdown.Convert(src, &out); err != nil {
+	if err := markdown.Renderer().Render(&out, src, doc); err != nil {
 		return "", err
 	}
 	return template.HTML(out.String()), nil
+}
+
+// markBroken marks each link whose relative target is missing.
+func markBroken(doc ast.Node, missing func(string) bool) {
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		l, ok := n.(*ast.Link)
+		if !entering || !ok {
+			return ast.WalkContinue, nil
+		}
+		dest := relativePath(string(l.Destination))
+		if dest == "" || !missing(dest) {
+			return ast.WalkContinue, nil
+		}
+		l.SetAttributeString("class", []byte("broken"))
+		if len(l.Title) == 0 {
+			l.SetAttributeString("title", []byte("missing: "+dest))
+		}
+		return ast.WalkContinue, nil
+	})
+}
+
+// relativePath is the path a relative link names, unescaped, or "" for a
+// link with a scheme or host, an absolute path or only a fragment or
+// query.
+func relativePath(dest string) string {
+	u, err := url.Parse(dest)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.Opaque != "" || strings.HasPrefix(u.Path, "/") {
+		return ""
+	}
+	return u.Path
 }
 
 // nodeRenderer replaces goldmark's rendering of fenced code and task list

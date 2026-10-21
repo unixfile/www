@@ -160,6 +160,9 @@ ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
 main a { color: inherit; text-decoration-color: var(--muted); }
 main a:visited { text-decoration-color: var(--rule); }
 main a:hover { text-decoration-color: currentColor; }
+/* A link whose target is missing keeps its words and wears a dotted
+   underline in the danger colour; its title names the missing path. */
+main a.broken { text-decoration-style: dotted; text-decoration-color: var(--danger); }
 header a, ul.listing a, table.locks a, p.latest a, .own a { color: inherit; text-decoration-color: var(--rule); }
 header a:visited, ul.listing a:visited, table.locks a:visited, p.latest a:visited, .own a:visited { color: var(--muted); }
 header a:hover, ul.listing a:hover, table.locks a:hover, p.latest a:hover, .own a:hover { text-decoration-color: currentColor; }
