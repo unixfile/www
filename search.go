@@ -119,7 +119,11 @@ func (t *tree) search(ctx context.Context, dir, q string) found {
 			res.Lines = append(res.Lines, hit{Href: t.href(p, i+1), Path: p, Line: i + 1, Text: lineAt(b, i), Here: here})
 		}
 	}
-	skip := func(d fs.DirEntry) bool { return isLockName(d.Name()) || d.IsDir() && unsearched[d.Name()] }
+	// What a listing leaves out, search leaves out too: a share hides dot
+	// entries, though its file system lists them.
+	skip := func(p string, d fs.DirEntry) bool {
+		return t.unlisted(path.Dir(p), d.Name()) || d.IsDir() && unsearched[d.Name()]
+	}
 	// The directory's own entries come first, so the hit limits cannot
 	// crowd them out with deeper ones; then each subdirectory in turn.
 	entries, err := fs.ReadDir(t.fsys, dir)
@@ -132,22 +136,22 @@ func (t *tree) search(ctx context.Context, dir, q string) found {
 			res.Cut = true
 			return res
 		}
-		if !skip(d) {
-			visit(path.Join(dir, d.Name()), d)
+		if p := path.Join(dir, d.Name()); !skip(p, d) {
+			visit(p, d)
 		}
 	}
 	errStop := errors.New("stop")
 	for _, e := range entries {
-		if !e.IsDir() || skip(e) {
+		sub := path.Join(dir, e.Name())
+		if !e.IsDir() || skip(sub, e) {
 			continue
 		}
-		sub := path.Join(dir, e.Name())
 		err := fs.WalkDir(t.fsys, sub, func(p string, d fs.DirEntry, err error) error {
 			if ctx.Err() != nil {
 				res.Cut = true
 				return errStop
 			}
-			if err != nil || (p != sub && skip(d)) {
+			if err != nil || (p != sub && skip(p, d)) {
 				if d != nil && d.IsDir() {
 					return fs.SkipDir
 				}

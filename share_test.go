@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"net/http"
 	"net/netip"
 	"os"
@@ -310,5 +311,24 @@ func TestEnvironmentDefaults(t *testing.T) {
 	t.Setenv(addrEnv, "10.0.0.1")
 	if _, err := endpointOf(config{dir: "."}, 1000); err == nil || !strings.HasPrefix(err.Error(), addrEnv+"=10.0.0.1: ") {
 		t.Errorf("non-loopback "+envPrefix+"ADDR: %v, want an error naming it", err)
+	}
+}
+
+// A share's search names no dot entry, as its listing shows none.
+func TestShareSearchHidesDotEntries(t *testing.T) {
+	s := shareTree(t)
+	dir := s.lookup("/docs/").dir
+	os.WriteFile(filepath.Join(dir, ".envkey"), []byte("env\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "open", ".envdir"), 0o755)
+	os.WriteFile(filepath.Join(dir, "open", ".envhidden"), []byte("env\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "open", "env.txt"), []byte("env\n"), 0o644)
+	var res found
+	json.Unmarshal(get(s.handler(), "/docs/?search=env").Body.Bytes(), &res)
+	var names []string
+	for _, h := range res.Names {
+		names = append(names, h.Path)
+	}
+	if strings.Join(names, " ") != "open/env.txt" {
+		t.Errorf("names: %v", names)
 	}
 }

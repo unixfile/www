@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/netip"
 	"os"
@@ -77,33 +79,51 @@ func flock(f *os.File, how int) error {
 	}
 }
 
-// linkName turns a directory into one file name: % and / become %25 and %2F.
+// linkName turns a directory into one file name for its link: % and /
+// become %25 and %2F, cut short to keep within NAME_MAX, and a random
+// suffix follows. So every join makes a link of a new name, which the
+// server tells from the link it already has without trusting the inode,
+// which a new file may reuse. The name only helps a reader of the
+// registry; www reads the tree from the link's target.
 func linkName(dir string) string {
-	return strings.NewReplacer("%", "%25", "/", "%2F").Replace(dir)
+	name := strings.NewReplacer("%", "%25", "/", "%2F").Replace(dir)
+	if len(name) > linkNameMax {
+		name = name[:linkNameMax]
+	}
+	return name + "~" + rand.Text()[:8]
 }
 
-func (r *registry) linkPath(lockPath string) string {
-	return filepath.Join(r.dir, linkName(filepath.Dir(lockPath)))
-}
+// linkNameMax leaves room under NAME_MAX, 255 bytes, for the suffix.
+const linkNameMax = 200
 
-// add links lockPath into the registry. An old link for the same tree is
-// replaced, so the server can tell a new join from the link it already has.
+// add links lockPath into the registry. Any older link for the same tree
+// goes, and the new one takes a new name, so the server can tell a new
+// join from the link it already has.
 // A shared tree's secret token follows the lock path after a #, which the
 // lock name never holds; the registry is private, so the token stays so.
 func (r *registry) add(lockPath, token string) (string, os.FileInfo, error) {
-	link := r.linkPath(lockPath)
-	if err := os.Remove(link); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	links, err := r.links()
+	if err != nil {
 		return "", nil, err
+	}
+	for link, target := range links {
+		if old, _ := splitTarget(target); filepath.Dir(old) == filepath.Dir(lockPath) {
+			if err := os.Remove(link); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return "", nil, err
+			}
+		}
 	}
 	target := lockPath
 	if token != "" {
 		target += "#" + token
 	}
+	link := filepath.Join(r.dir, linkName(filepath.Dir(lockPath)))
 	if err := os.Symlink(target, link); err != nil {
 		return "", nil, err
 	}
 	info, err := os.Lstat(link)
 	if err != nil {
+		os.Remove(link)
 		return "", nil, err
 	}
 	return link, info, nil
@@ -184,10 +204,20 @@ func serverOf(ep netip.AddrPort) (lockInfo, bool) {
 	if err != nil {
 		return lockInfo{}, false
 	}
-	b, err := os.ReadFile(filepath.Join(dir, serverFile))
+	f, err := os.Open(filepath.Join(dir, serverFile))
+	if err != nil {
+		return lockInfo{}, false
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return lockInfo{}, false
+	}
+	b, err := io.ReadAll(f)
 	if err != nil {
 		return lockInfo{}, false
 	}
 	l := parseLock(b)
+	l.since = info.ModTime()
 	return l, pidLive(l.pid, l.bootID, bootID())
 }

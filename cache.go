@@ -66,6 +66,17 @@ func (c *cache) put(key string, val any, size int64) {
 	}
 }
 
+// reset empties c and gives it a new budget. A server resets the cache
+// it shares with what is left of an earlier server in the same process,
+// as in tests, rather than replace it under that server's goroutines.
+func (c *cache) reset(max int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.max, c.used = max, 0
+	c.order.Init()
+	clear(c.items)
+}
+
 func (c *cache) drop(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

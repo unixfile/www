@@ -171,7 +171,7 @@ func TestTreesShareOneServer(t *testing.T) {
 		t.Fatalf("second tree went with the first: status %d", code)
 	}
 	reg := filepath.Join(os.Getenv("XDG_STATE_HOME"), progName, endpointName(ep))
-	if _, err := os.Lstat(filepath.Join(reg, linkName(one))); err == nil {
+	if hasLink(reg, one) {
 		t.Error("withdrawn tree keeps its registry link")
 	}
 

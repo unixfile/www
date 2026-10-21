@@ -47,7 +47,7 @@ func TestPersistentLock(t *testing.T) {
 	if _, err := os.Stat(kept); err != nil {
 		t.Fatal("stopping the server removed the persistent lock")
 	}
-	if _, err := os.Lstat(filepath.Join(reg, linkName(one))); err != nil {
+	if !hasLink(reg, one) {
 		t.Fatal("stopping the server removed the persistent link")
 	}
 	if _, ok := readLive(ep, kept); ok {
@@ -78,7 +78,7 @@ func TestPersistentLock(t *testing.T) {
 
 	os.Remove(kept)
 	waitFor(t, "the kept tree to go", func() bool { return status(t, base+one+"/a.txt?raw") == http.StatusNotFound })
-	if _, err := os.Lstat(filepath.Join(reg, linkName(one))); err == nil {
+	if hasLink(reg, one) {
 		t.Error("a deleted persistent lock keeps its link")
 	}
 	os.Remove(filepath.Join(two, lockName(ep)))
@@ -110,6 +110,48 @@ func TestPersistUpgradesLock(t *testing.T) {
 		t.Error("no live persistent lock")
 	}
 	os.Remove(filepath.Join(one, persistName(ep)))
+	os.Remove(filepath.Join(two, lockName(ep)))
+	select {
+	case <-served:
+	case <-time.After(3 * time.Second):
+		t.Fatal("server outlived its last lock")
+	}
+}
+
+// --persist on a server's only tree keeps the server and the tree.
+func TestPersistUpgradesOnlyTree(t *testing.T) {
+	ep := testEndpoint(t)
+	one := t.TempDir()
+	base := "http://" + ep.String()
+	_, served := start(t, config{dir: one, ep: ep})
+	lines, code := start(t, config{dir: one, ep: ep, persist: true})
+	if <-code != 0 || lines[0] != "url "+base+one+"/" {
+		t.Fatalf("persist: %q", lines)
+	}
+	if _, ok := readLive(ep, filepath.Join(one, persistName(ep))); !ok {
+		t.Error("no live persistent lock")
+	}
+	os.Remove(filepath.Join(one, persistName(ep)))
+	select {
+	case <-served:
+	case <-time.After(3 * time.Second):
+		t.Fatal("server outlived its last lock")
+	}
+}
+
+// A persistent lock that an earlier server wrote does not count as served
+// by the server that runs now, which may serve another tree at its URL.
+func TestPersistentLockOfEarlierServer(t *testing.T) {
+	ep := testEndpoint(t)
+	one, two := t.TempDir(), t.TempDir()
+	kept := filepath.Join(one, persistName(ep))
+	os.WriteFile(kept, []byte("url: http://"+ep.String()+"/x/\nroot: "+one+"\n"), 0o644)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(kept, old, old)
+	_, served := start(t, config{dir: two, ep: ep})
+	if _, ok := readLive(ep, kept); ok {
+		t.Error("a lock from before the server counts as live")
+	}
 	os.Remove(filepath.Join(two, lockName(ep)))
 	select {
 	case <-served:

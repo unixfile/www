@@ -71,6 +71,7 @@ type lockInfo struct {
 	pid    int
 	url    string
 	bootID string
+	since  time.Time // when a server record was written, as the server started
 }
 
 func parseLock(b []byte) lockInfo {
@@ -118,7 +119,9 @@ func pidLive(pid int, was, now string) bool {
 
 // readLive reads the lock at path and reports whether its server runs. A
 // persistent lock holds no PID, so it takes the PID of the server that
-// the registry of ep names.
+// the registry of ep names. That server serves the tree only if it wrote
+// the lock, after it started: a lock from an earlier server, kept for
+// the next, may name a URL that another tree has taken since.
 func readLive(ep netip.AddrPort, path string) (lockInfo, bool) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -128,6 +131,10 @@ func readLive(ep netip.AddrPort, path string) (lockInfo, bool) {
 	if isPersist(path) {
 		srv, ok := serverOf(ep)
 		if !ok || l.url == "" {
+			return l, false
+		}
+		info, err := os.Stat(path)
+		if err != nil || info.ModTime().Before(srv.since) {
 			return l, false
 		}
 		l.pid, l.bootID = srv.pid, srv.bootID

@@ -199,7 +199,6 @@ type tree struct {
 	lock     *lock       // nil only in tests
 	link     string      // registry link
 	linkInfo os.FileInfo // the link this server knows, to tell it from a new join
-	linkTo   string      // its target, since a new link may reuse its inode
 	wd       int         // inotify watch on dir, or -1
 	shared   bool        // served beyond loopback: only what other users could read
 	secret   bool        // mounted under a token, and left off the index
@@ -336,11 +335,13 @@ func (s *server) logged(next http.Handler) http.Handler {
 			return
 		}
 		uri := r.URL.RequestURI()
+		// The token is cut from the decoded path, which the lookup matched;
+		// the raw one may spell it in escapes, eg /%733cret/.
 		if t := s.lookup(p); t != nil && t.secret {
-			uri = "/<token>/" + strings.TrimPrefix(uri, t.prefix)
+			uri = "/<token>" + hideToken(r.URL, strings.TrimPrefix(p, t.prefix))
 		} else if t := s.byPrefix(p + "/"); t != nil && t.secret {
 			// The secret path without its slash, which redirects.
-			uri = "/<token>" + strings.TrimPrefix(uri, p)
+			uri = "/<token>" + hideToken(r.URL, "")
 		}
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
@@ -355,6 +356,19 @@ func (s *server) logged(next http.Handler) http.Handler {
 			logInfo("%s", msg)
 		}
 	})
+}
+
+// hideToken is the request URI of u for the log, with rest, the decoded
+// path below a secret tree's prefix, in place of its path.
+func hideToken(u *url.URL, rest string) string {
+	uri := (&url.URL{Path: "/" + rest}).EscapedPath()
+	if rest == "" && !strings.HasSuffix(u.Path, "/") {
+		uri = ""
+	}
+	if u.RawQuery != "" {
+		uri += "?" + u.RawQuery
+	}
+	return uri
 }
 
 // statusWriter keeps the status a handler sent, for the log.

@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -91,7 +92,34 @@ func TestRemoveSparesReplacedLock(t *testing.T) {
 }
 
 func TestLinkNameEscapes(t *testing.T) {
-	if got := linkName("/home/u/100%/a"); got != "%2Fhome%2Fu%2F100%25%2Fa" {
+	got := linkName("/home/u/100%/a")
+	if !strings.HasPrefix(got, "%2Fhome%2Fu%2F100%25%2Fa~") || len(got) != len("%2Fhome%2Fu%2F100%25%2Fa~")+8 {
 		t.Errorf("link name %q", got)
 	}
+	if linkName("/a") == linkName("/a") {
+		t.Error("two joins of a tree got links of one name")
+	}
+}
+
+// A deep directory's link still fits in a file name.
+func TestLinkNameFitsDeepDir(t *testing.T) {
+	dir := "/" + strings.Repeat("deep/", 60)
+	if n := len(linkName(dir)); n > 255 {
+		t.Errorf("link name of %d bytes", n)
+	}
+	reg := &registry{dir: t.TempDir()}
+	if _, _, err := reg.add(filepath.Join(dir, "127.31.1.1-8080.lock"), ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// hasLink reports whether the registry in regDir links a lock in dir.
+func hasLink(regDir, dir string) bool {
+	links, _ := readLinks(regDir)
+	for _, target := range links {
+		if lockPath, _ := splitTarget(target); filepath.Dir(lockPath) == dir {
+			return true
+		}
+	}
+	return false
 }

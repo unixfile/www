@@ -71,6 +71,9 @@ func run(c config, rep *reporter) int {
 	if err != nil {
 		return rep.fail(errnoOf(err), err.Error())
 	}
+	// A share's name comes from DNS, which may take a second; asked
+	// before the registry is locked, it holds up no other www.
+	origin := shareOrigin(c.ep)
 	reg, err := openRegistry(c.ep)
 	if err != nil {
 		return rep.fail(errnoOf(err), "cannot open the registry: "+err.Error())
@@ -90,6 +93,10 @@ func run(c config, rep *reporter) int {
 		report(rep, c.ep, l.url)
 		return 0
 	}
+	// upgrade is the plain lock that --persist replaces, which goes only
+	// once the new link is in place: a server whose last tree it is would
+	// otherwise look gone, and the address taken by a stranger.
+	upgrade := ""
 	if l, ok := findLive(c.ep, lockPath); ok && !c.persist {
 		reg.close()
 		logInfo("already served: %s", dir)
@@ -102,7 +109,7 @@ func run(c config, rep *reporter) int {
 		// --persist on a tree served until reboot: the server withdraws the
 		// tree once its lock goes, and takes it again from the new link.
 		logInfo("persists %s, served until now by %s", dir, lockPath)
-		os.Remove(lockPath)
+		upgrade = lockPath
 	}
 	// A .LOCK whose server is down still marks the tree as persistent; a
 	// plain start there keeps it so.
@@ -119,14 +126,17 @@ func run(c config, rep *reporter) int {
 	ln, err := net.Listen("tcp", c.ep.String())
 	switch {
 	case err == nil:
-		return serve(c, rep, ln, reg, dir, home)
+		if upgrade != "" {
+			os.Remove(upgrade)
+		}
+		return serve(c, rep, ln, reg, dir, home, origin)
 	case errors.Is(err, syscall.EADDRINUSE) && !reg.serves(c.ep):
 		// The registry is locked, so a server of ours on ep is either up
 		// with a tree or gone. Something else holds the address.
 		reg.close()
 		return rep.fail(syscall.EADDRINUSE, taken(c.ep))
 	case errors.Is(err, syscall.EADDRINUSE):
-		return join(c.ep, rep, reg, dir, lockPath, c.token)
+		return join(c.ep, rep, reg, dir, lockPath, upgrade, c.token)
 	default:
 		reg.close()
 		return rep.fail(errnoOf(err), "cannot listen on "+c.ep.String()+": "+err.Error())
@@ -135,9 +145,14 @@ func run(c config, rep *reporter) int {
 
 // join hands dir to the server already on ep and waits until it writes the
 // lock. The registry stays locked until the link exists, so the server
-// cannot be on its way out.
-func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath, token string) int {
+// cannot be on its way out. upgrade, when set, is the plain lock that a
+// persistent one replaces; the server withdraws the tree once it goes, and
+// takes it again from the new link.
+func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath, upgrade, token string) int {
 	link, _, err := reg.add(lockPath, token)
+	if err == nil && upgrade != "" {
+		os.Remove(upgrade)
+	}
 	reg.close()
 	if err != nil {
 		return rep.fail(errnoOf(err), "cannot join the server on "+ep.String()+": "+err.Error())
@@ -237,20 +252,23 @@ func ifaceOf(a netip.Addr) string {
 // serve runs the server on ln with dir as its first tree. The caller holds
 // the registry lock, which serve releases once dir is adopted and a crashed
 // server's leftovers are gone.
-func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home string) int {
+func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home, origin string) int {
 	logInfo("server starts on %s: %s", c.ep, build())
 	go warmLexers()
 	showBuilt = c.stamp
-	gitCache = newCache(defaultCache)
+	size := int64(defaultCache)
 	if c.cache != "" {
-		n, _ := parseSize(c.cache)
-		gitCache = newCache(n)
+		size, _ = parseSize(c.cache)
 	}
+	gitCache.reset(size)
 	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(lockMask),
 		done: make(chan struct{}), fresh: map[net.Conn]bool{}}
 	defer h.w.close()
 	defer reg.close()
 	defer reg.unmarkServer()
+	// The loop and the signal handler may still hold or release the
+	// registry flock after done closes, so its file closes only after them.
+	defer h.bg.Wait()
 	h.dropLeftovers()
 	if err := reg.markServer(); err != nil {
 		reg.unlock()
@@ -259,7 +277,7 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	}
 	h.w.add(reg.dir)
 	h.srv.shared = shared(c.ep)
-	h.origin = shareOrigin(c.ep)
+	h.origin = origin
 	first := lockName(c.ep)
 	if c.persist {
 		first = persistName(c.ep)
@@ -280,14 +298,14 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	defer signal.Stop(sigs)
-	go func() {
+	h.bg.Go(func() {
 		select {
 		case sig := <-sigs:
 			h.shutdown(signalName(sig))
 		case <-h.done:
 		}
-	}()
-	go h.loop()
+	})
+	h.bg.Go(h.loop)
 
 	url := h.origin + t.prefixURL()
 	report(rep, c.ep, url)
@@ -335,7 +353,8 @@ type hub struct {
 	// flock does across processes.
 	mu     sync.Mutex
 	halted atomic.Bool
-	done   chan struct{} // closed once open connections are drained
+	done   chan struct{}  // closed once open connections are drained
+	bg     sync.WaitGroup // the loop and the signal handler
 	// fresh holds the connections that have sent no request yet.
 	fresh   map[net.Conn]bool
 	freshMu sync.Mutex
@@ -422,13 +441,11 @@ func (h *hub) adopt(lockPath, link, token string) (*tree, error) {
 		return nil, fmt.Errorf("cannot write lockfile: %w", err)
 	}
 	if link == "" {
+		// add removes its link when it fails.
 		t.link, t.linkInfo, err = h.reg.add(lockPath, token)
 	} else {
 		t.link = link
 		t.linkInfo, err = os.Lstat(link)
-	}
-	if err == nil {
-		t.linkTo, err = os.Readlink(t.link)
 	}
 	if err != nil {
 		t.lock.remove()
@@ -470,16 +487,11 @@ func (h *hub) withdraw(t *tree, why string, keep bool) {
 }
 
 // ownsLink reports whether t's registry link is still the one this server
-// took, not a new join for the same directory. A new link can reuse the
-// old one's inode, so its target must match too: a join that moves the
-// tree to a persistent lock names the other lock.
+// took. A new join for the same directory removes it and makes a link of
+// another name, so a link of this name is this one.
 func (t *tree) ownsLink() bool {
 	info, err := os.Lstat(t.link)
-	if err != nil || !os.SameFile(info, t.linkInfo) {
-		return false
-	}
-	to, err := os.Readlink(t.link)
-	return err == nil && to == t.linkTo
+	return err == nil && os.SameFile(info, t.linkInfo)
 }
 
 // sync withdraws every tree whose lock is gone and adopts every new link.

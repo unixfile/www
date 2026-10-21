@@ -142,11 +142,14 @@ func TestRequestLog(t *testing.T) {
 	tr.prefix, tr.secret = "/s3cr3t/", true
 	get(h, "/s3cr3t/index.md?raw")
 	get(h, "/s3cr3t?log")
+	// Escapes spell the token another way.
+	get(h, "/%733cr3t/index.md?raw")
+	get(h, "/%733cr3t?log")
 
 	path, _ := logFile()
 	b, _ := os.ReadFile(path)
 	log := string(b)
-	for _, skip := range []string{"style.", "favicon", ownPath + "live", "s3cr3t"} {
+	for _, skip := range []string{"style.", "favicon", ownPath + "live", "s3cr3t", "3cr3t"} {
 		if strings.Contains(log, skip) {
 			t.Errorf("log holds %s:\n%s", skip, log)
 		}
