@@ -54,6 +54,16 @@ func TestCheckDirRefusesHome(t *testing.T) {
 	if _, err := checkDir(filepath.Join(home, "missing"), home); err == nil {
 		t.Error("missing directory accepted")
 	}
+	for _, d := range []string{filepath.Dir(home), "/"} {
+		if _, err := checkDir(d, home); errnoOf(err) != 1 {
+			t.Errorf("%s above home: %v, want EPERM", d, err)
+		}
+	}
+	link := filepath.Join(t.TempDir(), "home")
+	os.Symlink(home, link)
+	if _, err := checkDir(filepath.Dir(home), link); errnoOf(err) != 1 {
+		t.Errorf("above a linked home: %v, want EPERM", err)
+	}
 }
 
 // The watcher wakes on a change in a watched directory.

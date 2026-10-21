@@ -28,7 +28,7 @@ const (
 
 // checkDir resolves path and refuses what must not be served. A tree
 // exposes everything below it, and home holds ~/.ssh, ~/.gnupg and every
-// token file.
+// token file, so home and every directory above it are refused.
 func checkDir(path, home string) (string, error) {
 	dir, err := filepath.Abs(path)
 	if err != nil {
@@ -43,6 +43,22 @@ func checkDir(path, home string) (string, error) {
 	}
 	if hi, err := os.Stat(home); home != "" && err == nil && os.SameFile(info, hi) {
 		return "", &errno{syscall.EPERM, "refusing to serve the home directory " + dir + ": it holds ~/.ssh, ~/.gnupg and every token file"}
+	}
+	// Home may be reached through a symlink, so the directories above its
+	// resolved path count too.
+	homes := []string{home}
+	if real, err := filepath.EvalSymlinks(home); home != "" && err == nil && real != home {
+		homes = append(homes, real)
+	}
+	for _, h := range homes {
+		for p := filepath.Dir(h); h != ""; p = filepath.Dir(p) {
+			if pi, err := os.Stat(p); err == nil && os.SameFile(info, pi) {
+				return "", &errno{syscall.EPERM, "refusing to serve " + dir + ": it holds the home directory " + home}
+			}
+			if p == filepath.Dir(p) {
+				break
+			}
+		}
 	}
 	return dir, nil
 }
