@@ -672,6 +672,10 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, u, http.StatusMovedPermanently)
 		return
 	}
+	if q, ok := r.URL.Query()["search"]; ok && info.IsDir() {
+		t.serveSearch(w, r, name, q[0])
+		return
+	}
 	if _, log := r.URL.Query()["log"]; log {
 		t.serveLog(w, r, name, info.IsDir())
 		return
@@ -880,6 +884,7 @@ type page struct {
 	Body    template.HTML
 	Raw     bool
 	Tree    string       // prefix the stop button withdraws, or "" for every tree
+	Search  string       // the tree's URL, which answers ?search=, or "" off a tree
 	Status  string       // the server's age, on the index
 	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
@@ -943,7 +948,7 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 // render gives the page this tree's Delete lock button, unless the tree is
 // shared.
 func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page) {
-	p.Tree, p.Shared = t.prefix, t.shared
+	p.Tree, p.Shared, p.Search = t.prefix, t.shared, t.prefixURL()
 	render(w, r, status, p)
 }
 

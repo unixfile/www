@@ -240,6 +240,21 @@ table.locks button { font: inherit; color: inherit; background: none; border: 1p
    and fades to none in 3 s, so the eye finds where the change landed. */
 main > .changed { animation: changed 3s ease-in; }
 @keyframes changed { from { background-color: var(--target); } to { background-color: transparent; } }
+/* The search box sits with the header's buttons, as quiet as they are. */
+header input.search {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 0.2em;
+  padding: 0.15em 0.4em;
+  width: 9em;
+}
+header input.search:focus { outline: none; border-color: var(--muted); }
+/* Search results: the path is the program's and mono, a matching line is
+   the file's and stays mono too, in the muted colour. */
+ul.found li .line { color: var(--muted); font-size: 0.8em; hyphens: none; }
+ul.found li.note { color: var(--muted); font-size: 0.8em; margin-top: 0.8em; }
 /* An entry the arrows reached shows a quiet ring. */
 ul.listing a:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
 

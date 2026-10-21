@@ -16,7 +16,7 @@
 			found();
 		} else if (!es) {
 			es = new EventSource(url);
-			es.onmessage = update;
+			es.onmessage = () => (searching() ? (pending = true) : update());
 			es.onopen = found;
 			es.onerror = () => {
 				if (!lost) lost = setTimeout(reload, 3000);
@@ -92,6 +92,90 @@
 	document.addEventListener("visibilitychange", sync);
 	sync();
 
+	// The box in the header searches the tree as the user types: names
+	// first, then lines. The results stand in for the page while the box
+	// holds a query; Escape or an empty box brings the page back, with any
+	// update that arrived meanwhile.
+	let pending = false;
+	let timer = null;
+	let ctl = null;
+	const box = () => document.querySelector("input.search");
+	const searching = () => {
+		const b = box();
+		return !!b && b.value.trim() !== "";
+	};
+	const showPage = () => {
+		const ul = document.querySelector("ul.found");
+		if (ul) ul.remove();
+		const main = document.querySelector("main");
+		if (main) main.hidden = false;
+		if (pending) {
+			pending = false;
+			update();
+		}
+	};
+	const runSearch = () => {
+		const b = box();
+		const q = b.value.trim();
+		if (ctl) ctl.abort();
+		if (!q) return showPage();
+		ctl = new AbortController();
+		fetch(b.dataset.search + "?search=" + encodeURIComponent(q), { signal: ctl.signal })
+			.then((r) => r.json())
+			.then((res) => {
+				if (!box() || box().value.trim() !== q) return;
+				const ul = document.createElement("ul");
+				ul.className = "listing found";
+				const add = (h, label, text) => {
+					const li = document.createElement("li");
+					const a = document.createElement("a");
+					a.href = h.href;
+					a.textContent = label;
+					li.append(a);
+					if (text) {
+						const span = document.createElement("span");
+						span.className = "line";
+						span.textContent = text;
+						li.append(" ", span);
+					}
+					ul.append(li);
+				};
+				for (const h of res.names) add(h, h.path);
+				for (const h of res.lines) add(h, h.path + ":" + h.line, h.text);
+				const note = document.createElement("li");
+				note.className = "note";
+				note.textContent = (res.names.length + res.lines.length ? "" : "nothing found, ") +
+					"searched " + res.files + " files" + (res.cut ? ", stopped early" : "");
+				ul.append(note);
+				const main = document.querySelector("main");
+				const old = document.querySelector("ul.found");
+				if (old) old.replaceWith(ul);
+				else main.before(ul);
+				main.hidden = true;
+			})
+			.catch(() => {});
+	};
+	const clearSearch = () => {
+		const b = box();
+		b.value = "";
+		b.blur();
+		runSearch();
+	};
+	document.addEventListener("input", (e) => {
+		if (!e.target.matches("input.search")) return;
+		clearTimeout(timer);
+		timer = setTimeout(runSearch, 120);
+	});
+	document.addEventListener("keydown", (e) => {
+		if (!e.target.matches || !e.target.matches("input.search")) return;
+		const first = document.querySelector("ul.found a");
+		if (e.key === "Escape") clearSearch();
+		else if (e.key === "ArrowDown" && first) first.focus();
+		else if (e.key === "Enter" && first) location.href = first.href;
+		else return;
+		e.preventDefault();
+	});
+
 	// The build stamp counts the seconds since the binary was built. It is
 	// looked up on each tick, since a doc's update replaces it.
 	setInterval(() => {
@@ -99,15 +183,28 @@
 		if (ago) ago.textContent = Math.max(0, Math.floor((Date.now() - Number(ago.parentNode.dataset.built)) / 1000));
 	}, 1000);
 
-	// Arrows walk a listing: Up and Down move between entries, Right or
-	// Space opens one, as Enter does, and Left goes up a directory. Other
-	// pages keep their arrows for scrolling.
+	// Arrows walk a listing, or the search results: Up and Down move
+	// between entries, Right or Space opens one, as Enter does, and Left
+	// goes up a directory. Other pages keep their arrows for scrolling. A
+	// slash goes to the search box.
 	document.addEventListener("keydown", (e) => {
 		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
 		if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
-		const links = [...document.querySelectorAll("ul.listing a")];
+		if (e.key === "/" && box()) {
+			e.preventDefault();
+			return box().focus();
+		}
+		if (e.key === "Escape" && searching()) {
+			e.preventDefault();
+			return clearSearch();
+		}
+		const links = [...document.querySelectorAll("ul.listing a")].filter((a) => a.offsetParent !== null);
 		if (!links.length) return;
 		const i = links.indexOf(document.activeElement);
+		if (e.key === "ArrowUp" && i === 0 && searching()) {
+			e.preventDefault();
+			return box().focus();
+		}
 		switch (e.key) {
 			case "ArrowDown":
 				links[Math.min(i + 1, links.length - 1)].focus();
