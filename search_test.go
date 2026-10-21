@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -36,5 +37,23 @@ func TestSearch(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &res)
 	if len(res.Names)+len(res.Lines) != 0 {
 		t.Errorf("lock found: %+v %+v", res.Names, res.Lines)
+	}
+}
+
+// The search box searches the directory a page is in, and a page with
+// ?q= is the page itself, for the script to fill the box from.
+func TestSearchBoxScope(t *testing.T) {
+	s, _, _ := serveTree(t)
+	for _, c := range []struct{ url, want string }{
+		{"/", "/"},
+		{"/a/", "/a/"},
+		{"/a/b.go", "/a/"},
+		{"/a/b.go?q=func", "/a/"},
+		{"/a/missing", "/"},
+	} {
+		w := get(s.handler(), c.url)
+		if !strings.Contains(w.Body.String(), `data-search="`+c.want+`"`) {
+			t.Errorf("%s: want data-search=%q, status %d", c.url, c.want, w.Code)
+		}
 	}
 }

@@ -92,10 +92,11 @@
 	document.addEventListener("visibilitychange", sync);
 	sync();
 
-	// The box under the header searches the tree as the user types: names
-	// first, then lines. The results stand in for the page while the box
-	// holds a query; Escape or an empty box brings the page back, with any
-	// update that arrived meanwhile.
+	// The box under the header searches the page's directory as the user
+	// types: names first, then lines. The results stand in for the page
+	// while the box holds a query; Escape or an empty box brings the page
+	// back, with any update that arrived meanwhile. The query rides in the
+	// URL as ?q=, so Back from a result and a reload show the results again.
 	let pending = false;
 	let timer = null;
 	let ctl = null;
@@ -114,9 +115,18 @@
 			update();
 		}
 	};
+	// withQuery is this page's URL holding q, or none; other parameters
+	// keep their spelling, so ?log stays ?log.
+	const withQuery = (q) => {
+		const rest = location.search.slice(1).split("&").filter((s) => s && s !== "q" && !s.startsWith("q="));
+		if (q) rest.push("q=" + encodeURIComponent(q));
+		return location.pathname + (rest.length ? "?" + rest.join("&") : "") + location.hash;
+	};
 	const runSearch = () => {
 		const b = box();
 		const q = b.value.trim();
+		const u = withQuery(q);
+		if (u !== location.pathname + location.search + location.hash) history.replaceState(history.state, "", u);
 		if (ctl) ctl.abort();
 		if (!q) return showPage();
 		ctl = new AbortController();
@@ -161,6 +171,12 @@
 		b.blur();
 		runSearch();
 	};
+	document.addEventListener("DOMContentLoaded", () => {
+		const q = new URLSearchParams(location.search).get("q");
+		if (!q || !box()) return;
+		box().value = q;
+		runSearch();
+	});
 	document.addEventListener("input", (e) => {
 		if (!e.target.matches("input.search")) return;
 		clearTimeout(timer);

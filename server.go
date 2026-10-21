@@ -946,10 +946,20 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 }
 
 // render gives the page this tree's Delete lock button, unless the tree is
-// shared.
+// shared, and a search box for the directory the page is in. A failed
+// page searches the whole tree, since its directory may not exist.
 func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Tree, p.Shared, p.Search = t.prefix, t.shared, t.prefixURL()
+	if status == http.StatusOK {
+		p.Search = searchURL(r.URL.Path)
+	}
 	render(w, r, status, p)
+}
+
+// searchURL is the directory a page at urlPath is in: a listing itself,
+// or a file's directory.
+func searchURL(urlPath string) string {
+	return (&url.URL{Path: urlPath[:strings.LastIndex(urlPath, "/")+1]}).String()
 }
 
 // why is what a refusal page says: the reason in full, or on a shared tree
