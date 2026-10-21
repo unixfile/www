@@ -236,6 +236,13 @@ table.locks td + td { text-align: right; }
 table.locks form { display: inline; }
 table.locks button { font: inherit; color: inherit; background: none; border: 1px solid currentColor; border-radius: 0.2em; padding: 0.15em 0.7em; cursor: pointer; white-space: nowrap; }
 
+/* A block that changed with the last save fills with the target colour
+   and fades to none in 3 s, so the eye finds where the change landed. */
+main > .changed { animation: changed 3s ease-in; }
+@keyframes changed { from { background-color: var(--target); } to { background-color: transparent; } }
+/* An entry the arrows reached shows a quiet ring. */
+ul.listing a:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
+
 /* the line a #L42 link points at */
 pre > code.sourceCode > span:target { background: var(--target); }
 

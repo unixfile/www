@@ -23,10 +23,12 @@ import (
 
 // liveJS is the one script a page may run. It holds an EventSource while
 // the tab is visible and reloads the page on its one event, or when the
-// stream stays lost for three seconds, since the server is gone. A hidden
-// tab lets go, since a browser opens no more than six connections to a
-// host, and asks again when it shows. It also loads a commit's diff into a
-// history when its fold opens.
+// stream stays lost for three seconds, since the server is gone; a doc
+// instead takes its new version in place and marks the blocks that
+// changed. A hidden tab lets go, since a browser opens no more than six
+// connections to a host, and asks again when it shows. It also walks a
+// listing by arrow and loads a commit's diff into a history when its fold
+// opens.
 //
 //go:embed assets/live.js
 var liveJS string
