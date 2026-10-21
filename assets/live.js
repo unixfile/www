@@ -92,7 +92,7 @@
 	document.addEventListener("visibilitychange", sync);
 	sync();
 
-	// The box in the header searches the tree as the user types: names
+	// The box under the header searches the tree as the user types: names
 	// first, then lines. The results stand in for the page while the box
 	// holds a query; Escape or an empty box brings the page back, with any
 	// update that arrived meanwhile.
