@@ -80,7 +80,17 @@ func run(c config, rep *reporter) int {
 		return rep.fail(errnoOf(err), "cannot lock the registry "+reg.dir+": "+err.Error())
 	}
 	lockPath := filepath.Join(dir, lockName(c.ep))
-	if l, ok := findLive(lockPath); ok {
+	persistPath := filepath.Join(dir, persistName(c.ep))
+	if l, ok := findLive(c.ep, persistPath); ok {
+		reg.close()
+		logInfo("already served: %s", dir)
+		if c.secret {
+			rep.send("note", "already served; --secret applies to a new share. Delete "+persistPath+" and share again to change it.")
+		}
+		report(rep, c.ep, l.url)
+		return 0
+	}
+	if l, ok := findLive(c.ep, lockPath); ok && !c.persist {
 		reg.close()
 		logInfo("already served: %s", dir)
 		if c.secret {
@@ -88,6 +98,14 @@ func run(c config, rep *reporter) int {
 		}
 		report(rep, c.ep, l.url)
 		return 0
+	} else if ok {
+		// --persist on a tree served until reboot: the server withdraws the
+		// tree once its lock goes, and takes it again from the new link.
+		logInfo("persists %s, served until now by %s", dir, lockPath)
+		os.Remove(lockPath)
+	}
+	if c.persist {
+		lockPath = persistPath
 	}
 	if err := syscall.Access(dir, wOK); err != nil {
 		reg.close()
@@ -120,12 +138,10 @@ func join(ep netip.AddrPort, rep *reporter, reg *registry, dir, lockPath, token 
 		return rep.fail(errnoOf(err), "cannot join the server on "+ep.String()+": "+err.Error())
 	}
 	for end := time.Now().Add(joinWait); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
-		if b, err := os.ReadFile(lockPath); err == nil {
-			if l := parseLock(b); l.live(bootID()) {
-				logInfo("joined the server on %s: %s", ep, dir)
-				report(rep, ep, l.url)
-				return 0
-			}
+		if l, ok := readLive(ep, lockPath); ok {
+			logInfo("joined the server on %s: %s", ep, dir)
+			report(rep, ep, l.url)
+			return 0
 		}
 		// The server removes a link it cannot take.
 		if _, err := os.Lstat(link); err != nil {
@@ -229,11 +245,21 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home st
 		done: make(chan struct{}), fresh: map[net.Conn]bool{}}
 	defer h.w.close()
 	defer reg.close()
+	defer reg.unmarkServer()
 	h.dropLeftovers()
+	if err := reg.markServer(); err != nil {
+		reg.unlock()
+		ln.Close()
+		return rep.fail(errnoOf(err), "cannot write the server record in "+reg.dir+": "+err.Error())
+	}
 	h.w.add(reg.dir)
 	h.srv.shared = shared(c.ep)
 	h.origin = shareOrigin(c.ep)
-	t, err := h.adopt(filepath.Join(dir, lockName(c.ep)), "", c.token)
+	first := lockName(c.ep)
+	if c.persist {
+		first = persistName(c.ep)
+	}
+	t, err := h.adopt(filepath.Join(dir, first), "", c.token)
 	reg.unlock()
 	if err != nil {
 		ln.Close()
@@ -333,11 +359,18 @@ func (h *hub) unlock() {
 
 // dropLeftovers clears what a crashed server left in the registry. Every
 // link there names a stale lock, since no other server can hold this
-// endpoint while this one starts.
+// endpoint while this one starts. A persistent lock is not stale: its link
+// stays, and the first sync serves its tree again.
 func (h *hub) dropLeftovers() {
 	links, _ := h.reg.links()
 	for link, target := range links {
-		if lockPath, _ := splitTarget(target); filepath.Base(lockPath) == lockName(h.ep) {
+		lockPath, _ := splitTarget(target)
+		if filepath.Base(lockPath) == persistName(h.ep) {
+			if _, err := os.Stat(lockPath); err == nil {
+				continue
+			}
+		}
+		if filepath.Base(lockPath) == lockName(h.ep) {
 			if os.Remove(lockPath) == nil {
 				logInfo("removed %s, left by a crashed server", lockPath)
 			}
@@ -350,7 +383,7 @@ func (h *hub) dropLeftovers() {
 // the registry entry a joining www made, or "" to make one. token puts
 // a shared tree under a secret path.
 func (h *hub) adopt(lockPath, link, token string) (*tree, error) {
-	if !filepath.IsAbs(lockPath) || filepath.Base(lockPath) != lockName(h.ep) {
+	if !filepath.IsAbs(lockPath) || !lockNames(h.ep, filepath.Base(lockPath)) {
 		return nil, &errno{syscall.EINVAL, "not a lock for " + h.ep.String() + ": " + lockPath}
 	}
 	dir, err := checkDir(filepath.Dir(lockPath), h.home)
@@ -411,15 +444,18 @@ func (h *hub) where(t *tree) string {
 
 // withdraw stops serving t for the cause why and removes its lock and link.
 // A link that is not the one the server knows is a new join for the same
-// directory, and stays. The caller holds the lock.
-func (h *hub) withdraw(t *tree, why string) {
+// directory, and stays. When the server stops, keep leaves a persistent
+// lock and its link for the next server. The caller holds the lock.
+func (h *hub) withdraw(t *tree, why string, keep bool) {
 	if !h.srv.remove(t) {
 		return
 	}
 	logInfo("withdraws %s: %s", t.dir, why)
-	t.lock.remove()
-	if info, err := os.Lstat(t.link); err == nil && os.SameFile(info, t.linkInfo) {
-		os.Remove(t.link)
+	if !keep || !t.lock.persist() {
+		t.lock.remove()
+		if info, err := os.Lstat(t.link); err == nil && os.SameFile(info, t.linkInfo) {
+			os.Remove(t.link)
+		}
 	}
 	h.w.remove(t.wd)
 	t.root.Close()
@@ -436,7 +472,7 @@ func (h *hub) sync() bool {
 	}
 	for _, t := range h.srv.list() {
 		if t.lock.gone() {
-			h.withdraw(t, "its lock "+t.lock.path+" was deleted or replaced")
+			h.withdraw(t, "its lock "+t.lock.path+" was deleted or replaced", false)
 		}
 	}
 	served := map[string]bool{}
@@ -485,7 +521,7 @@ func (h *hub) loop() {
 func (h *hub) stop(trees []*tree, why string) {
 	h.lock()
 	for _, t := range trees {
-		h.withdraw(t, why)
+		h.withdraw(t, why, false)
 	}
 	h.unlock()
 	h.w.signal()
@@ -495,7 +531,7 @@ func (h *hub) stop(trees []*tree, why string) {
 func (h *hub) shutdown(why string) {
 	h.lock()
 	for _, t := range h.srv.list() {
-		h.withdraw(t, why)
+		h.withdraw(t, why, true)
 	}
 	h.halt(why)
 	h.unlock()
@@ -512,6 +548,7 @@ func (h *hub) halt(why string) {
 	}
 	logInfo("server stops: %s", why)
 	h.ln.Close()
+	h.reg.unmarkServer()
 	// Live reload streams never end on their own, and Shutdown waits for them.
 	h.srv.live.close()
 	// Shutdown also waits five seconds for a connection that has sent no

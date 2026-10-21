@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/netip"
 	"os"
@@ -110,7 +111,7 @@ func (r *registry) add(lockPath, token string) (string, os.FileInfo, error) {
 
 // splitTarget parses a link's target into the lock path and the token.
 func splitTarget(target string) (lockPath, token string) {
-	if strings.HasSuffix(target, lockSuffix) {
+	if strings.HasSuffix(target, lockSuffix) || strings.HasSuffix(target, persistSuffix) {
 		return target, ""
 	}
 	i := strings.LastIndex(target, "#")
@@ -154,4 +155,39 @@ func readLinks(dir string) (map[string]string, error) {
 		}
 	}
 	return m, nil
+}
+
+// serverFile, in a registry, names the server that runs on its endpoint:
+// its PID and boot, as a lock does. A persistent lock holds no PID, so this
+// is how to tell whether its tree is served and which process to stop.
+const serverFile = "server"
+
+// markServer records this process as the server of the registry.
+func (r *registry) markServer() error {
+	return os.WriteFile(filepath.Join(r.dir, serverFile),
+		[]byte(fmt.Sprintf("pid: %d\nboot_id: %s\n", os.Getpid(), bootID())), 0o600)
+}
+
+// unmarkServer removes the record, unless another server has written its
+// own.
+func (r *registry) unmarkServer() {
+	p := filepath.Join(r.dir, serverFile)
+	if b, err := os.ReadFile(p); err == nil && parseLock(b).pid == os.Getpid() {
+		os.Remove(p)
+	}
+}
+
+// serverOf reads the server record of ep, and reports whether that server
+// still runs.
+func serverOf(ep netip.AddrPort) (lockInfo, bool) {
+	dir, err := registryDir(ep)
+	if err != nil {
+		return lockInfo{}, false
+	}
+	b, err := os.ReadFile(filepath.Join(dir, serverFile))
+	if err != nil {
+		return lockInfo{}, false
+	}
+	l := parseLock(b)
+	return l, pidLive(l.pid, l.bootID, bootID())
 }

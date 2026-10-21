@@ -26,6 +26,8 @@ func TestIsLockName(t *testing.T) {
 	}
 }
 
+var testEP = netip.MustParseAddrPort("127.31.1.1:8080")
+
 func TestLockNameIsEndpoint(t *testing.T) {
 	ep := netip.MustParseAddrPort("127.31.1.1:8080")
 	if got := lockName(ep); got != "127.31.1.1-8080.lock" {
@@ -45,7 +47,7 @@ func writeLock(t *testing.T, dir string, pid int, boot string) string {
 
 func TestLiveLockFound(t *testing.T) {
 	p := writeLock(t, t.TempDir(), os.Getpid(), bootID())
-	if _, ok := findLive(p); !ok {
+	if _, ok := findLive(testEP, p); !ok {
 		t.Fatal("own live lock not found")
 	}
 }
@@ -53,7 +55,7 @@ func TestLiveLockFound(t *testing.T) {
 // A lock from an earlier boot is stale even if its PID is alive now.
 func TestLockFromEarlierBootRemoved(t *testing.T) {
 	p := writeLock(t, t.TempDir(), os.Getpid(), "earlier-boot")
-	if _, ok := findLive(p); ok {
+	if _, ok := findLive(testEP, p); ok {
 		t.Fatal("lock from an earlier boot counted as live")
 	}
 	if _, err := os.Stat(p); !os.IsNotExist(err) {
@@ -63,7 +65,7 @@ func TestLockFromEarlierBootRemoved(t *testing.T) {
 
 func TestLockOfDeadProcessRemoved(t *testing.T) {
 	p := writeLock(t, t.TempDir(), 1<<22+1, bootID())
-	if _, ok := findLive(p); ok {
+	if _, ok := findLive(testEP, p); ok {
 		t.Fatal("lock of a dead process counted as live")
 	}
 	if _, err := os.Stat(p); !os.IsNotExist(err) {

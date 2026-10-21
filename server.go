@@ -576,7 +576,7 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 		body.WriteString("<h2 class=\"own\">Other addresses</h2>\n<table class=\"locks own\">\n")
 		for _, t := range others {
 			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">since %s</span></td></tr>\n",
-				esc(t.url), esc(filepath.Join(t.dir, lockName(t.ep))), segments(t.url), clock(t.since))
+				esc(t.url), esc(t.lockPath), segments(t.url), clock(t.since))
 		}
 		body.WriteString("</table>\n")
 	}

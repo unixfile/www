@@ -21,13 +21,21 @@ clean:
 
 # install and install-deb end by moving running servers to the new binary,
 # so no server keeps old code. A server on port 80 stays put under the
-# binary from make install, which cannot bind it.
+# binary from make install, which cannot bind it. install also ships the
+# user unit, disabled, which serves .LOCK trees again at login; it never
+# uses sudo, so the system template comes only with the package.
+USERUNIT := $(HOME)/.config/systemd/user/$(NAME).service
+
 install: build
 	ln -sf $(CURDIR)/build/$(NAME) $(HOME)/.local/bin/$(NAME)
+	mkdir -p $(dir $(USERUNIT))
+	sed 's/@NAME@/$(NAME)/g; s|@BIN@|$(HOME)/.local/bin/$(NAME)|' systemd/user.service.in > $(USERUNIT)
+	-systemctl --user daemon-reload
 	-build/$(NAME) --restart
 
 uninstall:
-	rm -f $(HOME)/.local/bin/$(NAME)
+	rm -f $(HOME)/.local/bin/$(NAME) $(USERUNIT)
+	-systemctl --user daemon-reload
 
 # deb builds a Debian package in build/. The version comes from the last
 # commit, its UTC time first so later commits sort higher, until releases
@@ -47,6 +55,9 @@ deb:
 	rm $(STAGE)/copyright
 	mkdir -p $(STAGE)/usr/share/lintian/overrides
 	sed 's/@NAME@/$(NAME)/g' deb/lintian-overrides.in > $(STAGE)/usr/share/lintian/overrides/$(NAME)
+	mkdir -p $(STAGE)/usr/lib/systemd/user $(STAGE)/usr/lib/systemd/system
+	sed 's/@NAME@/$(NAME)/g; s|@BIN@|/usr/bin/$(NAME)|' systemd/user.service.in > $(STAGE)/usr/lib/systemd/user/$(NAME).service
+	sed 's/@NAME@/$(NAME)/g; s|@BIN@|/usr/bin/$(NAME)|' systemd/system@.service.in > $(STAGE)/usr/lib/systemd/system/$(NAME)@.service
 	printf '$(NAME) (%s) unstable; urgency=low\n\n  * Build of commit %s.\n\n -- %s  %s\n' \
 		'$(VERSION)' "$$(git rev-parse --short HEAD)" "$$(sed -n 's/^Maintainer: //p' deb/control.in)" \
 		"$$(git log -1 --format=%cD)" | gzip -9n > $(STAGE)/changelog.gz

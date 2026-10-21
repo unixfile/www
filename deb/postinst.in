@@ -5,4 +5,6 @@ set -e
 if [ "$1" = configure ]; then
 	setcap cap_net_bind_service=+ep /usr/bin/@NAME@ ||
 		echo "@NAME@: setcap failed; @NAME@ will serve on port 8080" >&2
+	# The units ship disabled; a reload lets systemd see them.
+	systemctl daemon-reload 2>/dev/null || true
 fi

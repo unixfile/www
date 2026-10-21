@@ -5,9 +5,10 @@ Maintainer: unixfile <unixfile@users.noreply.github.com>
 Installed-Size: @SIZE@
 Depends: git, libcap2-bin
 Recommends: xdg-utils
+Suggests: graphviz
 Section: text
 Priority: optional
-Homepage: https://github.com/unixfile/@NAME@
+Homepage: https://github.com/unixfile/mdserve
 Description: browse trees of Markdown docs in the browser
  Run @NAME@ in a directory and it serves the tree on a loopback address
  of the user's own, rendered on each request. Links follow into

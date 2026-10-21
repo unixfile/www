@@ -18,7 +18,9 @@ import (
 
 // restart replaces the server on c.ep, when -a or --share names it, or
 // else every server, with one running the current binary and serving the
-// same trees, as --list and --kill pick their servers.
+// same trees, as --list and --kill pick their servers. An address with no
+// server but with persistent locks in its registry gets a server again,
+// which is how trees come back after a reboot.
 func restart(c config) int {
 	eps, err := endpoints()
 	if err != nil {
@@ -31,10 +33,13 @@ func restart(c config) int {
 	code := 0
 	for _, ep := range eps {
 		pid, trees, err := servedTrees(ep)
-		if errors.Is(err, syscall.ESRCH) && !named {
-			continue
-		}
-		if err == nil {
+		if errors.Is(err, syscall.ESRCH) {
+			if kept := persistedTrees(ep); len(kept) > 0 {
+				err = startTrees(ep, kept)
+			} else if !named {
+				continue
+			}
+		} else if err == nil {
 			err = restartServer(ep, pid, trees)
 		}
 		if err != nil && code == 0 {
@@ -58,6 +63,16 @@ func restartServer(ep netip.AddrPort, pid int, trees []servedTree) error {
 	if err := stopServer(ep, pid, trees); err != nil {
 		return err
 	}
+	return startTrees(ep, trees)
+}
+
+// startTrees serves each tree on ep through this binary, as a start from
+// the command line would, persistent ones with --persist.
+func startTrees(ep netip.AddrPort, trees []servedTree) error {
+	if ep.Port() < 1024 && !lowPortOK() {
+		return &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
+			", so it cannot serve " + ep.String() + ". Run the installed package's " + progName + ", which holds cap_net_bind_service"}
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return &errno{errnoOf(err), "cannot find own executable: " + err.Error()}
@@ -72,6 +87,9 @@ func restartServer(ep netip.AddrPort, pid int, trees []servedTree) error {
 		// in the tree already holds it for anyone who can read the tree.
 		if t.token != "" {
 			args = append(args, "--secret="+t.token)
+		}
+		if t.persist {
+			args = append(args, "--persist")
 		}
 		cmd := exec.Command(exe, append(args, "--", t.dir)...)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
@@ -153,11 +171,12 @@ func servedTrees(ep netip.AddrPort) (int, []servedTree, error) {
 	return trees[0].pid, trees, nil
 }
 
-// waitGone waits for the server to withdraw every tree. It closes its
-// listener as it does, so a new server can bind before the old one exits.
+// waitGone waits for the server to withdraw every tree and drop its
+// record; persistent locks stay. It closes its listener as it does, so a
+// new server can bind before the old one exits.
 func waitGone(dirs []string, ep netip.AddrPort) bool {
 	for end := time.Now().Add(joinWait); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
-		if !slices.ContainsFunc(dirs, func(dir string) bool {
+		if _, up := serverOf(ep); !up && !slices.ContainsFunc(dirs, func(dir string) bool {
 			_, err := os.Lstat(filepath.Join(dir, lockName(ep)))
 			return !errors.Is(err, fs.ErrNotExist)
 		}) {
@@ -165,4 +184,27 @@ func waitGone(dirs []string, ep netip.AddrPort) bool {
 		}
 	}
 	return false
+}
+
+// persistedTrees returns the trees whose persistent locks the registry of
+// ep still links to, for a server that is not running.
+func persistedTrees(ep netip.AddrPort) []servedTree {
+	dir, err := registryDir(ep)
+	if err != nil {
+		return nil
+	}
+	links, _ := readLinks(dir)
+	var trees []servedTree
+	for _, target := range links {
+		lockPath, token := splitTarget(target)
+		if !isPersist(lockPath) {
+			continue
+		}
+		if _, err := os.Stat(lockPath); err != nil {
+			continue
+		}
+		trees = append(trees, servedTree{ep: ep, dir: filepath.Dir(lockPath), token: token, lockPath: lockPath, persist: true})
+	}
+	slices.SortFunc(trees, func(a, b servedTree) int { return strings.Compare(a.dir, b.dir) })
+	return trees
 }

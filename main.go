@@ -68,6 +68,7 @@ type config struct {
 	ep      netip.AddrPort
 	fg      bool
 	noopen  bool
+	persist bool // write a persistent lock, so the tree is served after reboot
 	stamp   bool   // show the build time above each page's header
 	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
 	help    bool
@@ -77,8 +78,8 @@ type config struct {
 	kill    bool
 }
 
-var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnh] [-a ip[:port]] [dir]
-       @NAME@ [-fnh] --share[=host[:port]] [--secret[=token]] [dir]
+var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnph] [-a ip[:port]] [dir]
+       @NAME@ [-fnph] --share[=host[:port]] [--secret[=token]] [dir]
        @NAME@ --restart [-a ip[:port] | --share[=host[:port]]]
        @NAME@ -l [-a ip[:port] | --share[=host[:port]]] [dir]
        @NAME@ --kill [-a ip[:port] | --share[=host[:port]]]
@@ -97,13 +98,17 @@ var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnh] [-a ip[:port]] [dir]
   -f, --foreground      when no server runs on the address yet, serve in the
                         foreground until Ctrl-C
   -n, --no-open         print the URL without opening a browser
+  -p, --persist         write a .LOCK instead of a .lock: the tree is served
+                        again after a reboot or a stopped server, by the
+                        next server on its address or by --restart
       --stamp           show the binary's build time, the seconds since, its
                         commit and the page's render time, small and faint,
                         above each page's header
       --cache size      memory a new server may spend on cached git answers,
                         eg 64M; 0 caches nothing (default 32M)
       --restart         replace every server with one running this binary,
-                        serving the same trees; with -a or --share, only the
+                        serving the same trees, and start one for persistent
+                        trees that have none; with -a or --share, only the
                         server on that address
   -l, --list            print each served tree's URL and directory; with a
                         directory, only the trees at or below it
@@ -119,6 +124,7 @@ func (c *config) switches() map[string]*bool {
 	return map[string]*bool{
 		"foreground": &c.fg,
 		"no-open":    &c.noopen,
+		"persist":    &c.persist,
 		"stamp":      &c.stamp,
 		"help":       &c.help,
 		"version":    &c.version,
@@ -128,7 +134,7 @@ func (c *config) switches() map[string]*bool {
 	}
 }
 
-var shorts = map[byte]string{'f': "foreground", 'n': "no-open", 'h': "help", 'l': "list"}
+var shorts = map[byte]string{'f': "foreground", 'n': "no-open", 'p': "persist", 'h': "help", 'l': "list"}
 
 // parseArgs reads options the GNU way. Short ones combine, as in -fn, and
 // take a value joined or apart: -aIP or -a IP. Long ones take --addr IP or
@@ -225,6 +231,9 @@ func parseArgs(args []string) (config, error) {
 	}
 	if c.restart && (len(dirs) > 0 || c.fg) {
 		return c, &errno{syscall.EINVAL, "--restart takes no directory or -f"}
+	}
+	if c.persist && (c.restart || c.list || c.kill) {
+		return c, &errno{syscall.EINVAL, "--persist goes with a start, not with --restart, --list or --kill"}
 	}
 	if c.list && (c.restart || c.fg) {
 		return c, &errno{syscall.EINVAL, "--list takes no --restart or -f"}

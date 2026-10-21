@@ -7,8 +7,8 @@ It is fast. A page from a running server takes one to three milliseconds, a serv
 ## Usage
 
 ```
-www [-fnh] [-a ip[:port]] [dir]
-www [-fnh] --share[=host[:port]] [--secret[=token]] [dir]
+www [-fnph] [-a ip[:port]] [dir]
+www [-fnph] --share[=host[:port]] [--secret[=token]] [dir]
 www --restart [-a ip[:port] | --share[=host[:port]]]
 www -l [-a ip[:port] | --share[=host[:port]]] [dir]
 www --kill [-a ip[:port] | --share[=host[:port]]]
@@ -21,7 +21,7 @@ The URL is all it prints, so `url=$(www -n)` works. Running `www` again in a ser
 
 Trees on one address share one server. The first `www` starts it in the background, and later ones hand their tree to it and return.
 When something other than your www on that address holds the port, `www` fails at once with `E98` and names the listeners there.
-The server exits when its last lock is gone. SIGTERM stops it at once and removes every lock, as does the Kill server button on the index at `/`.
+The server exits when its last lock is gone. SIGTERM stops it at once and removes every lock but a persistent `.LOCK`, as does the Kill server button on the index at `/`.
 A running server keeps the binary it started with. `www --restart` moves every server's trees to the current binary, and `make install` and `make install-deb` run it for you; open tabs reload onto the new binary. A binary without the capability for port 80, such as the one from `make install`, leaves a port-80 server on its old binary and says so.
 
 The index at `/` lists the server's locks: each tree with the time its lock was written and a Delete lock button, and the lock's path on hover. Trees on other addresses follow as plain links, since only their own server may stop them. The header shows when the server started, and a warning appears when the binary on disk has changed since.
@@ -32,9 +32,10 @@ To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`
 - `--secret[=token]`: serve a shared tree under a random token, or the one given, so only those holding the link reach it
 - `-f`, `--foreground`: when no server runs on the address yet, serve in the foreground until Ctrl-C
 - `-n`, `--no-open`: print the URL without opening a browser
+- `-p`, `--persist`: write a persistent lock, such as `127.31.1.1-8080.LOCK`, so the tree is served again after a reboot; see [Serving after reboot](#serving-after-reboot)
 - `--stamp`: show the binary's build time, the seconds since, its commit and the page's render time, small and faint, above each page's header. `make run` sets it; `--restart` leaves it off
 - `--cache size`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
-- `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; with `-a` or `--share`, only the server on that address
+- `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one; with `-a` or `--share`, only the server on that address
 - `-l`, `--list`: print each served tree's URL and directory, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it
 - `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
 - `--version`: print when the binary was built and the commit it came from, as the stamp says it, eg `www built 2026-10-21 12:49, from 1aa282c+modified`
@@ -48,6 +49,13 @@ Two variables set the default addresses. `--help` shows each value and where it 
 - `WWW_ADDR`: the loopback address for a start without `-a`. `--list`, `--kill` and `--restart` without an address still cover every server
 
 A third sets how a start opens its URL. `WWW_OPEN` holds the command, split at spaces, with `%s` where the URL goes, or the URL appended when no `%s` is given. `WWW_OPEN='brave-browser --app=%s'` opens a tree in an app window and `WWW_OPEN=firefox` in Firefox. It applies to loopback starts only; a share opens through `xdg-open`, as every start does without the variable.
+
+## Serving after reboot
+
+`www -p` writes a lock in capitals, such as `127.31.1.1-8080.LOCK`. It holds no PID, and it outlives its server: Kill server, `--kill`, SIGTERM and a reboot all stop the server but leave the `.LOCK` in place. The next server on that address serves the tree again, and so does `www --restart`, which starts a server for every address whose persistent trees have none. Deleting the `.LOCK`, or Delete lock on the tree's pages, ends the tree for good. `www -p` in a tree served by a plain `.lock` moves it to a `.LOCK`.
+
+A systemd user unit runs `www --restart` at login. `make install` puts it in `~/.config/systemd/user/` and the package in `/usr/lib/systemd/user/`, both disabled; enable it with `systemctl --user enable www`. It serves from login to logout, and linger stays off.
+The package also ships a system template, `www@.service`, which serves a user's trees from boot, before login, with the capability for port 80. Enable it with `sudo systemctl enable www@<user>`. While either unit runs for a user, the other stands aside, since both would serve the same trees.
 
 ## Sharing
 
@@ -107,7 +115,7 @@ With `--stamp`, each page says when its binary was built and how many seconds ag
 The header names a tree by its base name and shows the full path on hover. Every tree page's breadcrumbs start at `index`, which links `/`. The header, listings and www's own messages are mono; documents keep the serif.
 Every page keeps one width, 58ch of the body font, and keeps space for a scrollbar, so the header holds still from page to page. Code is half the size of the body text, never under 11px, so about 115 columns fit; longer lines scroll.
 
-Add `*.*.*.*-*.lock` to `~/.config/git/ignore` so locks stay out of `git status`.
+Add `*.*.*.*-*.lock` and `*.*.*.*-*.LOCK` to `~/.config/git/ignore` so locks stay out of `git status`.
 
 ## Licence
 

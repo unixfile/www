@@ -21,21 +21,20 @@ type servedTree struct {
 	dir, url string
 	token    string    // the secret path's token, or ""
 	since    time.Time // when the lock was written
+	lockPath string
+	persist  bool // the lock outlives its server
 }
 
 // readTree reads the lock that a registry link targets and reports whether
 // its server runs.
 func readTree(ep netip.AddrPort, target string) (servedTree, bool) {
 	lockPath, token := splitTarget(target)
-	b, err := os.ReadFile(lockPath)
-	if err != nil {
+	l, ok := readLive(ep, lockPath)
+	if !ok {
 		return servedTree{}, false
 	}
-	l := parseLock(b)
-	if !l.live(bootID()) {
-		return servedTree{}, false
-	}
-	t := servedTree{ep: ep, pid: l.pid, dir: filepath.Dir(lockPath), url: l.url, token: token}
+	t := servedTree{ep: ep, pid: l.pid, dir: filepath.Dir(lockPath), url: l.url, token: token,
+		lockPath: lockPath, persist: isPersist(lockPath)}
 	if info, err := os.Stat(lockPath); err == nil {
 		t.since = info.ModTime()
 	}
@@ -77,7 +76,7 @@ func liveTrees(ep netip.AddrPort) ([]servedTree, error) {
 	var trees []servedTree
 	for _, target := range links {
 		lockPath, _ := splitTarget(target)
-		if _, ok := findLive(lockPath); !ok {
+		if _, ok := findLive(ep, lockPath); !ok {
 			continue
 		}
 		if t, ok := readTree(ep, target); ok {

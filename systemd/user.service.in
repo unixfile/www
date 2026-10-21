@@ -1,0 +1,17 @@
+# The user unit serves the trees that .LOCK files name, from login to
+# logout. Enable it with: systemctl --user enable @NAME@
+# --restart starts a server for each address whose registry links a .LOCK.
+# Stopping the unit sends its servers SIGTERM, which keeps every .LOCK.
+# While the system template runs for this user it serves the same trees
+# from boot, so this unit stands aside.
+[Unit]
+Description=@NAME@: serve the trees that .LOCK files name
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecCondition=/bin/sh -c '! systemctl is-active --quiet @NAME@@%u.service'
+ExecStart=@BIN@ --restart
+
+[Install]
+WantedBy=default.target

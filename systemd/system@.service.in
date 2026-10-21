@@ -1,0 +1,20 @@
+# The system template serves a user's .LOCK trees from boot, before login.
+# Enable it for one user with: sudo systemctl enable @NAME@@<user>
+# The capability lets it bind port 80, as the package's binary may.
+# While the user unit runs in that user's session it serves the same
+# trees, so this unit stands aside.
+[Unit]
+Description=@NAME@: serve %i's trees that .LOCK files name, from boot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=%i
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ExecCondition=/bin/sh -c '! XDG_RUNTIME_DIR=/run/user/$$(id -u) systemctl --user is-active --quiet @NAME@.service'
+ExecStart=@BIN@ --restart
+
+[Install]
+WantedBy=multi-user.target
