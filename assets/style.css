@@ -3,6 +3,7 @@
 
 /* The page colours. The syntax colours below are pandoc's. */
 :root {
+  color-scheme: light dark;
   --page: #f6f6f6;
   --text: #1a1a1a;
   --muted: #666666;
@@ -13,6 +14,23 @@
   --faint: #b8b8b8;
   --added: #e4f2e4;
   --removed: #f8e6e2;
+}
+/* The dark palette, a draft by the model for the user to adjust. Text is
+   light grey on near black, not white on black, so a long read does not
+   glare; each tint keeps the role it has in the light palette. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #1c1c1c;
+    --text: #d6d6d6;
+    --muted: #999999;
+    --rule: #3d3d3d;
+    --danger: #e07a5a;
+    --target: #4a4020;
+    --gutter: #5e5e5e;
+    --faint: #555555;
+    --added: #1f3322;
+    --removed: #3b2420;
+  }
 }
 
 /* STIX Two Text from the machine, else from the program, never from the
@@ -284,3 +302,36 @@ code span.st { color: #4070a0; } /* String */
 code span.va { color: #19177c; } /* Variable */
 code span.vs { color: #4070a0; } /* VerbatimString */
 code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+
+/* Pandoc's roles in the dark palette: each colour is the light one's hue,
+   lifted to read on the dark page. */
+@media (prefers-color-scheme: dark) {
+code span.al { color: #ff6b6b; }
+code span.an { color: #7fa9b5; }
+code span.at { color: #b5c46a; }
+code span.bn { color: #7fc4a0; }
+code span.bu { color: #82c482; }
+code span.cf { color: #8fc47f; }
+code span.ch { color: #8fb3d9; }
+code span.cn { color: #e48080; }
+code span.co { color: #7fa9b5; }
+code span.cv { color: #7fa9b5; }
+code span.do { color: #e07070; }
+code span.dt { color: #e0906e; }
+code span.dv { color: #7fc4a0; }
+code span.er { color: #ff6b6b; }
+code span.fl { color: #7fc4a0; }
+code span.fu { color: #8eaaf0; }
+code span.im { color: #82c482; }
+code span.in { color: #7fa9b5; }
+code span.kw { color: #8fc47f; }
+code span.op { color: #999999; }
+code span.ot { color: #8fc47f; }
+code span.pp { color: #d9a85a; }
+code span.sc { color: #8fb3d9; }
+code span.ss { color: #d494b4; }
+code span.st { color: #8fb3d9; }
+code span.va { color: #a9a8f0; }
+code span.vs { color: #8fb3d9; }
+code span.wa { color: #7fa9b5; }
+}
