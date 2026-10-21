@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,7 @@ type hit struct {
 	Path string `json:"path"`
 	Line int    `json:"line,omitempty"`
 	Text string `json:"text,omitempty"`
+	Here bool   `json:"here,omitempty"` // in the searched directory itself, not below it
 }
 
 type found struct {
@@ -64,21 +66,8 @@ func (t *tree) search(ctx context.Context, dir, q string) found {
 	}
 	needle := []byte(lq)
 	contents := len(lq) >= minContentQuery
-	errStop := errors.New("stop")
-	err := fs.WalkDir(t.fsys, dir, func(p string, d fs.DirEntry, err error) error {
-		if ctx.Err() != nil {
-			res.Cut = true
-			return errStop
-		}
-		if p == dir {
-			return nil
-		}
-		if err != nil || strings.HasPrefix(d.Name(), ".") || isLockName(d.Name()) {
-			if d != nil && d.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
+	visit := func(p string, d fs.DirEntry) {
+		here := path.Dir(p) == dir
 		if strings.Contains(strings.ToLower(d.Name()), lq) {
 			if len(res.Names) == maxNameHits {
 				res.Cut = true
@@ -87,23 +76,23 @@ func (t *tree) search(ctx context.Context, dir, q string) found {
 				if d.IsDir() {
 					label += "/"
 				}
-				res.Names = append(res.Names, hit{Href: t.href(label, 0), Path: label})
+				res.Names = append(res.Names, hit{Href: t.href(label, 0), Path: label, Here: here})
 			}
 		}
 		if d.IsDir() || !contents || len(res.Lines) == maxLineHits {
-			return nil
+			return
 		}
 		if info, err := d.Info(); err != nil || !info.Mode().IsRegular() || info.Size() > maxSearchFile {
-			return nil
+			return
 		}
 		b, err := fs.ReadFile(t.fsys, p)
 		if err != nil || !isText(b) {
-			return nil
+			return
 		}
 		res.Files++
 		lower := bytes.ToLower(b)
 		if !bytes.Contains(lower, needle) {
-			return nil
+			return
 		}
 		for i, line := range bytes.Split(lower, []byte("\n")) {
 			if !bytes.Contains(line, needle) {
@@ -115,12 +104,54 @@ func (t *tree) search(ctx context.Context, dir, q string) found {
 			}
 			// Lowering may change a line's length outside ASCII but keeps
 			// its newlines, so the line is cut from the original by number.
-			res.Lines = append(res.Lines, hit{Href: t.href(p, i+1), Path: p, Line: i + 1, Text: lineAt(b, i)})
+			res.Lines = append(res.Lines, hit{Href: t.href(p, i+1), Path: p, Line: i + 1, Text: lineAt(b, i), Here: here})
 		}
-		return nil
-	})
-	if err != nil && err != errStop {
+	}
+	skip := func(d fs.DirEntry) bool { return strings.HasPrefix(d.Name(), ".") || isLockName(d.Name()) }
+	// The directory's own entries come first, so the hit limits cannot
+	// crowd them out with deeper ones; then each subdirectory in turn.
+	entries, err := fs.ReadDir(t.fsys, dir)
+	if err != nil {
 		res.Cut = true
+		return res
+	}
+	for _, d := range entries {
+		if ctx.Err() != nil {
+			res.Cut = true
+			return res
+		}
+		if !skip(d) {
+			visit(path.Join(dir, d.Name()), d)
+		}
+	}
+	errStop := errors.New("stop")
+	for _, e := range entries {
+		if !e.IsDir() || skip(e) {
+			continue
+		}
+		sub := path.Join(dir, e.Name())
+		err := fs.WalkDir(t.fsys, sub, func(p string, d fs.DirEntry, err error) error {
+			if ctx.Err() != nil {
+				res.Cut = true
+				return errStop
+			}
+			if err != nil || (p != sub && skip(d)) {
+				if d != nil && d.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if p != sub {
+				visit(p, d)
+			}
+			return nil
+		})
+		if err == errStop {
+			break
+		}
+		if err != nil {
+			res.Cut = true
+		}
 	}
 	return res
 }

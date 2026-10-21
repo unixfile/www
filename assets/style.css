@@ -148,7 +148,7 @@ header button {
 }
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
-pre, code, header, input.search, .own, ul.listing, p.built { font-family: ui-monospace, "Iosevka", monospace; }
+pre, code, header, input.search, .own, ul.listing, p.built, div.found p, p.unfound { font-family: ui-monospace, "Iosevka", monospace; }
 /* Code is half the body size, so about 115 columns fit the doc's measure
    and no page needs to be wider. It never drops below 11px, where small
    screens set the body at 16px. */
@@ -257,8 +257,8 @@ input.search {
 input.search:focus { outline: none; border-color: var(--muted); }
 /* Search results: the path is the program's and mono, a matching line is
    the file's and stays mono too, in the muted colour. */
-ul.found li .line { color: var(--muted); font-size: 0.8em; hyphens: none; }
-ul.found li.note { color: var(--muted); font-size: 0.8em; margin-top: 0.8em; }
+div.found .line { color: var(--muted); font-size: 0.8em; hyphens: none; }
+div.found p.note { color: var(--muted); font-size: 0.8em; margin-top: 0.8em; }
 /* A page the box filters keeps its matching lines stacked, each with its
    own number, and marks the matches. The directory's results follow a
    blank line, dimmed as one block, so a visited link stays a step lighter
@@ -268,7 +268,7 @@ pre.filtering > code.sourceCode { white-space: normal; }
 pre.filtering > code.sourceCode > span { display: block; white-space: pre; }
 pre.numberSource.filtering code > span > a:first-child::before { content: attr(data-n); }
 ::highlight(search) { background-color: var(--target); }
-ul.found.wider { opacity: 0.6; margin-top: 1.4em; }
+div.found ul.wider { opacity: 0.6; margin-top: 1.4em; }
 p.unfound { color: var(--muted); font-size: 0.8em; }
 /* An entry the arrows reached shows a quiet ring. */
 ul.listing a:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }

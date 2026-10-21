@@ -57,3 +57,20 @@ func TestSearchBoxScope(t *testing.T) {
 		}
 	}
 }
+
+// A directory's own entries come first and are marked here; deeper ones
+// follow unmarked.
+func TestSearchHereFirst(t *testing.T) {
+	s, _, dir := serveTree(t)
+	os.WriteFile(filepath.Join(dir, "a", "deep.txt"), []byte("needle\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "z.txt"), []byte("needle\n"), 0o644)
+	var res found
+	json.Unmarshal(get(s.handler(), "/?search=needle").Body.Bytes(), &res)
+	if len(res.Lines) != 2 || res.Lines[0].Path != "z.txt" || !res.Lines[0].Here || res.Lines[1].Path != "a/deep.txt" || res.Lines[1].Here {
+		t.Errorf("lines: %+v", res.Lines)
+	}
+	json.Unmarshal(get(s.handler(), "/a/?search=needle").Body.Bytes(), &res)
+	if len(res.Lines) != 1 || res.Lines[0].Path != "a/deep.txt" || !res.Lines[0].Here {
+		t.Errorf("lines below a: %+v", res.Lines)
+	}
+}

@@ -94,7 +94,8 @@
 
 	// The box under the header searches what is below it. A listing
 	// searches its directory, names first, then lines, and the results
-	// stand in for the page. Any other page filters itself in place: lines
+	// stand in for the page: its own entries first, then what lies deeper,
+	// dimmed. Any other page filters itself in place: lines
 	// of code, blocks of a doc, commits of a history, each match marked.
 	// The directory's results follow, dimmed, without this file. Escape or
 	// an empty box brings the page back, with any update that arrived
@@ -122,8 +123,8 @@
 		if (window.CSS && CSS.highlights) CSS.highlights.delete("search");
 	};
 	const showPage = () => {
-		const ul = document.querySelector("ul.found");
-		if (ul) ul.remove();
+		const results = document.querySelector("div.found");
+		if (results) results.remove();
 		unfilter();
 		const main = document.querySelector("main");
 		if (main) main.hidden = false;
@@ -235,11 +236,18 @@
 			.then((r) => r.json())
 			.then((res) => {
 				if (!box() || box().value.trim() !== q) return;
-				const here = (h) => inPlace && new URL(h.href, location.href).pathname === location.pathname;
-				const ul = document.createElement("ul");
-				ul.className = "listing found" + (inPlace ? " wider" : "");
+				const own = (h) => inPlace && new URL(h.href, location.href).pathname === location.pathname;
+				const list = (wider) => {
+					const ul = document.createElement("ul");
+					ul.className = "listing" + (wider ? " wider" : "");
+					return ul;
+				};
+				// A listing shows its own entries at full strength and what
+				// lies deeper dimmed below; a filtered page dims all of it.
+				const near = inPlace ? null : list(false);
+				const far = list(true);
 				const add = (h, label, text) => {
-					if (here(h)) return;
+					if (own(h)) return;
 					const li = document.createElement("li");
 					const a = document.createElement("a");
 					a.href = h.href;
@@ -251,20 +259,28 @@
 						span.textContent = text;
 						li.append(" ", span);
 					}
-					ul.append(li);
+					(near && h.here ? near : far).append(li);
 				};
 				for (const h of res.names) add(h, h.path);
 				for (const h of res.lines) add(h, h.path + ":" + h.line, h.text);
-				const note = document.createElement("li");
-				note.className = "note";
-				note.textContent = (ul.children.length ? "" : "nothing found, ") +
-					"searched " + res.files + " files" + (res.cut ? ", stopped early" : "");
-				ul.append(note);
+				const results = document.createElement("div");
+				results.className = "found";
+				const line = (cls, text) => {
+					const p = document.createElement("p");
+					p.className = cls;
+					p.textContent = text;
+					results.append(p);
+				};
+				const any = (near ? near.children.length : 0) + far.children.length;
+				if (near && near.children.length) results.append(near);
+				else if (near && any) line("unfound", "nothing in this directory itself");
+				if (far.children.length) results.append(far);
+				line("note", (any ? "" : "nothing found, ") + "searched " + res.files + " files" + (res.cut ? ", stopped early" : ""));
 				const main = document.querySelector("main");
-				const old = document.querySelector("ul.found");
-				if (old) old.replaceWith(ul);
-				else if (inPlace) (document.querySelector("p.unfound") || main).after(ul);
-				else main.before(ul);
+				const old = document.querySelector("div.found");
+				if (old) old.replaceWith(results);
+				else if (inPlace) (document.querySelector("p.unfound") || main).after(results);
+				else main.before(results);
 				if (!inPlace) main.hidden = true;
 			})
 			.catch(() => {});
@@ -295,7 +311,7 @@
 	});
 	document.addEventListener("keydown", (e) => {
 		if (!e.target.matches || !e.target.matches("input.search")) return;
-		const first = document.querySelector("ul.found a");
+		const first = document.querySelector("div.found a");
 		if (e.key === "Escape") clearSearch();
 		else if (e.key === "ArrowDown" && first) first.focus();
 		else if (e.key === "Enter" && firstMatch) jump(firstMatch);
