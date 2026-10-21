@@ -70,6 +70,7 @@ type config struct {
 	stamp   bool   // show the build time above each page's header
 	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
 	help    bool
+	version bool
 	restart bool
 	list    bool
 	kill    bool
@@ -107,6 +108,7 @@ var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnh] [-a ip[:port]] [dir]
                         directory, only the trees at or below it
       --kill            stop every server and print the trees it served; with
                         -a or --share, only the server on that address
+      --version         print when the binary was built and its commit
   -h, --help            print this help
 `, "@NAME@", progName)
 
@@ -118,6 +120,7 @@ func (c *config) switches() map[string]*bool {
 		"no-open":    &c.noopen,
 		"stamp":      &c.stamp,
 		"help":       &c.help,
+		"version":    &c.version,
 		"restart":    &c.restart,
 		"list":       &c.list,
 		"kill":       &c.kill,
@@ -262,6 +265,10 @@ func main() {
 	}
 	if c.help {
 		io.WriteString(os.Stdout, usageText+environment(os.Getuid())+logHelp())
+		os.Exit(0)
+	}
+	if c.version {
+		fmt.Println(versionLine(built, buildCommit))
 		os.Exit(0)
 	}
 	if hint := spacedShare(c); hint != "" {

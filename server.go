@@ -136,6 +136,16 @@ var built = func() time.Time {
 	return info.ModTime()
 }()
 
+// versionLine is --version's account of the build, in the words of the
+// stamp, with the full date since a build may be old.
+func versionLine(t time.Time, commit string) string {
+	when := "at an unknown time"
+	if !t.IsZero() {
+		when = t.Format("2006-01-02 15:04")
+	}
+	return progName + " built " + when + ", from " + commit
+}
+
 // stamp is the build as a page shows it: the time of day, the seconds
 // since, which live.js counts on from Millis, the commit, and how long
 // the page took to render.

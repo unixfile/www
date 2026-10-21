@@ -28,6 +28,7 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"--", "-f"}, config{dir: "-f"}},
 		{[]string{"-h"}, config{dir: ".", help: true}},
 		{[]string{"--help"}, config{dir: ".", help: true}},
+		{[]string{"--version"}, config{dir: ".", version: true}},
 		{[]string{"--restart", "-a", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2", restart: true}},
 		{[]string{"-l"}, config{list: true}},
 		{[]string{"--list", "docs"}, config{dir: "docs", list: true}},
