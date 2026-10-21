@@ -47,6 +47,8 @@ Two variables set the default addresses. `--help` shows each value and where it 
 - `WWW_SHARE`: the address or name for a bare `--share`, eg `mate.peer.home`, in a start and in `--kill`, `--restart` and `--list`. Without it a bare `--share` takes the default route's address
 - `WWW_ADDR`: the loopback address for a start without `-a`. `--list`, `--kill` and `--restart` without an address still cover every server
 
+A third sets how a start opens its URL. `WWW_OPEN` holds the command, split at spaces, with `%s` where the URL goes, or the URL appended when no `%s` is given. `WWW_OPEN='brave-browser --app=%s'` opens a tree in an app window and `WWW_OPEN=firefox` in Firefox. It applies to loopback starts only; a share opens through `xdg-open`, as every start does without the variable.
+
 ## Sharing
 
 `www --share` serves the tree to other machines on the LAN from a server of its own. It serves only what other users could read, hides dot entries such as `.git` and shows nothing of the machine around the tree. `--secret` puts the tree under a random token. See [doc/sharing.md](doc/sharing.md).

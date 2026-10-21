@@ -3,6 +3,7 @@ package main
 import (
 	"net/netip"
 	"os"
+	"slices"
 	"testing"
 )
 
@@ -136,5 +137,22 @@ func TestOriginUnspecified(t *testing.T) {
 	}
 	if got, want := origin(netip.MustParseAddrPort("0.0.0.0:8080")), "http://"+name+":8080"; got != want {
 		t.Errorf("0.0.0.0:8080: %s, want %s", got, want)
+	}
+}
+
+func TestOpenArgs(t *testing.T) {
+	const lo, lan = "http://127.31.1.1/x/", "http://192.168.1.5/x/"
+	for _, c := range []struct {
+		url, open string
+		want      []string
+	}{
+		{lo, "", []string{"xdg-open", lo}},
+		{lo, "brave-browser --app=%s", []string{"brave-browser", "--app=" + lo}},
+		{lo, "firefox", []string{"firefox", lo}},
+		{lan, "brave-browser --app=%s", []string{"xdg-open", lan}},
+	} {
+		if got := openArgs(c.url, c.open); !slices.Equal(got, c.want) {
+			t.Errorf("openArgs(%q, %q) = %q, want %q", c.url, c.open, got, c.want)
+		}
 	}
 }

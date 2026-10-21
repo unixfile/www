@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"net"
 	"net/netip"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -316,10 +317,12 @@ func noteRun() {
 	}
 }
 
-// Environment variables that set the default addresses.
+// Environment variables that set the default addresses, and the command
+// that opens a loopback URL.
 var (
 	addrEnv  = envPrefix + "ADDR"
 	shareEnv = envPrefix + "SHARE"
+	openEnv  = envPrefix + "OPEN"
 )
 
 // endpointOf returns where c serves. A bare --share takes WWW_SHARE,
@@ -365,9 +368,15 @@ func environment(uid int) string {
 	if v := os.Getenv(shareEnv); v != "" {
 		share = v + ", from " + shareEnv
 	}
+	open := "xdg-open, built in"
+	if v := os.Getenv(openEnv); v != "" {
+		open = v + ", from " + openEnv
+	}
 	return "\nenvironment:\n" +
 		"  " + addrEnv + "    default for a start without -a; now " + addr + "\n" +
-		"  " + shareEnv + "   default for a bare --share; now " + share + "\n"
+		"  " + shareEnv + "   default for a bare --share; now " + share + "\n" +
+		"  " + openEnv + "    command that opens a loopback URL, %s for the URL or\n" +
+		"              appended, eg 'brave-browser --app=%s'; now " + open + "\n"
 }
 
 // endpointFor returns where to serve: addr when given, else the user's own
@@ -571,10 +580,45 @@ func openBrowser(url string) {
 	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
 		return
 	}
-	cmd := exec.Command("xdg-open", url)
-	if cmd.Start() == nil {
-		go cmd.Wait()
+	args := openArgs(url, os.Getenv(openEnv))
+	cmd := exec.Command(args[0], args[1:]...)
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "E%d: cannot open %s with %s: %v\n", errnoOf(err), url, args[0], err)
+		return
 	}
+	go cmd.Wait()
+}
+
+// openArgs is the command that opens url. A loopback URL takes WWW_OPEN,
+// split at spaces, with each %s replaced by the URL, or the URL appended
+// when none holds %s; eg 'brave-browser --app=%s' opens an app window. A
+// shared URL, and any URL without the variable, goes to xdg-open.
+func openArgs(url, open string) []string {
+	fields := strings.Fields(open)
+	if len(fields) == 0 || !loopbackURL(url) {
+		return []string{"xdg-open", url}
+	}
+	placed := false
+	for i, f := range fields {
+		if strings.Contains(f, "%s") {
+			fields[i] = strings.ReplaceAll(f, "%s", url)
+			placed = true
+		}
+	}
+	if !placed {
+		fields = append(fields, url)
+	}
+	return fields
+}
+
+// loopbackURL reports whether u names a loopback host.
+func loopbackURL(u string) bool {
+	p, err := neturl.Parse(u)
+	if err != nil {
+		return false
+	}
+	a, err := netip.ParseAddr(p.Hostname())
+	return err == nil && a.IsLoopback() || p.Hostname() == "localhost"
 }
 
 // detach re-runs www in a new session and relays its start report.
