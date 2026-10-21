@@ -5,12 +5,13 @@ import (
 	"strings"
 )
 
-//go:embed NAME
+//go:embed WORKING_NAME
 var nameFile string
 
-// progName is the program's name, from the file NAME, which the Makefile and
-// the package files read too. Every path, variable, URL and message that
-// names the program derives from it, so a rename changes one word.
+// progName is the program's name, from the file WORKING_NAME, which the
+// Makefile and the package files read too. Every path, variable, URL and
+// message that names the program derives from it, so a rename changes one
+// word.
 var progName = strings.TrimSpace(nameFile)
 
 // envPrefix starts the name of every environment variable the program

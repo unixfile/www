@@ -1,8 +1,8 @@
 .PHONY: all build run test clean install uninstall deb install-deb uninstall-deb
 
-# NAME holds the program's name, which the binary, the package and the
-# paths below take.
-NAME := $(shell cat NAME)
+# WORKING_NAME holds the program's name, provisional until a final one is
+# chosen. The binary, the package and the paths below take it.
+NAME := $(shell cat WORKING_NAME)
 
 all: build
 

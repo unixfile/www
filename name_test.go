@@ -10,8 +10,8 @@ import (
 	"testing"
 )
 
-// The name lives in NAME alone. Go code takes it from progName, the Makefile
-// and the package files from NAME, so a tracked file names the program
+// The name lives in WORKING_NAME alone. Go code takes it from progName, the Makefile
+// and the package files from WORKING_NAME, so a tracked file names the program
 // only in prose: comments, README.md, doc/ and go.mod, which Go needs as
 // a literal. A name such as www also occurs inside words that belong to
 // others, which foreign strips first.
@@ -23,7 +23,7 @@ func TestNameHasOneSource(t *testing.T) {
 	}
 	lower := strings.ToLower(progName)
 	for _, f := range strings.Fields(string(out)) {
-		if f == "NAME" || f == "go.mod" || f == "README.md" || strings.HasPrefix(f, "doc/") || strings.HasPrefix(f, "assets/fonts/") {
+		if f == "WORKING_NAME" || f == "go.mod" || f == "README.md" || strings.HasPrefix(f, "doc/") || strings.HasPrefix(f, "assets/fonts/") {
 			continue
 		}
 		src, err := os.ReadFile(f)
