@@ -52,7 +52,7 @@ A third sets how a start opens its URL. `WWW_OPEN` holds the command, split at s
 
 ## Serving after reboot
 
-`www -p` writes a lock in capitals, such as `127.31.1.1-8080.LOCK`. It holds no PID, and it outlives its server: Kill server, `--kill`, SIGTERM and a reboot all stop the server but leave the `.LOCK` in place. The next server on that address serves the tree again, and so does `www --restart`, which starts a server for every address whose persistent trees have none. Deleting the `.LOCK`, or Delete lock on the tree's pages, ends the tree for good. `www -p` in a tree served by a plain `.lock` moves it to a `.LOCK`.
+`www -p` writes a lock in capitals, such as `127.31.1.1-8080.LOCK`. It holds no PID, and it outlives its server: Kill server, `--kill`, SIGTERM and a reboot all stop the server but leave the `.LOCK` in place. The next server on that address serves the tree again, and so does `www --restart`, which starts a server for every address whose persistent trees have none. Deleting the `.LOCK`, or Delete lock on the tree's pages, ends the tree for good. `www -p` in a tree served by a plain `.lock` moves it to a `.LOCK`, and a plain `www` in a tree that holds a `.LOCK` keeps it.
 
 A systemd user unit runs `www --restart` at login. `make install` puts it in `~/.config/systemd/user/` and the package in `/usr/lib/systemd/user/`, both disabled; enable it with `systemctl --user enable www`. It serves from login to logout, and linger stays off.
 The package also ships a system template, `www@.service`, which serves a user's trees from boot, before login, with the capability for port 80. Enable it with `sudo systemctl enable www@<user>`. While either unit runs for a user, the other stands aside, since both would serve the same trees.

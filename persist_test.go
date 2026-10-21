@@ -57,6 +57,21 @@ func TestPersistentLock(t *testing.T) {
 		t.Errorf("persisted trees: %+v", got)
 	}
 
+	// A plain start in the kept tree keeps its lock persistent.
+	_, served = start(t, config{dir: one, ep: ep})
+	if _, err := os.Stat(filepath.Join(one, lockName(ep))); err == nil {
+		t.Error("a plain start beside a .LOCK wrote a .lock")
+	}
+	if _, ok := readLive(ep, kept); !ok {
+		t.Error("a plain start beside a .LOCK did not serve it")
+	}
+	syscall.Kill(os.Getpid(), syscall.SIGHUP)
+	select {
+	case <-served:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not stop")
+	}
+
 	// The next server on the address serves the kept tree again.
 	_, served = start(t, config{dir: two, ep: ep})
 	waitFor(t, "the kept tree to come back", func() bool { return status(t, base+one+"/a.txt?raw") == http.StatusOK })

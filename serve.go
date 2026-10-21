@@ -104,6 +104,11 @@ func run(c config, rep *reporter) int {
 		logInfo("persists %s, served until now by %s", dir, lockPath)
 		os.Remove(lockPath)
 	}
+	// A .LOCK whose server is down still marks the tree as persistent; a
+	// plain start there keeps it so.
+	if _, err := os.Stat(persistPath); err == nil {
+		c.persist = true
+	}
 	if c.persist {
 		lockPath = persistPath
 	}
