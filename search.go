@@ -29,6 +29,18 @@ const (
 	minContentQuery = 2
 )
 
+// unsearched names the hidden directories a search leaves out: stores
+// that machines write, not people, which would swamp the answer. Other
+// dot entries, eg .gitignore, .github or .vscode, are searched as the
+// listing shows them.
+var unsearched = map[string]bool{
+	// version control
+	".git": true, ".hg": true, ".svn": true, ".jj": true, ".bzr": true,
+	// environments and caches
+	".venv": true, ".tox": true, ".cache": true, ".mypy_cache": true,
+	".pytest_cache": true, ".ruff_cache": true, ".gradle": true, ".next": true,
+}
+
 // hit is one search result: a name that matched, or a line that did.
 type hit struct {
 	Href string `json:"href"`
@@ -47,8 +59,8 @@ type found struct {
 
 // serveSearch answers ?search=q below name: names that hold q first, then
 // lines that hold it, both ignoring case. It reads the tree through its
-// own file system, so a share searches only what it would serve. Dot
-// entries are skipped, since .git alone would swamp the answer.
+// own file system, so a share searches only what it would serve. The
+// directories in unsearched are skipped.
 func (t *tree) serveSearch(w http.ResponseWriter, r *http.Request, name, q string) {
 	ctx, cancel := context.WithTimeout(r.Context(), searchBudget)
 	defer cancel()
@@ -107,7 +119,7 @@ func (t *tree) search(ctx context.Context, dir, q string) found {
 			res.Lines = append(res.Lines, hit{Href: t.href(p, i+1), Path: p, Line: i + 1, Text: lineAt(b, i), Here: here})
 		}
 	}
-	skip := func(d fs.DirEntry) bool { return strings.HasPrefix(d.Name(), ".") || isLockName(d.Name()) }
+	skip := func(d fs.DirEntry) bool { return isLockName(d.Name()) || d.IsDir() && unsearched[d.Name()] }
 	// The directory's own entries come first, so the hit limits cannot
 	// crowd them out with deeper ones; then each subdirectory in turn.
 	entries, err := fs.ReadDir(t.fsys, dir)

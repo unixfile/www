@@ -9,11 +9,11 @@ import (
 )
 
 // A search lists matching names, then matching lines, ignoring case, and
-// leaves out locks, dot entries and binary files.
+// leaves out locks, .git and binary files.
 func TestSearch(t *testing.T) {
 	s, _, dir := serveTree(t)
-	os.MkdirAll(filepath.Join(dir, ".hidden"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".hidden", "readme.md"), []byte("readme\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".git", "readme.md"), []byte("readme\n"), 0o644)
 	w := get(s.handler(), "/?search=README")
 	if w.Code != 200 {
 		t.Fatalf("status %d: %s", w.Code, w.Body)
@@ -72,5 +72,25 @@ func TestSearchHereFirst(t *testing.T) {
 	json.Unmarshal(get(s.handler(), "/a/?search=needle").Body.Bytes(), &res)
 	if len(res.Lines) != 1 || res.Lines[0].Path != "a/deep.txt" || !res.Lines[0].Here {
 		t.Errorf("lines below a: %+v", res.Lines)
+	}
+}
+
+// Hidden files and directories are searched, but not the stores in
+// unsearched.
+func TestSearchHidden(t *testing.T) {
+	s, _, dir := serveTree(t)
+	os.MkdirAll(filepath.Join(dir, ".github"), 0o755)
+	os.MkdirAll(filepath.Join(dir, ".venv"), 0o755)
+	for _, p := range []string{".gitignore", ".github/ci.yml", ".venv/x.py"} {
+		os.WriteFile(filepath.Join(dir, p), []byte("needle\n"), 0o644)
+	}
+	var res found
+	json.Unmarshal(get(s.handler(), "/?search=needle").Body.Bytes(), &res)
+	var paths []string
+	for _, h := range res.Lines {
+		paths = append(paths, h.Path)
+	}
+	if strings.Join(paths, " ") != ".gitignore .github/ci.yml" {
+		t.Errorf("lines: %v", paths)
 	}
 }
