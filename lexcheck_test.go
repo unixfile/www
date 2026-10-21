@@ -18,9 +18,9 @@ import (
 // reports the share of bytes that agree per language and the first lines
 // that differ.
 func TestOwnLexersMatchChroma(t *testing.T) {
-	roots := strings.Fields(os.Getenv("WWW_LEXCHECK"))
+	roots := strings.Fields(os.Getenv(envPrefix + "LEXCHECK"))
 	if len(roots) == 0 {
-		t.Skip("set WWW_LEXCHECK to files or directories to compare")
+		t.Skip("set " + envPrefix + "LEXCHECK to files or directories to compare")
 	}
 	type tally struct{ files, bytes, wrong int }
 	tallies := map[string]*tally{}
