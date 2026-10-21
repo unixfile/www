@@ -285,7 +285,7 @@ func TestSpacedShareHint(t *testing.T) {
 	}
 }
 
-// MDSERVE_SHARE fills a bare --share and MDSERVE_ADDR a start without -a.
+// WWW_SHARE fills a bare --share and WWW_ADDR a start without -a.
 // Flags win, --list, --kill and --restart keep covering every server, and
 // a bad value names its variable.
 func TestEnvironmentDefaults(t *testing.T) {

@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-// taken explains why ep cannot be bound when no mdserve of this user serves
+// taken explains why ep cannot be bound when no www of this user serves
 // there: it names the listeners that hold the port, marking the ones that
-// are mdserve servers on other addresses.
+// are www servers on other addresses.
 func taken(ep netip.AddrPort) string {
 	var names []string
 	for _, l := range holders(ep) {

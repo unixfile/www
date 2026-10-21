@@ -1,4 +1,4 @@
-module mdserve
+module www
 
 go 1.25
 

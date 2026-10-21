@@ -1,22 +1,22 @@
 # Sharing
 
-`mdserve --share [dir]` serves a tree on the address of the default route, so other machines on the LAN can read it. mdserve asks the kernel which source address it would use to leave the machine, and the printed URL shows it. Over a full-tunnel VPN that is the tunnel's address.
+`www --share [dir]` serves a tree on the address of the default route, so other machines on the LAN can read it. www asks the kernel which source address it would use to leave the machine, and the printed URL shows it. Over a full-tunnel VPN that is the tunnel's address.
 
-`MDSERVE_SHARE`, eg `MDSERVE_SHARE=mate.peer.home`, gives a bare `--share` another address, for `--kill --share` and `--restart --share` as well.
+`WWW_SHARE`, eg `WWW_SHARE=mate.peer.home`, gives a bare `--share` another address, for `--kill --share` and `--restart --share` as well.
 
-`--share=ip[:port]` names the address instead, joined with `=`: `--share 192.168.1.5` would read the address as the directory. Any IPv4 address the machine lets mdserve bind will do, `0.0.0.0` included. A name will do too, such as `--share=mate.peer.home`: mdserve binds the address it resolves to, which an interface here must hold.
+`--share=ip[:port]` names the address instead, joined with `=`: `--share 192.168.1.5` would read the address as the directory. Any IPv4 address the machine lets www bind will do, `0.0.0.0` included. A name will do too, such as `--share=mate.peer.home`: www binds the address it resolves to, which an interface here must hold.
 
-The printed URL carries the address's name when its reverse lookup resolves back to it, so a share on a WireGuard address with its own DNS prints `http://mate.peer.home/notes/`. Otherwise it carries the address. The port defaults to 80 where mdserve may bind it, else 8080, as on loopback. `-a` takes only loopback addresses, so a typo there cannot share a tree.
+The printed URL carries the address's name when its reverse lookup resolves back to it, so a share on a WireGuard address with its own DNS prints `http://mate.peer.home/notes/`. Otherwise it carries the address. The port defaults to 80 where www may bind it, else 8080, as on loopback. `-a` takes only loopback addresses, so a typo there cannot share a tree.
 
-A shared address gets a server of its own, apart from the loopback one. More trees join it with the same `--share` address. The lock is named after the address, such as `192.168.1.5-80.lock`, and deleting it stops the share. `mdserve --kill --share` stops every tree on that address. `mdserve --restart --share` moves the trees to a new binary. `mdserve -l` lists shared trees with the rest.
+A shared address gets a server of its own, apart from the loopback one. More trees join it with the same `--share` address. The lock is named after the address, such as `192.168.1.5-80.lock`, and deleting it stops the share. `www --kill --share` stops every tree on that address. `www --restart --share` moves the trees to a new binary. `www -l` lists shared trees with the rest.
 
-On `0.0.0.0` the printed URL carries the machine's name, since the server answers on every address. `0.0.0.0` claims its port on every address, so it cannot bind a port that any listener holds, the loopback mdserve included. mdserve then fails with `E98` and names the listeners on that port. Share on one address, or give `0.0.0.0` another port.
+On `0.0.0.0` the printed URL carries the machine's name, since the server answers on every address. `0.0.0.0` claims its port on every address, so it cannot bind a port that any listener holds, the loopback www included. www then fails with `E98` and names the listeners on that port. Share on one address, or give `0.0.0.0` another port.
 
 ## What a visitor sees
 
 A shared tree mounts at its base name, eg `http://192.168.1.69/notes/`. The URL does not reveal where the tree lives on the machine.
 
-The server serves only what other users on the machine could read. A file needs the others-read bit, and every directory from the tree's root down to it needs others-read and others-execute. Links out of the tree follow the `.mdserve-follow` rule as on loopback. Names that begin with a dot are neither listed nor served, at any depth, nor are links that lead to them inside the tree: `.git` holds the history and every deleted file. History pages show commit messages alone, without trailers, and only when other users could read the repo. Everything else in the tree is served, so share a directory that holds only what you mean to share.
+The server serves only what other users on the machine could read. A file needs the others-read bit, and every directory from the tree's root down to it needs others-read and others-execute. Links out of the tree follow the `.www-follow` rule as on loopback. Names that begin with a dot are neither listed nor served, at any depth, nor are links that lead to them inside the tree: `.git` holds the history and every deleted file. History pages show commit messages alone, without trailers, and only when other users could read the repo. Everything else in the tree is served, so share a directory that holds only what you mean to share.
 
 A refused entry shows as refused, without the reason, since the reason names paths outside the tree. The index at `/` lists the shared trees by name. It shows no lock paths, no other addresses and no buttons. No page has a Delete lock or Kill server button, so no visitor can stop the server.
 
@@ -31,7 +31,7 @@ note: other machines connect to 192.168.1.69:80; a firewall here may drop them u
       Check with: sudo tcpdump -ni wlp0s20f3 tcp port 80
 ```
 
-mdserve cannot find out by itself. A firewall drops the connection before any socket sees it, reading the ruleset needs root, and a test from this machine goes through loopback and passes.
+www cannot find out by itself. A firewall drops the connection before any socket sees it, reading the ruleset needs root, and a test from this machine goes through loopback and passes.
 
 Run the capture and load the URL on the other machine:
 

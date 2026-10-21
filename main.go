@@ -1,4 +1,4 @@
-// Command mdserve browses trees of Markdown docs in the browser. It renders
+// Command www browses trees of Markdown docs in the browser. It renders
 // each page with goldmark when requested and mirrors the file tree in its
 // URLs. Trees on one address share a server, which lives while their locks
 // exist.
@@ -315,9 +315,9 @@ var (
 	shareEnv = envPrefix + "SHARE"
 )
 
-// endpointOf returns where c serves. A bare --share takes MDSERVE_SHARE,
-// and a start without -a takes MDSERVE_ADDR; --list, --kill and --restart
-// without an address cover every server, so MDSERVE_ADDR leaves them be.
+// endpointOf returns where c serves. A bare --share takes WWW_SHARE,
+// and a start without -a takes WWW_ADDR; --list, --kill and --restart
+// without an address cover every server, so WWW_ADDR leaves them be.
 // An error from a variable's value names the variable.
 func endpointOf(c config, uid int) (netip.AddrPort, error) {
 	if c.sharing {
@@ -504,7 +504,7 @@ func validToken(s string) bool {
 	})
 }
 
-// errno is an error with the code mdserve exits with.
+// errno is an error with the code www exits with.
 type errno struct {
 	code syscall.Errno
 	msg  string
@@ -570,7 +570,7 @@ func openBrowser(url string) {
 	}
 }
 
-// detach re-runs mdserve in a new session and relays its start report.
+// detach re-runs www in a new session and relays its start report.
 // Go cannot fork safely, so a re-exec is the way to background itself.
 func detach(c config) int {
 	r, w, err := os.Pipe()

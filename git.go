@@ -50,7 +50,7 @@ type commit struct {
 // run, so the options that would start one are off, fsmonitor among them
 // whichever command runs, and git may not fetch a partial clone's missing
 // objects. Pathspecs are literal, and no GIT_
-// variable from mdserve's own environment leaks in. git's safe.directory
+// variable from www's own environment leaks in. git's safe.directory
 // check refuses repos that other users own.
 func git(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	args = append([]string{"-c", "protocol.allow=never", "-c", "core.fsmonitor=false", "-c", "core.quotePath=false", "--no-pager", "--literal-pathspecs"}, args...)
@@ -353,7 +353,7 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	}
 	// git walks every commit back to the ones that touched name, unless
 	// the repo's commit-graph tells it which paths each commit changed.
-	// mdserve leaves the repo alone and names the command instead. A share
+	// www leaves the repo alone and names the command instead. A share
 	// says nothing, since its viewer cannot run it.
 	if took > slowGit && !t.shared && t.lacksPathFilters(r.Context(), name) {
 		fmt.Fprintf(&body, "<p class=\"own\">git took %d ms for this history. "+

@@ -398,7 +398,7 @@ func guard(next http.Handler, anyHost bool) http.Handler {
 var hostsFile = "/etc/hosts"
 
 // localHost accepts a loopback address, localhost, or a name that the hosts
-// file maps to loopback, eg an mdserve instance named there. DNS is never
+// file maps to loopback, eg an www instance named there. DNS is never
 // asked: a DNS name that resolves to loopback is the rebinding attack itself.
 func localHost(host string) bool {
 	if strings.EqualFold(host, "localhost") {
@@ -845,7 +845,7 @@ type crumb struct {
 }
 
 // indexCrumb leads every tree page's breadcrumbs to the index, the parent
-// of all trees. Its label is not mdserve, which a tree may be called.
+// of all trees. Its label is not www, which a tree may be called.
 var indexCrumb = crumb{Label: "index", Href: "/"}
 
 type page struct {

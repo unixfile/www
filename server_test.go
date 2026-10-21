@@ -242,7 +242,7 @@ func TestIndexDeleteReturns(t *testing.T) {
 	}
 }
 
-// The fonts come from mdserve, cached for a year; nothing else leaves the
+// The fonts come from www, cached for a year; nothing else leaves the
 // font directory.
 func TestFonts(t *testing.T) {
 	s, _, _ := serveTree(t)

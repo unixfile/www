@@ -11,8 +11,8 @@ import (
 )
 
 // A registry directory joins trees to the server of one endpoint, eg
-// ~/.local/state/mdserve/127.31.1.1-8080/, with one symlink per lock. A
-// joining mdserve adds a link; the server sees it through inotify, writes
+// ~/.local/state/www/127.31.1.1-8080/, with one symlink per lock. A
+// joining www adds a link; the server sees it through inotify, writes
 // the lock and serves the tree. An flock on the directory orders a join
 // against the server's start and exit, so no tree joins a dying server.
 type registry struct {

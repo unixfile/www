@@ -164,7 +164,7 @@ func originHost(host string, port uint16) string {
 
 // report ends a start with the tree's URL alone, the same whether this run
 // started the tree or found it served. A share adds a note on stderr: a
-// firewall drops other machines before mdserve sees them, and a test from
+// firewall drops other machines before www sees them, and a test from
 // this machine passes through loopback, so only a capture tells.
 func report(rep *reporter, ep netip.AddrPort, url string) {
 	rep.send("url", url)
@@ -331,7 +331,7 @@ func (h *hub) dropLeftovers() {
 }
 
 // adopt serves the tree whose lock is lockPath and writes the lock. link is
-// the registry entry a joining mdserve made, or "" to make one. token puts
+// the registry entry a joining www made, or "" to make one. token puts
 // a shared tree under a secret path.
 func (h *hub) adopt(lockPath, link, token string) (*tree, error) {
 	if !filepath.IsAbs(lockPath) || filepath.Base(lockPath) != lockName(h.ep) {
@@ -487,7 +487,7 @@ func (h *hub) shutdown(why string) {
 }
 
 // halt closes the listener while the registry is locked, so a joining
-// mdserve finds the address free and starts a new server instead of
+// www finds the address free and starts a new server instead of
 // linking into this one. Open connections drain in the background. The
 // caller holds the lock.
 func (h *hub) halt(why string) {

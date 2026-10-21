@@ -14,7 +14,7 @@ var nameFile string
 var progName = strings.TrimSpace(nameFile)
 
 // envPrefix starts the name of every environment variable the program
-// reads, eg MDSERVE_ADDR.
+// reads, eg WWW_ADDR.
 var envPrefix = strings.ToUpper(progName) + "_"
 
 // ownPath is the URL path of the program's own resources, eg the

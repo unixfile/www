@@ -48,7 +48,7 @@ var goneWait = 2 * time.Second
 
 // live tells open pages when what they show has changed. A page names its
 // version: the server instance that rendered it and what the page showed.
-// It keeps a stream open on /_mdserve/live, which wakes on any change in
+// It keeps a stream open on /_www/live, which wakes on any change in
 // the directories the page reads from and sends one event, reload, when
 // the version is no longer current.
 type live struct {

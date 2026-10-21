@@ -14,10 +14,10 @@ import (
 	"time"
 )
 
-// mdserve logs every action, so a later look can tell what the user and
-// mdserve did: each run with its arguments, each server's start and stop
+// www logs every action, so a later look can tell what the user and
+// www did: each run with its arguments, each server's start and stop
 // with the cause, trees joining and leaving, and page requests. Entries go
-// to the systemd journal, tagged mdserve, or to a file in the state
+// to the systemd journal, tagged www, or to a file in the state
 // directory where no journal runs. Nothing is filtered when written; the
 // journal's PRIORITY filters when read.
 
@@ -105,7 +105,7 @@ func journalEntry(prio int, ep, msg string) []byte {
 	return b.Bytes()
 }
 
-// logFile is the fallback log, eg ~/.local/state/mdserve/log.
+// logFile is the fallback log, eg ~/.local/state/www/log.
 func logFile() (string, error) {
 	base, err := stateDir()
 	if err != nil {
@@ -188,7 +188,7 @@ func logSink() *os.File {
 	return f
 }
 
-// build names the running binary and its commit, eg /usr/bin/mdserve
+// build names the running binary and its commit, eg /usr/bin/www
 // 54cca2a, with +modified for a build from uncommitted code. A stale binary
 // is the first thing to rule out.
 func build() string {

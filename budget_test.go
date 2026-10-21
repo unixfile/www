@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
-// pageBudget is the time mdserve promises for any page from a warm server.
+// pageBudget is the time www promises for any page from a warm server.
 const pageBudget = 5 * time.Millisecond
 
 // Every kind of page renders within pageBudget once its git answers are
-// cached: a doc and a code page the size of mdserve's own README and
+// cached: a doc and a code page the size of www's own README and
 // render.go, a listing, histories and a commit's diff. Each takes the
 // median of 15 runs, so one slow run does not fail it.
 func TestPageBudget(t *testing.T) {
