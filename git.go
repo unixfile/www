@@ -417,6 +417,15 @@ func (t *tree) gitShow(ctx context.Context, name, hash string) (c *commit, diffs
 	if t.shared && !openRepo(ctx, dir) {
 		return nil, nil, false, errNoHistory
 	}
+	// A commit never changes, so its diff is kept under its full hash.
+	var key string
+	if r := repoAt(ctx, dir); r.complaint == "" && fullHash(hash) {
+		key = fmt.Sprintf("show\x00%s\x00%s\x00%s\x00%s\x00%s\x00%t", r.gitDir, dir, spec, name, hash, t.shared)
+		if v, ok := gitCache.get(key); ok {
+			s := v.(shown)
+			return &s.c, s.diffs, s.cut, nil
+		}
+	}
 	// ^{commit} refuses a blob or a tree, which would show a file's text.
 	rev := hash + "^{commit}"
 	show := func(args ...string) ([]byte, error) {
@@ -453,7 +462,34 @@ func (t *tree) gitShow(ctx context.Context, name, hash string) (c *commit, diffs
 		}
 		diffs = append(diffs, fileDiff{name: f, lines: diffLines(b)})
 	}
+	if key != "" {
+		c := log[0]
+		size := int64(len(c.hash)+len(c.short)+len(c.subject)+len(c.body)) + 64
+		for _, d := range diffs {
+			size += int64(len(d.name)) + 16
+			for _, l := range d.lines {
+				size += int64(len(l)) + 16
+			}
+		}
+		gitCache.put(key, shown{c, diffs, cut}, size)
+	}
 	return &log[0], diffs, cut, nil
+}
+
+// shown is a commit and its diff as gitShow keeps them.
+type shown struct {
+	c     commit
+	diffs []fileDiff
+	cut   bool
+}
+
+// fullHash reports whether hash is a whole SHA-1 or SHA-256 name in hex,
+// which no later commit can make ambiguous.
+func fullHash(hash string) bool {
+	if len(hash) != 40 && len(hash) != 64 {
+		return false
+	}
+	return !strings.ContainsFunc(hash, func(r rune) bool { return !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') })
 }
 
 // diffName reads the file's name from the header of its diff, a/name
