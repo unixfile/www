@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -152,6 +153,7 @@ func findLive(ep netip.AddrPort, path string) (lockInfo, bool) {
 type lock struct {
 	path string
 	info os.FileInfo
+	body []byte // what this server wrote, to tell its lock from a new one
 }
 
 // createLock writes the lock at path. A persistent lock that is already
@@ -166,14 +168,16 @@ func createLock(path, root, url string) (*lock, error) {
 	if err != nil {
 		return nil, err
 	}
+	var body string
 	if isPersist(path) {
-		_, err = fmt.Fprintf(f, "# "+progName+" serves this directory, after reboot too. Delete this file to stop serving it.\n"+
+		body = fmt.Sprintf("# "+progName+" serves this directory, after reboot too. Delete this file to stop serving it.\n"+
 			"url: %s\nroot: %s\nstarted: %s\n", url, root, time.Now().Format(time.RFC3339))
 	} else {
-		_, err = fmt.Fprintf(f, "# "+progName+" is serving this directory. Delete this file to stop serving it.\n"+
+		body = fmt.Sprintf("# "+progName+" is serving this directory. Delete this file to stop serving it.\n"+
 			"url: %s\nroot: %s\npid: %d\nstarted: %s\nboot_id: %s\n",
 			url, root, os.Getpid(), time.Now().Format(time.RFC3339), bootID())
 	}
+	_, err = f.WriteString(body)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -185,13 +189,20 @@ func createLock(path, root, url string) (*lock, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &lock{path: path, info: info}, nil
+	return &lock{path: path, info: info, body: []byte(body)}, nil
 }
 
 // gone reports whether the lock was deleted or replaced by another file.
+// The file's identity alone cannot tell: ext4 hands a new file the inode
+// of one just deleted, so a replacement can look like the same file. The
+// body tells, since another server's lock holds another PID or start.
 func (l *lock) gone() bool {
 	info, err := os.Stat(l.path)
-	return err != nil || !os.SameFile(info, l.info)
+	if err != nil || !os.SameFile(info, l.info) {
+		return true
+	}
+	b, err := os.ReadFile(l.path)
+	return err != nil || !bytes.Equal(b, l.body)
 }
 
 // persist reports whether the lock outlives its server.

@@ -427,6 +427,9 @@ func (h *hub) adopt(lockPath, link, token string) (*tree, error) {
 		t.link = link
 		t.linkInfo, err = os.Lstat(link)
 	}
+	if err == nil {
+		t.linkTo, err = os.Readlink(t.link)
+	}
 	if err != nil {
 		t.lock.remove()
 		root.Close()
@@ -458,12 +461,25 @@ func (h *hub) withdraw(t *tree, why string, keep bool) {
 	logInfo("withdraws %s: %s", t.dir, why)
 	if !keep || !t.lock.persist() {
 		t.lock.remove()
-		if info, err := os.Lstat(t.link); err == nil && os.SameFile(info, t.linkInfo) {
+		if t.ownsLink() {
 			os.Remove(t.link)
 		}
 	}
 	h.w.remove(t.wd)
 	t.root.Close()
+}
+
+// ownsLink reports whether t's registry link is still the one this server
+// took, not a new join for the same directory. A new link can reuse the
+// old one's inode, so its target must match too: a join that moves the
+// tree to a persistent lock names the other lock.
+func (t *tree) ownsLink() bool {
+	info, err := os.Lstat(t.link)
+	if err != nil || !os.SameFile(info, t.linkInfo) {
+		return false
+	}
+	to, err := os.Readlink(t.link)
+	return err == nil && to == t.linkTo
 }
 
 // sync withdraws every tree whose lock is gone and adopts every new link.

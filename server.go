@@ -199,6 +199,7 @@ type tree struct {
 	lock     *lock       // nil only in tests
 	link     string      // registry link
 	linkInfo os.FileInfo // the link this server knows, to tell it from a new join
+	linkTo   string      // its target, since a new link may reuse its inode
 	wd       int         // inotify watch on dir, or -1
 	shared   bool        // served beyond loopback: only what other users could read
 	secret   bool        // mounted under a token, and left off the index
