@@ -349,7 +349,9 @@
 	// the box's caret. Escape clears the query, and with none goes up to
 	// the last linked crumb. With nothing to walk, Up, Down and Space
 	// scroll the page as they would outside the box; during a search Space
-	// types.
+	// types. Shift+Tab in the box enters the header at the crumb Escape
+	// goes to, so Delete lock is never one key from the box; Escape on any
+	// other focused control comes back to the box.
 	const walkable = () =>
 		(searching() ? [...matches, ...document.querySelectorAll("div.found a")] : [...document.querySelectorAll("main ul.listing a")])
 			.filter((el) => el.offsetParent !== null);
@@ -366,8 +368,15 @@
 		const b = box();
 		const inBox = !!b && e.target === b;
 		if (!inBox && e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
+		if (inBox && e.key === "Tab" && e.shiftKey) {
+			const crumbs = document.querySelectorAll("header nav a");
+			if (!crumbs.length) return;
+			e.preventDefault();
+			return crumbs[crumbs.length - 1].focus();
+		}
 		const q = searching();
-		if (b && !inBox && ((e.key.length === 1 && (e.key !== " " || q)) || (e.key === "Backspace" && q))) {
+		const presses = e.target.closest && e.target.closest("button, summary");
+		if (b && !inBox && ((e.key.length === 1 && (e.key !== " " || (q && !presses))) || (e.key === "Backspace" && q))) {
 			b.focus({ preventScroll: true });
 			b.selectionStart = b.selectionEnd = b.value.length;
 			return;
@@ -393,7 +402,8 @@
 				break;
 			}
 			case "Escape":
-				if (q) clearSearch();
+				if (b && !inBox && document.activeElement !== document.body) b.focus({ preventScroll: true });
+				else if (q) clearSearch();
 				else up();
 				break;
 			case " ":
@@ -404,6 +414,36 @@
 				return;
 		}
 		e.preventDefault();
+	});
+
+	// The copy button copies the page's path on disk: through the
+	// clipboard API where the origin is secure, else through a selection,
+	// which works on any origin. Its label says how it went.
+	document.addEventListener("click", (e) => {
+		const btn = e.target.closest && e.target.closest("button.copy");
+		if (!btn) return;
+		const text = btn.dataset.copy;
+		const done = (ok) => {
+			btn.textContent = ok ? "copied" : "copy failed";
+			setTimeout(() => (btn.textContent = "copy path"), 1500);
+			hold();
+		};
+		const bySelection = () => {
+			const t = document.createElement("textarea");
+			t.value = text;
+			t.style.position = "fixed";
+			t.style.opacity = "0";
+			document.body.append(t);
+			t.select();
+			let ok = false;
+			try {
+				ok = document.execCommand("copy");
+			} catch {}
+			t.remove();
+			done(ok);
+		};
+		if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(() => done(true), bySelection);
+		else bySelection();
 	});
 
 	// A history's fold loads its commit's diff from the commit page the

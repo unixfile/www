@@ -148,7 +148,7 @@ header button {
 }
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
-pre, code, header, input.search, .own, ul.listing, p.built, div.found p, p.unfound { font-family: ui-monospace, "Iosevka", monospace; }
+pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound { font-family: ui-monospace, "Iosevka", monospace; }
 /* Code is half the body size, so about 115 columns fit the doc's measure
    and no page needs to be wider. It never drops below 11px, where small
    screens set the body at 16px. */
@@ -240,14 +240,20 @@ table.locks button { font: inherit; color: inherit; background: none; border: 1p
    and fades to none in 3 s, so the eye finds where the change landed. */
 main > .changed { animation: changed 3s ease-in; }
 @keyframes changed { from { background-color: var(--target); } to { background-color: transparent; } }
-/* The search box has a row of its own under the header, the column's
-   full width, as quiet as the header's buttons. */
-input.search {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
+/* The search box has a row of its own under the header, as quiet as the
+   header's buttons, and leaves the row's right end to the button that
+   copies the page's path. */
+div.search {
+  display: flex;
+  gap: 1em;
+  align-items: stretch;
   margin: -0.7em 0 1.5em;
   font-size: 0.8em;
+}
+input.search {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
   color: inherit;
   background: none;
   border: 1px solid var(--rule);
@@ -255,6 +261,18 @@ input.search {
   padding: 0.15em 0.4em;
 }
 input.search:focus { outline: none; border-color: var(--muted); }
+button.copy {
+  flex: none;
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 0.2em;
+  padding: 0.15em 0.7em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.copy:hover, button.copy:focus-visible { color: inherit; border-color: var(--muted); outline: none; }
 /* Search results: the path is the program's and mono, a matching line is
    the file's and stays mono too, in the muted colour. */
 div.found .line { color: var(--muted); font-size: 0.8em; hyphens: none; }

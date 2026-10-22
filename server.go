@@ -900,6 +900,7 @@ type page struct {
 	Raw     bool
 	Tree    string       // prefix the stop button withdraws, or "" for every tree
 	Search  string       // the tree's URL, which answers ?search=, or "" off a tree
+	Path    string       // the page's file or directory on disk, which the copy button copies; "" on a share or a failed page
 	Status  string       // the server's age, on the index
 	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
@@ -961,12 +962,16 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 }
 
 // render gives the page this tree's Delete lock button, unless the tree is
-// shared, and a search box for the directory the page is in. A failed
-// page searches the whole tree, since its directory may not exist.
+// shared, and a search box for the directory the page is in, with a button
+// that copies the page's path on disk. A failed page searches the whole
+// tree, since its directory may not exist, and has no path to copy.
 func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Tree, p.Shared, p.Search = t.prefix, t.shared, t.prefixURL()
 	if status == http.StatusOK {
 		p.Search = searchURL(r.URL.Path)
+		if !t.shared {
+			p.Path = filepath.Join(t.dir, filepath.FromSlash(strings.TrimPrefix(r.URL.Path, t.prefix)))
+		}
 	}
 	render(w, r, status, p)
 }
