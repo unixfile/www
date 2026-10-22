@@ -270,8 +270,9 @@ pre.numberSource.filtering code > span > a:first-child::before { content: attr(d
 ::highlight(search) { background-color: var(--target); }
 div.found ul.wider { opacity: 0.6; margin-top: 1.4em; }
 p.unfound { color: var(--muted); font-size: 0.8em; }
-/* An entry the arrows reached shows a quiet ring. */
-ul.listing a:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
+/* The entry or match the keys act on shows a quiet ring, as does a link
+   Tab reached. */
+.sel, ul.listing a:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
 
 /* the line a #L42 link points at */
 pre > code.sourceCode > span:target { background: var(--target); }

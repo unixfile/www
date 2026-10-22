@@ -24,24 +24,45 @@
 		}
 	};
 
-	// A reload keeps the listing entry that had focus, so arrows go on
-	// from where they were.
-	const focusKey = "focus";
+	// A highlight, not focus, marks the entry the keys act on, since the
+	// search box keeps focus. A reload keeps the highlighted entry, and the
+	// page Escape goes up to highlights the page it came from, so Enter
+	// goes back. Entries match by path and query, without ?q=.
+	const selKey = "sel";
+	let sel = null;
+	const plain = (href) => {
+		const u = new URL(href, location.href);
+		const rest = u.search.slice(1).split("&").filter((s) => s && s !== "q" && !s.startsWith("q="));
+		return u.pathname + (rest.length ? "?" + rest.join("&") : "");
+	};
+	const select = (el) => {
+		if (sel) sel.classList.remove("sel");
+		sel = el;
+		if (!el) return;
+		el.classList.add("sel");
+		el.scrollIntoView({ block: "nearest" });
+	};
+	// hold gives the box the keyboard, except on a touch screen, where
+	// focus would raise the on-screen keyboard.
+	const hold = () => {
+		const b = box();
+		if (b && matchMedia("(pointer: fine)").matches) b.focus({ preventScroll: true });
+	};
 	const reload = () => {
-		const a = document.activeElement;
 		try {
-			if (a && a.matches("ul.listing a")) sessionStorage.setItem(focusKey, a.getAttribute("href"));
+			if (sel && sel.matches("ul.listing a")) sessionStorage.setItem(selKey, plain(sel.href));
 		} catch {}
 		location.reload();
 	};
 	document.addEventListener("DOMContentLoaded", () => {
-		let href = null;
+		let key = null;
 		try {
-			href = sessionStorage.getItem(focusKey);
-			sessionStorage.removeItem(focusKey);
+			key = sessionStorage.getItem(selKey);
+			sessionStorage.removeItem(selKey);
 		} catch {}
-		const a = [...document.querySelectorAll("ul.listing a")].find((a) => a.getAttribute("href") === href);
-		if (a) a.focus();
+		const a = key && [...document.querySelectorAll("main ul.listing a")].find((a) => plain(a.href) === key);
+		if (a) select(a);
+		hold();
 	});
 
 	// A doc takes its new version in place, and each block that differs
@@ -79,9 +100,12 @@
 					else el.classList.add("changed");
 				}
 				const x = scrollX, y = scrollY;
+				const held = document.activeElement === box();
 				document.title = next.title;
 				document.body.replaceWith(document.adoptNode(next.body));
 				scrollTo(x, y);
+				sel = null;
+				if (held) hold();
 				url = live.dataset.live;
 				if (es) es.close();
 				es = null;
@@ -105,7 +129,7 @@
 	let timer = null;
 	let ctl = null;
 	let hidden = [];
-	let firstMatch = null;
+	let matches = [];
 	const box = () => document.querySelector("input.search");
 	const searching = () => {
 		const b = box();
@@ -115,7 +139,8 @@
 	const unfilter = () => {
 		for (const el of hidden) el.hidden = false;
 		hidden = [];
-		firstMatch = null;
+		matches = [];
+		select(null);
 		for (const el of document.querySelectorAll(".filtering, p.unfound")) {
 			if (el.matches("p.unfound")) el.remove();
 			else el.classList.remove("filtering");
@@ -164,7 +189,7 @@
 			hidden.push(el);
 			return false;
 		}
-		if (!firstMatch) firstMatch = el;
+		matches.push(el);
 		mark(el, q, ranges);
 		return true;
 	};
@@ -286,9 +311,7 @@
 			.catch(() => {});
 	};
 	const clearSearch = () => {
-		const b = box();
-		b.value = "";
-		b.blur();
+		box().value = "";
 		runSearch();
 	};
 	// jump leaves the search for a match in the whole page: a line of code
@@ -297,6 +320,7 @@
 		clearSearch();
 		if (el.id) location.hash = el.id;
 		else el.scrollIntoView({ block: "center" });
+		hold();
 	};
 	document.addEventListener("DOMContentLoaded", () => {
 		const q = new URLSearchParams(location.search).get("q");
@@ -309,16 +333,6 @@
 		clearTimeout(timer);
 		timer = setTimeout(runSearch, 120);
 	});
-	document.addEventListener("keydown", (e) => {
-		if (!e.target.matches || !e.target.matches("input.search")) return;
-		const first = document.querySelector("div.found a");
-		if (e.key === "Escape") clearSearch();
-		else if (e.key === "ArrowDown" && first) first.focus();
-		else if (e.key === "Enter" && firstMatch) jump(firstMatch);
-		else if (e.key === "Enter" && first) location.href = first.href;
-		else return;
-		e.preventDefault();
-	});
 
 	// The build stamp counts the seconds since the binary was built. It is
 	// looked up on each tick, since a doc's update replaces it.
@@ -327,46 +341,65 @@
 		if (ago) ago.textContent = Math.max(0, Math.floor((Date.now() - Number(ago.parentNode.dataset.built)) / 1000));
 	}, 1000);
 
-	// Arrows walk a listing, or the search results: Up and Down move
-	// between entries, Right or Space opens one, as Enter does, and Left
-	// goes up a directory. Other pages keep their arrows for scrolling. A
-	// slash goes to the search box.
+	// The box holds the keyboard, so typing searches from anywhere: a key
+	// that types, or Backspace during a search, goes to the box wherever
+	// focus is. Up and Down move the highlight through what can be opened,
+	// a listing's entries or a search's matches and results, and Enter
+	// opens it, or the first one during a search. Left and Right stay with
+	// the box's caret. Escape clears the query, and with none goes up to
+	// the last linked crumb. With nothing to walk, Up, Down and Space
+	// scroll the page as they would outside the box; during a search Space
+	// types.
+	const walkable = () =>
+		(searching() ? [...matches, ...document.querySelectorAll("div.found a")] : [...document.querySelectorAll("main ul.listing a")])
+			.filter((el) => el.offsetParent !== null);
+	const up = () => {
+		const crumbs = document.querySelectorAll("header nav a");
+		if (!crumbs.length) return;
+		try {
+			sessionStorage.setItem(selKey, plain(location.href));
+		} catch {}
+		location.href = crumbs[crumbs.length - 1].href;
+	};
 	document.addEventListener("keydown", (e) => {
-		if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
-		if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
-		if (e.key === "/" && box()) {
-			e.preventDefault();
-			return box().focus();
+		if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing || e.defaultPrevented) return;
+		const b = box();
+		const inBox = !!b && e.target === b;
+		if (!inBox && e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
+		const q = searching();
+		if (b && !inBox && ((e.key.length === 1 && (e.key !== " " || q)) || (e.key === "Backspace" && q))) {
+			b.focus({ preventScroll: true });
+			b.selectionStart = b.selectionEnd = b.value.length;
+			return;
 		}
-		if (e.key === "Escape" && searching()) {
-			e.preventDefault();
-			return clearSearch();
-		}
-		const links = [...document.querySelectorAll("ul.listing a")].filter((a) => a.offsetParent !== null);
-		if (!links.length) return;
-		const i = links.indexOf(document.activeElement);
-		if (e.key === "ArrowUp" && i === 0 && searching()) {
-			e.preventDefault();
-			return box().focus();
-		}
+		const walk = walkable();
+		const i = walk.indexOf(sel);
 		switch (e.key) {
 			case "ArrowDown":
-				links[Math.min(i + 1, links.length - 1)].focus();
-				break;
 			case "ArrowUp":
-				links[i < 0 ? links.length - 1 : Math.max(i - 1, 0)].focus();
+				if (walk.length) {
+					if (e.key === "ArrowDown") select(walk[Math.min(i + 1, walk.length - 1)]);
+					else select(walk[i < 0 ? walk.length - 1 : Math.max(i - 1, 0)]);
+					if (b) b.focus({ preventScroll: true });
+				} else if (inBox) scrollBy(0, e.key === "ArrowDown" ? 40 : -40);
+				else return;
 				break;
-			case "ArrowRight":
-			case " ":
-				if (i < 0) return;
-				location.href = links[i].href;
-				break;
-			case "ArrowLeft": {
-				const up = links.find((a) => a.getAttribute("href") === "../");
-				if (!up) return;
-				location.href = up.href;
+			case "Enter": {
+				if (!inBox && e.target.closest && e.target.closest("a, button, summary")) return;
+				const to = i >= 0 ? sel : q ? walk[0] : null;
+				if (!to) return;
+				if (to.matches("a")) location.href = to.href;
+				else jump(to);
 				break;
 			}
+			case "Escape":
+				if (q) clearSearch();
+				else up();
+				break;
+			case " ":
+				if (!inBox || q) return;
+				scrollBy(0, (e.shiftKey ? -0.85 : 0.85) * innerHeight);
+				break;
 			default:
 				return;
 		}
