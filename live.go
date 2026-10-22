@@ -239,6 +239,8 @@ func (s *server) version(urlPath string) string {
 	kind := byte('-')
 	if t := s.lookup(urlPath); t != nil {
 		kind = t.version(h, t.name(urlPath))
+	} else if s.web != nil {
+		s.web.version(h, urlPath)
 	} else {
 		for _, t := range s.list() {
 			// A secret tree is not listed, so it must not show by a reload.

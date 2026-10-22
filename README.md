@@ -35,6 +35,7 @@ To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`
 - `-p`, `--persist`: write a persistent lock, such as `127.31.1.1-8080.LOCK`, so the tree is served again after a reboot; see [Serving after reboot](#serving-after-reboot)
 - `--stamp`: show the binary's build time, the seconds since, its commit and the page's render time, small and faint, above each page's header. `make run` sets it; `--restart` leaves it off
 - `--cache size`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
+- `--disk size`: disk a new server may fill with online repos, eg `4G`; it drops the repos read longest ago. The default is `2G`, and `--restart` goes back to it
 - `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one; with `-a` or `--share`, only the server on that address
 - `-l`, `--list`: print each served tree's URL and directory, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it
 - `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
@@ -56,6 +57,10 @@ A third sets how a start opens its URL. `WWW_OPEN` holds the command, split at s
 
 A systemd user unit runs `www --restart` at login. `make install` puts it in `~/.config/systemd/user/` and the package in `/usr/lib/systemd/user/`, both disabled; enable it with `systemctl --user enable www`. It serves from login to logout, and linger stays off.
 The package also ships a system template, `www@.service`, which serves a user's trees from boot, before login, with the capability for port 80. Enable it with `sudo systemctl enable www@<user>`. While either unit runs for a user, the other stands aside, since both would serve the same trees.
+
+## Online repos
+
+The server on your default address also serves 127.31.N.2, where a URL names a repo on a forge, eg `http://127.31.1.2/github.com/junegunn/fzf/`. The first visit fetches it into `~/.cache/www/` while a page shows each step, and www then serves it as it serves a checkout. A path that names no repo, eg `/github.com/junegunn`, lists the repos there. See [online repos](doc/online-repos.md).
 
 ## Sharing
 
@@ -84,7 +89,7 @@ The package grants `/usr/bin/www` one capability, `cap_net_bind_service`, so it 
 
 ## Notes
 
-Each user owns 127.31.N.0/24 with N = uid − 1000 and serves on 127.31.N.1 by default, port 80 or 8080 as above. Uids from 1000 to 1255 fit; others need `--addr`. `-a` takes only loopback addresses; `--share` takes the others.
+Each user owns 127.31.N.0/24 with N = uid − 1000 and serves on 127.31.N.1 by default, port 80 or 8080 as above, and online repos on 127.31.N.2. Uids from 1000 to 1255 fit; others need `--addr`. `-a` takes only loopback addresses; `--share` takes the others.
 The addresses keep users out of each other's way, not out of each other's trees. Loopback is open to every local account, so on a machine shared with other users, they can reach your server. Serve nothing there you would not show them.
 
 URLs start with the served directory's path relative to home, eg `http://127.31.1.1:8080/scratch/github.com/unixfile/webstack/index.md`, so a URL names its tree. A directory outside home uses its absolute path.

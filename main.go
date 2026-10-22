@@ -71,6 +71,7 @@ type config struct {
 	persist bool   // write a persistent lock, so the tree is served after reboot
 	stamp   bool   // show the build time above each page's header
 	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
+	disk    string // the disk for online repos, eg 4G; "" takes defaultDisk
 	help    bool
 	version bool
 	restart bool
@@ -106,6 +107,8 @@ var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnph] [-a ip[:port]] [dir]
                         above each page's header
       --cache size      memory a new server may spend on cached git answers,
                         eg 64M; 0 caches nothing (default 32M)
+      --disk size       disk a new server may fill with online repos, eg 4G;
+                        it drops the repos read longest ago (default 2G)
       --restart         replace every server with one running this binary,
                         serving the same trees, and start one for persistent
                         trees that have none; with -a or --share, only the
@@ -190,15 +193,19 @@ func parseArgs(args []string) (config, error) {
 				}
 				continue
 			}
-			if name == "cache" {
-				v, err := value(&i, "--cache", val)
+			if name == "cache" || name == "disk" {
+				v, err := value(&i, "--"+name, val)
 				if err != nil {
 					return c, err
 				}
 				if _, err := parseSize(v); err != nil {
 					return c, err
 				}
-				c.cache = v
+				if name == "cache" {
+					c.cache = v
+				} else {
+					c.disk = v
+				}
 				continue
 			}
 			p, ok := sw[name]

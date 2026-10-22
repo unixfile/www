@@ -52,19 +52,46 @@ type commit struct {
 // objects. Pathspecs are literal, and no GIT_
 // variable from www's own environment leaks in. git's safe.directory
 // check refuses repos that other users own.
+//
+// In web's cache git may reach a forge, since a repo there is a partial
+// clone whose pages fetch what they show: by webScheme alone, without
+// credentials, a prompt, hooks or the user's and the system's git config.
+// GIT_NO_LAZY_FETCH needs git 2.44; before it protocol.allow=never alone
+// keeps other repos from fetching.
 func git(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	args = append([]string{"-c", "protocol.allow=never", "-c", "core.fsmonitor=false", "-c", "core.quotePath=false", "--no-pager", "--literal-pathspecs"}, args...)
+	return gitProgress(ctx, dir, nil, args...)
+}
+
+// gitProgress is git, and hands each line of git's progress to progress,
+// when set. git rewrites a progress line in place with \r, so each
+// rewrite is a line.
+func gitProgress(ctx context.Context, dir string, progress func(string), args ...string) ([]byte, error) {
+	remote := inCache(dir)
+	pre := []string{"-c", "protocol.allow=never"}
+	if remote {
+		pre = append(pre, "-c", "protocol."+webScheme+".allow=always", "-c", "credential.helper=", "-c", "core.askPass=",
+			"-c", "core.hooksPath="+os.DevNull)
+	}
+	args = append(append(pre, "-c", "core.fsmonitor=false", "-c", "core.quotePath=false", "--no-pager", "--literal-pathspecs"), args...)
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "GIT_") {
+		if !strings.HasPrefix(kv, "GIT_") && !strings.HasPrefix(kv, "SSH_ASKPASS=") {
 			cmd.Env = append(cmd.Env, kv)
 		}
 	}
-	cmd.Env = append(cmd.Env, "GIT_NO_LAZY_FETCH=1", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(cmd.Env, "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
+	if remote {
+		cmd.Env = append(cmd.Env, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull)
+	} else {
+		cmd.Env = append(cmd.Env, "GIT_NO_LAZY_FETCH=1")
+	}
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
+	if progress != nil {
+		cmd.Stderr = &progressWriter{buf: &stderr, line: progress}
+	}
 	if err := cmd.Run(); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return out.Bytes(), errors.New(msg)
@@ -72,6 +99,34 @@ func git(ctx context.Context, dir string, args ...string) ([]byte, error) {
 		return out.Bytes(), fmt.Errorf("git: %w", err)
 	}
 	return out.Bytes(), nil
+}
+
+// progressWriter splits git's stderr at \r and \n and hands each line to
+// line. buf keeps the lines that are not progress, so an error reads as
+// git's complaint alone.
+type progressWriter struct {
+	buf  *bytes.Buffer
+	line func(string)
+	part []byte
+}
+
+var progressLine = regexp.MustCompile(`^(remote: )?[A-Z][a-z]+( [a-z]+)*: +[0-9]+%`)
+
+func (p *progressWriter) Write(b []byte) (int, error) {
+	for _, c := range b {
+		if c != '\r' && c != '\n' {
+			p.part = append(p.part, c)
+			continue
+		}
+		if s := strings.TrimSpace(string(p.part)); s != "" {
+			p.line(s)
+			if !progressLine.MatchString(s) {
+				p.buf.WriteString(s + "\n")
+			}
+		}
+		p.part = p.part[:0]
+	}
+	return len(b), nil
 }
 
 // gitPlace is where git runs for the page at name, and the path it logs.

@@ -218,6 +218,13 @@ pre.diff span.hunk, pre.diff span.meta { color: var(--muted); }
 p.latest { margin-bottom: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 0.6em; color: var(--muted); }
 p.latest a { color: var(--text); }
 pre.error { white-space: pre-wrap; color: var(--danger); }
+/* While git reads a repo, its page names each step git takes and the
+   dots after "reading" keep moving, so a slow clone shows it is alive. */
+pre.steps { white-space: pre-wrap; color: var(--muted); }
+p.reading::after { content: "..."; display: inline-block; vertical-align: bottom; overflow: hidden; width: 0; animation: dots 1.2s steps(4, jump-none) infinite; }
+@keyframes dots { to { width: 3ch; } }
+@media (prefers-reduced-motion: reduce) { p.reading::after { animation: none; width: 3ch; } }
+ul.listing .desc { color: var(--muted); font-size: 0.8em; margin-left: 1em; }
 header .age { color: var(--muted); }
 /* Kill server reaches every tree, so it alone wears the danger colour. */
 header button.kill { background: var(--danger); border-color: var(--danger); color: var(--page); }

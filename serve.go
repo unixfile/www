@@ -307,6 +307,10 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home, o
 	})
 	h.bg.Go(h.loop)
 
+	if ep, ok := webEndpoint(c.ep, os.Getuid()); ok {
+		h.startWeb(c, ep)
+	}
+
 	url := h.origin + t.prefixURL()
 	report(rep, c.ep, url)
 	if err := h.httpd.Serve(ln); !h.halted.Load() {
@@ -358,6 +362,45 @@ type hub struct {
 	// fresh holds the connections that have sent no request yet.
 	fresh   map[net.Conn]bool
 	freshMu sync.Mutex
+	// The web address, when this server serves it.
+	web      *web
+	webLn    net.Listener
+	webHTTPD *http.Server
+	webStop  context.CancelFunc
+}
+
+// startWeb serves the web address ep beside the default one. Where it
+// cannot, the server goes on without it, and the log says why.
+func (h *hub) startWeb(c config, ep netip.AddrPort) {
+	root, err := cacheDir()
+	if err != nil {
+		logErr("E%d: cannot serve online repos: %v", errnoOf(err), err)
+		return
+	}
+	limit := int64(defaultDisk)
+	if c.disk != "" {
+		limit, _ = parseSize(c.disk)
+	}
+	ln, err := net.Listen("tcp", ep.String())
+	if err != nil {
+		logErr("E%d: cannot serve online repos on %s: %v", errnoOf(err), ep, err)
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	w, err := newWeb(ctx, root, limit)
+	if err != nil {
+		cancel()
+		ln.Close()
+		logErr("E%d: cannot serve online repos from %s: %v", errnoOf(err), root, err)
+		return
+	}
+	w.srv.live = newLive()
+	h.web, h.webLn, h.webStop = w, ln, cancel
+	h.webHTTPD = &http.Server{Handler: w.srv.handler(), ReadHeaderTimeout: 10 * time.Second, ConnState: h.track,
+		ErrorLog: log.New(logWriter{}, "", 0)}
+	h.srv.webURL = origin(ep)
+	go h.webHTTPD.Serve(ln)
+	logInfo("serves online repos at %s from %s, within %s", origin(ep), w.root, sizeText(limit))
 }
 
 // track keeps fresh up to date.
@@ -581,6 +624,11 @@ func (h *hub) halt(why string) {
 	}
 	logInfo("server stops: %s", why)
 	h.ln.Close()
+	if h.web != nil {
+		h.webLn.Close()
+		h.webStop()
+		h.web.srv.live.close()
+	}
 	h.reg.unmarkServer()
 	// Live reload streams never end on their own, and Shutdown waits for them.
 	h.srv.live.close()
@@ -595,6 +643,9 @@ func (h *hub) halt(why string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		if h.webHTTPD != nil {
+			h.webHTTPD.Shutdown(ctx)
+		}
 		h.httpd.Shutdown(ctx)
 		close(h.done)
 	}()

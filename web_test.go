@@ -1,0 +1,296 @@
+package main
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"net/http/cgi"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// forge serves the bare repos below its root over git's smart HTTP, as a
+// forge does, with partial clone allowed. api answers other paths, or nil
+// for 404.
+type forge struct {
+	root string
+	host string // host:port, as a URL on the web address names it
+	work map[string]string
+}
+
+func newForge(t *testing.T, api http.Handler) *forge {
+	t.Helper()
+	needGit(t)
+	gitPath, _ := exec.LookPath("git")
+	f := &forge{root: t.TempDir(), work: map[string]string{}}
+	backend := &cgi.Handler{Path: gitPath, Args: []string{"http-backend"},
+		Env: []string{"GIT_PROJECT_ROOT=" + f.root, "GIT_HTTP_EXPORT_ALL=1"}, Stderr: io.Discard}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/info/refs") || strings.HasSuffix(r.URL.Path, "/git-upload-pack") {
+			backend.ServeHTTP(w, r)
+			return
+		}
+		if api != nil {
+			api.ServeHTTP(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	f.host = strings.TrimPrefix(srv.URL, "http://")
+	old := webScheme
+	webScheme = "http"
+	t.Cleanup(func() { webScheme = old })
+	return f
+}
+
+// repo makes the bare repo name with files committed, and returns its
+// commit.
+func (f *forge) repo(t *testing.T, name string, files map[string]string) string {
+	t.Helper()
+	work, ok := f.work[name]
+	if !ok {
+		work = t.TempDir()
+		f.work[name] = work
+		bare := filepath.Join(f.root, filepath.FromSlash(name))
+		for _, args := range [][]string{
+			{"init", "-q", "--bare", "-b", "main", bare},
+			{"-C", bare, "config", "uploadpack.allowFilter", "true"},
+			{"-C", bare, "config", "uploadpack.allowAnySHA1InWant", "true"},
+			{"init", "-q", "-b", "main", work},
+			{"-C", work, "remote", "add", "origin", bare},
+		} {
+			if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+	}
+	for p, body := range files {
+		os.MkdirAll(filepath.Dir(filepath.Join(work, p)), 0o755)
+		os.WriteFile(filepath.Join(work, p), []byte(body), 0o644)
+	}
+	commitAll(t, work, "change "+name)
+	if out, err := exec.Command("git", "-C", work, "push", "-q", "origin", "main").CombinedOutput(); err != nil {
+		t.Fatalf("git push: %v\n%s", err, out)
+	}
+	out, _ := exec.Command("git", "-C", work, "rev-parse", "HEAD").Output()
+	return strings.TrimSpace(string(out))
+}
+
+func testWeb(t *testing.T, limit int64) *web {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	old := cacheRoot
+	w, err := newWeb(ctx, t.TempDir(), limit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cancel()
+		cacheRoot = old
+	})
+	return w
+}
+
+// webGet asks the web address for path.
+func webGet(w *web, path string, hdr ...string) *httptest.ResponseRecorder {
+	return get(w.srv.handler(), path, append([]string{"Host", "127.31.1.2"}, hdr...)...)
+}
+
+// read visits path, which starts reading its repo, and waits for the page.
+func read(t *testing.T, w *web, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := webGet(w, path)
+	for end := time.Now().Add(20 * time.Second); rec.Code == http.StatusAccepted && time.Now().Before(end); {
+		time.Sleep(20 * time.Millisecond)
+		rec = webGet(w, path)
+	}
+	return rec
+}
+
+func TestWebReadsARepoOnTheVisit(t *testing.T) {
+	f := newForge(t, nil)
+	first := f.repo(t, "acct/docs", map[string]string{"README.md": "# Old\n", "guide/a.md": "Guide text\n"})
+	head := f.repo(t, "acct/docs", map[string]string{"README.md": "# New\n"})
+	w := testWeb(t, defaultDisk)
+	path := "/" + f.host + "/acct/docs/guide/a.md"
+
+	rec := webGet(w, path)
+	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), "reading") {
+		t.Fatalf("first visit: %d\n%s", rec.Code, rec.Body)
+	}
+	// A second page of the repo starts a job of its own, and the two
+	// serve one tree.
+	webGet(w, "/"+f.host+"/acct/docs/README.md")
+	read(t, w, "/"+f.host+"/acct/docs/README.md")
+	rec = read(t, w, path)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Guide text") {
+		t.Fatalf("after reading: %d\n%s", rec.Code, rec.Body)
+	}
+	if n := len(w.srv.list()); n != 1 {
+		t.Errorf("%d trees serve one repo", n)
+	}
+	if !strings.Contains(rec.Body.String(), "at "+head[:7]+", fetched ") {
+		t.Errorf("no commit and fetch time in the header:\n%s", rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "Delete lock") {
+		t.Error("a repo on the web address has a Delete lock button")
+	}
+	// The worktree lacks the first commit's blobs; its diff fetches them.
+	rec = webGet(w, "/"+f.host+"/acct/docs/README.md?commit="+first)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "# Old") {
+		t.Errorf("first commit's diff: %d\n%s", rec.Code, rec.Body)
+	}
+	if rec := webGet(w, "/"+f.host+"/acct/docs.git"); rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/"+f.host+"/acct/docs" {
+		t.Errorf(".git: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	if rec := webGet(w, "/"+f.host+"/acct/docs"); rec.Code != http.StatusFound || rec.Header().Get("Location") != "/"+f.host+"/acct/docs/" {
+		t.Errorf("repo without slash: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	if body := webGet(w, "/").Body.String(); !strings.Contains(body, f.host+"/acct/docs/") {
+		t.Errorf("the root does not list the cached repo:\n%s", body)
+	}
+	// A cache deleted under the server is read again.
+	os.RemoveAll(filepath.Join(w.root, f.host))
+	if rec := webGet(w, path); rec.Code != http.StatusAccepted {
+		t.Errorf("after the cache went: %d", rec.Code)
+	}
+	if rec := read(t, w, path); rec.Code != http.StatusOK {
+		t.Errorf("read again: %d\n%s", rec.Code, rec.Body)
+	}
+}
+
+// A visit after webRefresh fetches in the background, and the page moves
+// to the new commit.
+func TestWebRefreshes(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/r", map[string]string{"README.md": "one\n"})
+	w := testWeb(t, defaultDisk)
+	path := "/" + f.host + "/acct/r/README.md"
+	if rec := read(t, w, path); !strings.Contains(rec.Body.String(), "one") {
+		t.Fatalf("first read: %d\n%s", rec.Code, rec.Body)
+	}
+	head := f.repo(t, "acct/r", map[string]string{"README.md": "two\n"})
+	if body := webGet(w, path).Body.String(); !strings.Contains(body, "one") {
+		t.Fatalf("a fresh fetch fetched again:\n%s", body)
+	}
+	r := w.repos[f.host+"/acct/r"]
+	r.mu.Lock()
+	r.fetched, r.tried = time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)
+	old := r.tree.dir
+	r.mu.Unlock()
+	webGet(w, path)
+	var body string
+	for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
+		if body = webGet(w, path).Body.String(); strings.Contains(body, "two") {
+			break
+		}
+	}
+	if !strings.Contains(body, "two") || !strings.Contains(body, "at "+head[:7]) {
+		t.Fatalf("not refreshed:\n%s", body)
+	}
+	if exists(old) {
+		t.Errorf("the old worktree %s is still there", old)
+	}
+}
+
+// Another site cannot make the browser download a repo.
+func TestWebAsksWhenAnotherSiteSends(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
+	w := testWeb(t, defaultDisk)
+	rec := webGet(w, "/"+f.host+"/acct/r/", "Sec-Fetch-Site", "cross-site")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Another site sent you here") {
+		t.Fatalf("cross-site: %d\n%s", rec.Code, rec.Body)
+	}
+	if len(w.jobs) != 0 {
+		t.Error("a cross-site visit started a job")
+	}
+	if rec := webGet(w, "/"+f.host+"/acct/r/", "Sec-Fetch-Site", "same-origin"); rec.Code != http.StatusAccepted {
+		t.Errorf("same-origin: %d", rec.Code)
+	}
+}
+
+// When the cache outgrows its limit, the repo read longest ago goes.
+func TestWebTrimsTheCache(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/a", map[string]string{"README.md": strings.Repeat("a", 1<<16)})
+	f.repo(t, "acct/b", map[string]string{"README.md": strings.Repeat("b", 1<<16)})
+	w := testWeb(t, defaultDisk)
+	read(t, w, "/"+f.host+"/acct/a/")
+	past := time.Now().Add(-time.Hour)
+	os.Chtimes(filepath.Join(w.root, f.host, "acct", "a", ".used"), past, past)
+	w.limit = w.onDisk()[0].size * 3 / 2
+	if rec := read(t, w, "/"+f.host+"/acct/b/"); rec.Code != http.StatusOK {
+		t.Fatalf("b: %d\n%s", rec.Code, rec.Body)
+	}
+	if exists(filepath.Join(w.root, f.host, "acct", "a")) {
+		t.Error("a, read longest ago, is still cached")
+	}
+	if rec := webGet(w, "/"+f.host+"/acct/a/README.md"); rec.Code != http.StatusAccepted {
+		t.Errorf("a after it went: %d, want a new read", rec.Code)
+	}
+	read(t, w, "/"+f.host+"/acct/a/README.md")
+	w.limit = 1
+	f.repo(t, "acct/c", map[string]string{"README.md": "c\n"})
+	rec := read(t, w, "/"+f.host+"/acct/c/")
+	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "over the cache") {
+		t.Errorf("a repo over the limit: %d\n%s", rec.Code, rec.Body)
+	}
+}
+
+// A path that names no repo lists the account's repos: from the forge's
+// API where it answers, else from the cache.
+func TestWebLists(t *testing.T) {
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/users/org/repos" {
+			w.Write([]byte(`[{"full_name":"org/tool","description":"a tool"}]`))
+			return
+		}
+		http.NotFound(w, r)
+	})
+	f := newForge(t, api)
+	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
+	w := testWeb(t, defaultDisk)
+	read(t, w, "/"+f.host+"/acct/r/")
+
+	rec := read(t, w, "/"+f.host+"/org")
+	if body := rec.Body.String(); rec.Code != http.StatusOK || !strings.Contains(body, `href="/`+f.host+`/org/tool/"`) ||
+		!strings.Contains(body, "a tool") || !strings.Contains(body, "the Forgejo API") {
+		t.Errorf("API listing: %d\n%s", rec.Code, body)
+	}
+	rec = read(t, w, "/"+f.host+"/acct")
+	if body := rec.Body.String(); rec.Code != http.StatusOK || !strings.Contains(body, `href="/`+f.host+`/acct/r/"`) ||
+		!strings.Contains(body, "listed by the cache") {
+		t.Errorf("cache listing: %d\n%s", rec.Code, body)
+	}
+	if rec := read(t, w, "/"+f.host+"/nobody"); rec.Code != http.StatusNotFound {
+		t.Errorf("nothing there: %d\n%s", rec.Code, rec.Body)
+	}
+	// A failed clone leaves nothing in the cache. A forge that keeps
+	// repos at one depth clones without a probe.
+	depths[f.host] = 3
+	t.Cleanup(func() { delete(depths, f.host) })
+	if rec := read(t, w, "/"+f.host+"/acct/gone"); rec.Code != http.StatusBadGateway {
+		t.Errorf("no repo: %d\n%s", rec.Code, rec.Body)
+	}
+	if exists(filepath.Join(w.root, f.host, "acct", "gone")) {
+		t.Error("a failed read left its directory")
+	}
+}
+
+func TestWebEndpoint(t *testing.T) {
+	ep, _ := endpointFor("", 1001)
+	if w, ok := webEndpoint(ep, 1001); !ok || w.String() != "127.31.1.2:"+ep.String()[len("127.31.1.1:"):] {
+		t.Errorf("default: %v %v", w, ok)
+	}
+	other, _ := endpointFor("127.31.1.5", 1001)
+	if _, ok := webEndpoint(other, 1001); ok {
+		t.Error("a server on another address serves the web")
+	}
+}

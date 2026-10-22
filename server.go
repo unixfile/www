@@ -69,8 +69,10 @@ type server struct {
 	trees  []*tree
 	stop   func([]*tree, string) // withdraws trees for a cause; set by the hub
 	about  about
-	shared bool  // on an address beyond loopback: it shows the trees and nothing of the machine
-	live   *live // nil in tests that do without live reload
+	shared bool   // on an address beyond loopback: it shows the trees and nothing of the machine
+	live   *live  // nil in tests that do without live reload
+	web    *web   // set on the web address, whose trees are repos in the cache
+	webURL string // the web address's URL, for the index, or ""
 }
 
 // about describes the server for its index: where it listens, since when,
@@ -202,6 +204,7 @@ type tree struct {
 	wd       int         // inotify watch on dir, or -1
 	shared   bool        // served beyond loopback: only what other users could read
 	secret   bool        // mounted under a token, and left off the index
+	web      *webRepo    // the cached repo this tree is a worktree of, on the web address
 }
 
 func newTree(root *os.Root, dir, prefix, label string) *tree {
@@ -315,8 +318,9 @@ func (s *server) handler() http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		w.Write(b)
 	})
-	// A shared server has no buttons: no visitor may stop it.
-	if !s.shared {
+	// A shared server has no buttons: no visitor may stop it. The web
+	// address has none either; its server stops with the default address.
+	if !s.shared && s.web == nil {
 		mux.HandleFunc("POST "+ownPath+"stop", s.handleStop)
 	}
 	mux.HandleFunc("GET "+ownPath+"live", s.handleLive)
@@ -541,6 +545,8 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	}
 	t := s.lookup(r.URL.Path)
 	switch {
+	case s.web != nil:
+		s.web.serve(w, r, t)
 	case t != nil:
 		t.serve(w, r)
 	case s.byPrefix(r.URL.Path+"/") != nil:
@@ -586,6 +592,9 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 				esc(t.prefixURL()), esc(lockPath), segments(t.label), since, esc(t.prefix))
 		}
 		body.WriteString("</table>\n")
+	}
+	if s.webURL != "" {
+		fmt.Fprintf(&body, "<p class=\"own\">Online repos: <a href=\"%s/\">%s/</a></p>\n", esc(s.webURL), esc(strings.TrimPrefix(s.webURL, "http://")))
 	}
 	if others := s.otherTrees(); len(others) > 0 {
 		body.WriteString("<h2 class=\"own\">Other addresses</h2>\n<table class=\"locks own\">\n")
@@ -905,6 +914,7 @@ type page struct {
 	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
 	Shared  bool   // a shared server's page, which has no button
+	NoStop  bool   // a page on the web address, which has no button
 	Live    string // the URL of the page's live reload stream, or ""
 	Built   *stamp // when the binary was built, above the header, with --stamp; none on a share
 }
@@ -926,11 +936,20 @@ func (t *tree) rootCrumb() crumb {
 // part is plain.
 func (t *tree) crumbs(name string) []crumb {
 	root := t.rootCrumb()
+	out := []crumb{indexCrumb}
+	// A repo on the web address links its host and account, which list
+	// their repos.
+	if t.web != nil {
+		segs := strings.Split(t.web.key, "/")
+		for i := range segs[:len(segs)-1] {
+			out = append(out, crumb{Label: segs[i], Href: (&url.URL{Path: "/" + strings.Join(segs[:i+1], "/") + "/"}).String()})
+		}
+	}
 	if name == "." {
-		return []crumb{indexCrumb, root}
+		return append(out, root)
 	}
 	root.Href = t.prefixURL()
-	out := []crumb{indexCrumb, root}
+	out = append(out, root)
 	parts := strings.Split(name, "/")
 	for i, p := range parts {
 		c := crumb{Label: p}
@@ -967,6 +986,9 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 // tree, since its directory may not exist, and has no path to copy.
 func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Tree, p.Shared, p.Search = t.prefix, t.shared, t.prefixURL()
+	if t.web != nil {
+		p.NoStop, p.Status = true, t.web.status()
+	}
 	if status == http.StatusOK {
 		p.Search = searchURL(r.URL.Path)
 		if !t.shared {
