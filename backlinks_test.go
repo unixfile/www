@@ -23,6 +23,7 @@ func TestBacklinks(t *testing.T) {
 	write("d/e.md", "[ref][r]\n\n[r]: ../index.md\n")
 	write("d/f.md", "[elsewhere](../a/b.go) and index.md in prose\n")
 	write(".git/g.md", "[hidden](../index.md)\n")
+	write("w.md", "[[index]]\n")
 	links := func(name string) []string {
 		t.Helper()
 		w := get(s.handler(), name+"?backlinks")
@@ -50,7 +51,7 @@ func TestBacklinks(t *testing.T) {
 			}
 		}
 	}
-	eq(links("/index.md"), "/a/c.md", "/d/e.md")
+	eq(links("/index.md"), "/a/c.md", "/d/e.md", "/w.md")
 	eq(links("/a/b.go"), "/d/f.md", "/index.md")
 	eq(links("/a/c.md"))
 
@@ -59,5 +60,5 @@ func TestBacklinks(t *testing.T) {
 	os.Chtimes(filepath.Join(dir, "d/e.md"), time.Now(), time.Now().Add(time.Second))
 	os.Remove(filepath.Join(dir, "a/c.md"))
 	write("h.md", "[i](index.md)\n")
-	eq(links("/index.md"), "/h.md")
+	eq(links("/index.md"), "/h.md", "/w.md")
 }

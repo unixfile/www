@@ -115,3 +115,31 @@ func TestGraphFence(t *testing.T) {
 		t.Errorf("bad graph not shown as code with a reason: %s", s)
 	}
 }
+
+// A wiki link resolves as a relative link does, takes a label and a
+// heading, is marked broken when its target is missing, and leaves
+// CommonMark's own links alone.
+func TestWikiLinks(t *testing.T) {
+	missing := func(dest string) bool { return dest == "gone.md" }
+	for src, want := range map[string]string{
+		"[[name]]":                 `<a href="name.md">name</a>`,
+		"[[file.md]]":              `<a href="file.md">file.md</a>`,
+		"[[sub/a b|the label]]":    `<a href="sub/a%20b.md">the label</a>`,
+		"[[name#Two Words]]":       `<a href="name.md#two-words">name#Two Words</a>`,
+		"[[#Here]]":                `<a href="#here">#Here</a>`,
+		"[[a:b]]":                  `<a href="./a:b.md">a:b</a>`,
+		"[[gone]]":                 `<a href="gone.md" class="broken" title="missing: gone.md">gone</a>`,
+		"[[x]](y.md)":              `<a href="y.md">[x]</a>`,
+		"[[]] and [[a]b]]":         `<p>[[]] and [[a]b]]</p>`,
+		"`[[code]]`":               `<code>[[code]]</code>`,
+		"see [[a]] and [[b|B]] ok": `see <a href="a.md">a</a> and <a href="b.md">B</a> ok`,
+	} {
+		h, err := renderMarkdown([]byte(src), missing)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(h), want) {
+			t.Errorf("%s: want %s in %s", src, want, h)
+		}
+	}
+}

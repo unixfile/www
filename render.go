@@ -26,11 +26,11 @@ import (
 
 // markdown renders docs as CommonMark with GitHub's extensions: lines join
 // into paragraphs, bare URLs become links and a list may follow a line
-// with no blank line between. Raw HTML passes through; the
+// with no blank line between. Wiki links, [[name]], become links too. Raw HTML passes through; the
 // Content-Security-Policy keeps its scripts from running.
 var markdown = goldmark.New(
 	goldmark.WithExtensions(extension.GFM, extension.Footnote, extension.DefinitionList, extension.Typographer),
-	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+	goldmark.WithParserOptions(parser.WithAutoHeadingID(), parser.WithInlineParsers(util.Prioritized(wikiLinkParser{}, 199))),
 	goldmark.WithRendererOptions(
 		html.WithUnsafe(),
 		// The lowest priority registers last and wins, so this replaces

@@ -131,7 +131,7 @@ func (t *tree) backlinks(ctx context.Context, name string) backlinks {
 func linkTargets(p string, src []byte) []string {
 	// Most of a walk's time goes to parsing, so a doc without a link's
 	// brackets is not parsed.
-	if !bytes.Contains(src, []byte("](")) && !bytes.Contains(src, []byte("]:")) {
+	if !bytes.Contains(src, []byte("](")) && !bytes.Contains(src, []byte("]:")) && !bytes.Contains(src, []byte("[[")) {
 		return nil
 	}
 	var out []string
