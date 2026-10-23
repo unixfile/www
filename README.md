@@ -83,6 +83,8 @@ www needs git.
 
 To try a change without installing it, `make run` builds `build/www` and serves this directory in the foreground on port 8080 with `--stamp`, beside an installed server on port 80. Stop it with Ctrl-C before the next run; a run that finds a server on 8080 hands its tree to that server, which keeps the old code.
 
+`make bench` times what a reader waits for: a search across a generated tree of 4,000 files and 24 MB, and a code page's first view per language, lexing alone and the whole page. `BENCH` picks benchmarks by pattern and `COUNT` repeats them, eg `make bench BENCH=Search COUNT=10` for benchstat. Python, JavaScript and shell are timed on argparse.py, jquery.js and bash_completion from Debian's packages and skipped where those are not installed. Warm pages have no benchmark, since `TestPageBudget` in `make test` holds them under 5 ms.
+
 The program's name lives in the file `WORKING_NAME`, since www is a working name until a final one is chosen. The binary, its paths, environment variables, journal tag and URLs, the Makefile and the Debian package all take it from there, and a test fails on any other copy outside prose and `go.mod`.
 
 The package grants `/usr/bin/www` one capability, `cap_net_bind_service`, so it can bind port 80 while running as the user. `getcap /usr/bin/www` shows it. With it www serves on port 80 and URLs carry no port; without it, as after `make install`, the port is 8080. www also takes port 80 where the machine lets every user bind low ports.

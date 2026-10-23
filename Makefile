@@ -1,4 +1,4 @@
-.PHONY: all build run test clean install uninstall deb install-deb uninstall-deb
+.PHONY: all build run test bench clean install uninstall deb install-deb uninstall-deb
 
 # WORKING_NAME holds the program's name, provisional until a final one is
 # chosen. The binary, the package and the paths below take it.
@@ -15,6 +15,14 @@ run: build
 test:
 	go vet ./...
 	go test ./...
+
+# bench runs the benchmarks in bench_test.go. BENCH picks them by pattern
+# and COUNT repeats each, eg COUNT=10 for benchstat.
+BENCH ?= .
+COUNT ?= 1
+
+bench:
+	go test -run '^$$' -bench '$(BENCH)' -benchmem -count $(COUNT) .
 
 clean:
 	rm -rf build
