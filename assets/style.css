@@ -303,6 +303,10 @@ p.unfound { color: var(--muted); font-size: 0.8em; }
 /* The entry or match the keys act on shows a quiet ring, as does a link
    Tab reached. */
 .sel, ul.listing a:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
+/* Technical background, what a page says about its data rather than the
+   data itself, is set at code size: half the body, never under 11px. It
+   follows the rules above, which set these at 0.8em. */
+p.latest, ol.log summary > .own, div.commit > p.own, div.found p.note { font-size: max(0.5em, 11px); }
 
 /* the line a #L42 link points at */
 pre > code.sourceCode > span:target { background: var(--target); }
