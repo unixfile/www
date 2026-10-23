@@ -92,6 +92,7 @@ func testWeb(t *testing.T, limit int64) *web {
 	}
 	t.Cleanup(func() {
 		cancel()
+		w.wg.Wait()
 		cacheRoot = old
 	})
 	return w

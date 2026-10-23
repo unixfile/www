@@ -52,6 +52,10 @@ type web struct {
 	lists  map[string]*listing // by the URL path of a host or account
 	busy   map[string]bool     // keys being cloned or fetched, which trim leaves
 	kicked time.Time
+
+	// wg counts the goroutines web starts, so a test can wait for them
+	// before it changes the globals they read.
+	wg sync.WaitGroup
 }
 
 // webScheme is how web reaches forges. Tests serve repos over http.
@@ -253,7 +257,7 @@ func (w *web) visit(r *webRepo) {
 	}
 	if !r.fetching && time.Since(r.fetched) > webRefresh && time.Since(r.tried) > webRefresh {
 		r.fetching, r.tried = true, time.Now()
-		go w.refresh(r)
+		w.wg.Go(func() { w.refresh(r) })
 	}
 }
 
@@ -342,8 +346,8 @@ func (w *web) show(r *webRepo, wt string) error {
 		old.root.Close()
 	}
 	logInfo("serves %s at %s from %s", r.key, filepath.Base(wt), wt)
-	go t.warm()
-	go t.warmLinks()
+	w.wg.Go(t.warm)
+	w.wg.Go(t.warmLinks)
 	return nil
 }
 
@@ -364,7 +368,7 @@ func (w *web) start(key string, segs []string) *webJob {
 	}
 	j := &webJob{urlPath: "/" + key, started: time.Now()}
 	w.jobs[key] = j
-	go w.run(j, key, segs)
+	w.wg.Go(func() { w.run(j, key, segs) })
 	return j
 }
 
