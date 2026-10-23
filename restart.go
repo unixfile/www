@@ -20,7 +20,8 @@ import (
 // else every server, with one running the current binary and serving the
 // same trees, as --list and --kill pick their servers. An address with no
 // server but with persistent locks in its registry gets a server again,
-// which is how trees come back after a reboot.
+// which is how trees come back after a reboot. With --stamp, the new
+// servers show the build stamp.
 func restart(c config) int {
 	eps, err := endpoints()
 	if err != nil {
@@ -35,12 +36,12 @@ func restart(c config) int {
 		pid, trees, err := servedTrees(ep)
 		if errors.Is(err, syscall.ESRCH) {
 			if kept := persistedTrees(ep); len(kept) > 0 {
-				err = startTrees(ep, kept)
+				err = startTrees(ep, kept, c.stamp)
 			} else if !named {
 				continue
 			}
 		} else if err == nil {
-			err = restartServer(ep, pid, trees)
+			err = restartServer(ep, pid, trees, c.stamp)
 		}
 		if err != nil && code == 0 {
 			code = failNow(errnoOf(err), err.Error())
@@ -55,7 +56,7 @@ func restart(c config) int {
 // SIGTERM, waits for its locks to go and starts each tree again. A binary
 // that could not bind the server's port leaves the server alone, since
 // stopping it would drop its trees.
-func restartServer(ep netip.AddrPort, pid int, trees []servedTree) error {
+func restartServer(ep netip.AddrPort, pid int, trees []servedTree, stamp bool) error {
 	if ep.Port() < 1024 && !lowPortOK() {
 		return &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
 			", so the server on " + ep.String() + " keeps its old one. Run the installed package's " + progName + ", which holds cap_net_bind_service"}
@@ -63,12 +64,13 @@ func restartServer(ep netip.AddrPort, pid int, trees []servedTree) error {
 	if err := stopServer(ep, pid, trees); err != nil {
 		return err
 	}
-	return startTrees(ep, trees)
+	return startTrees(ep, trees, stamp)
 }
 
 // startTrees serves each tree on ep through this binary, as a start from
-// the command line would, persistent ones with --persist.
-func startTrees(ep netip.AddrPort, trees []servedTree) error {
+// the command line would, persistent ones with --persist. The first start
+// runs the server, so --stamp reaches it.
+func startTrees(ep netip.AddrPort, trees []servedTree, stamp bool) error {
 	if ep.Port() < 1024 && !lowPortOK() {
 		return &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
 			", so it cannot serve " + ep.String() + ". Run the installed package's " + progName + ", which holds cap_net_bind_service"}
@@ -90,6 +92,9 @@ func startTrees(ep netip.AddrPort, trees []servedTree) error {
 		}
 		if t.persist {
 			args = append(args, "--persist")
+		}
+		if stamp {
+			args = append(args, "--stamp")
 		}
 		cmd := exec.Command(exe, append(args, "--", t.dir)...)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr

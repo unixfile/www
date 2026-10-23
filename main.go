@@ -104,7 +104,8 @@ var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnph] [-a ip[:port]] [dir]
                         next server on its address or by --restart
       --stamp           show the binary's build time, the seconds since, its
                         commit and the page's render time, small and faint,
-                        above each page's header
+                        above each page's header; with --restart, on the
+                        new servers
       --cache size      memory a new server may spend on cached git answers,
                         eg 64M; 0 caches nothing (default 32M)
       --disk size       disk a new server may fill with online repos, eg 4G;

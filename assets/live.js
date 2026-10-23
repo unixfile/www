@@ -1,9 +1,13 @@
 (() => {
 	let url = document.currentScript.dataset.live;
 	let es = null;
-	// A page goes down with its server: a stream lost for three seconds
-	// reloads it, and the browser says the server is gone. A restart's new
-	// server answers within a second or two and sends reload itself.
+	// A page outlives its server. A stream lost for three seconds puts a
+	// line over the page that says the server is gone and since when, and
+	// the stream tries again each second. A server that answers again
+	// sends reload when it is a new one, eg after make run or --restart,
+	// and the page takes the new version; a line then says a new server
+	// answered and fades. A restart's new server answers within a second
+	// or two, before the gone line shows.
 	let lost = null;
 	const found = () => {
 		clearTimeout(lost);
@@ -17,11 +21,44 @@
 		} else if (!es) {
 			es = new EventSource(url);
 			es.onmessage = () => (searching() ? (pending = true) : update());
-			es.onopen = found;
+			es.onopen = () => {
+				found();
+				const gone = document.querySelector("p.conn:not(.fade)");
+				if (gone) gone.remove();
+			};
 			es.onerror = () => {
-				if (!lost) lost = setTimeout(reload, 3000);
+				if (!lost) lost = setTimeout(() => say("server gone since " + new Date().toTimeString().slice(0, 8) + ", waiting for it", true), 3000);
+				// The browser gives up on a stream that met an error page,
+				// so a new one takes its place.
+				if (es && es.readyState === EventSource.CLOSED) {
+					es = null;
+					setTimeout(sync, 1000);
+				}
 			};
 		}
+	};
+	// say shows text in the line over the page, kept until a server
+	// answers or fading.
+	const say = (text, keep) => {
+		const old = document.querySelector("p.conn");
+		if (old) old.remove();
+		const p = document.createElement("p");
+		p.className = "own conn" + (keep ? "" : " fade");
+		p.textContent = text;
+		if (!keep) p.addEventListener("animationend", () => p.remove());
+		document.body.append(p);
+	};
+	// Each server names itself in the stream's URL. A tab that last saw
+	// another says so, whether a reload or a click brought it here.
+	const serverKey = "server";
+	const seeServer = () => {
+		const id = (new URL(url, location.href).searchParams.get("v") || "").split(".")[0];
+		let last = null;
+		try {
+			last = sessionStorage.getItem(serverKey);
+			sessionStorage.setItem(serverKey, id);
+		} catch {}
+		if (last && id && last !== id) say("new server", false);
 	};
 
 	// A highlight, not focus, marks the entry the keys act on, since the
@@ -108,6 +145,7 @@
 				if (held) hold();
 				backlinks();
 				url = live.dataset.live;
+				seeServer();
 				if (es) es.close();
 				es = null;
 				sync();
@@ -465,6 +503,7 @@
 		main.append(h, ul);
 	};
 	document.addEventListener("DOMContentLoaded", () => {
+		seeServer();
 		visit();
 		recentIndex();
 		backlinks();

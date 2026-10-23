@@ -303,6 +303,13 @@ p.unfound { color: var(--muted); font-size: 0.8em; }
 /* The entry or match the keys act on shows a quiet ring, as does a link
    Tab reached. */
 .sel, ul.listing a:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
+/* The line that says the server is gone floats over the top of the page,
+   so nothing moves, and stays until a server answers. The one that says
+   a new server answered fades over three seconds. */
+p.conn { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 1; margin: 0; padding: 0.2em 0.8em;
+  background: var(--target); color: var(--text); font-size: 0.6em; white-space: nowrap; }
+p.conn.fade { animation: conn 3s ease-in forwards; }
+@keyframes conn { from { opacity: 1; } to { opacity: 0; } }
 /* Technical background, what a page says about its data rather than the
    data itself, is set at code size: half the body, never under 11px. It
    follows the rules above, which set these at 0.8em. */
