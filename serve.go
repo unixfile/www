@@ -499,6 +499,7 @@ func (h *hub) adopt(lockPath, link, token string) (*tree, error) {
 	h.srv.add(t)
 	logInfo("serves %s at %s", dir, h.where(t))
 	go t.warm()
+	go t.warmLinks()
 	return t, nil
 }
 

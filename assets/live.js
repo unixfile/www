@@ -106,6 +106,7 @@
 				scrollTo(x, y);
 				sel = null;
 				if (held) hold();
+				backlinks();
 				url = live.dataset.live;
 				if (es) es.close();
 				es = null;
@@ -271,8 +272,10 @@
 				// lies deeper dimmed below; a filtered page dims all of it.
 				const near = inPlace ? null : list(false);
 				const far = list(true);
+				const recents = recentMatching(q);
+				const shown = new Set(recents);
 				const add = (h, label, text) => {
-					if (own(h)) return;
+					if (own(h) || (!h.line && shown.has(new URL(h.href, location.href).pathname))) return;
 					const li = document.createElement("li");
 					const a = document.createElement("a");
 					a.href = h.href;
@@ -296,7 +299,24 @@
 					p.textContent = text;
 					results.append(p);
 				};
-				const any = (near ? near.children.length : 0) + far.children.length;
+				// Pages the reader opened that match lead, from any tree.
+				const recent = list(false);
+				recent.classList.add("recent");
+				for (const p of recents) {
+					const li = document.createElement("li");
+					const a = document.createElement("a");
+					a.href = p;
+					a.textContent = recentLabel(p);
+					li.append(a);
+					recent.append(li);
+				}
+				if (recent.children.length) {
+					const p = document.createElement("p");
+					p.className = "note";
+					p.textContent = "recent";
+					results.prepend(p, recent);
+				}
+				const any = recent.children.length + (near ? near.children.length : 0) + far.children.length;
 				if (near && near.children.length) results.append(near);
 				else if (near && any) line("unfound", "nothing in this directory itself");
 				if (far.children.length) results.append(far);
@@ -332,6 +352,122 @@
 		if (!e.target.matches("input.search")) return;
 		clearTimeout(timer);
 		timer = setTimeout(runSearch, 120);
+	});
+
+	// Below a doc, the docs that link to it. The server walks the tree for
+	// them, which can take longer than the page itself, so they arrive
+	// after it, and again after each update, which replaces the page.
+	const backlinks = () => {
+		if (document.body.className !== "doc") return;
+		fetch(location.pathname + "?backlinks", { cache: "no-store" })
+			.then((r) => (r.ok ? r.json() : Promise.reject()))
+			.then((res) => {
+				const main = document.querySelector("main");
+				if (!main || document.body.className !== "doc") return;
+				const old = main.querySelector(":scope > div.backlinks");
+				if (old) old.remove();
+				if (!res.links.length) return;
+				const div = document.createElement("div");
+				div.className = "backlinks own";
+				const h = document.createElement("h2");
+				h.className = "own";
+				h.textContent = "linked from";
+				const ul = document.createElement("ul");
+				for (const l of res.links) {
+					const li = document.createElement("li");
+					const a = document.createElement("a");
+					a.href = l.href;
+					a.textContent = l.path;
+					li.append(a);
+					ul.append(li);
+				}
+				div.append(h, ul);
+				main.append(div);
+				if (searching() && filters()) filterPage(box().value.trim());
+			})
+			.catch(() => {});
+	};
+
+	// The pages a reader opened live in the browser's storage for this
+	// origin, never on the server, so each viewer of a share sees only
+	// what that viewer opened. Each entry counts its visits and keeps the
+	// last; the score weighs both, as zoxide does. A reload is no visit.
+	const recentKey = "recent";
+	const maxRecent = 300;
+	const readRecent = () => {
+		try {
+			const list = JSON.parse(localStorage.getItem(recentKey));
+			return Array.isArray(list) ? list : [];
+		} catch {
+			return [];
+		}
+	};
+	const score = (e, now) => {
+		const age = now - e.t;
+		return e.n * (age < 3600e3 ? 4 : age < 86400e3 ? 2 : age < 7 * 86400e3 ? 0.5 : 0.25);
+	};
+	const recentPaths = () => {
+		const now = Date.now();
+		return readRecent()
+			.sort((a, b) => score(b, now) - score(a, now))
+			.map((e) => e.p);
+	};
+	const recentLabel = (p) => {
+		try {
+			return decodeURIComponent(p).replace(/^\//, "");
+		} catch {
+			return p;
+		}
+	};
+	// recentMatching lists the five best pages whose path holds every word
+	// of q, without this page.
+	const recentMatching = (q) => {
+		const words = q.toLowerCase().split(/\s+/).filter((w) => w);
+		return recentPaths()
+			.filter((p) => p !== location.pathname && words.every((w) => recentLabel(p).toLowerCase().includes(w)))
+			.slice(0, 5);
+	};
+	const visit = () => {
+		if (!["doc", "code", "dir"].includes(document.body.className)) return;
+		const nav = performance.getEntriesByType("navigation")[0];
+		if (nav && nav.type === "reload") return;
+		const now = Date.now();
+		const list = readRecent();
+		const e = list.find((e) => e.p === location.pathname);
+		if (e) {
+			e.n++;
+			e.t = now;
+		} else list.push({ p: location.pathname, n: 1, t: now });
+		list.sort((a, b) => score(b, now) - score(a, now));
+		try {
+			localStorage.setItem(recentKey, JSON.stringify(list.slice(0, maxRecent)));
+		} catch {}
+	};
+	// The index lists the best 20 below the trees, where the arrows walk
+	// them with the trees.
+	const recentIndex = () => {
+		const main = document.querySelector("main");
+		const paths = recentPaths().slice(0, 20);
+		if (document.body.className !== "index" || !main || !paths.length) return;
+		const h = document.createElement("h2");
+		h.className = "own";
+		h.textContent = "recent";
+		const ul = document.createElement("ul");
+		ul.className = "listing recent";
+		for (const p of paths) {
+			const li = document.createElement("li");
+			const a = document.createElement("a");
+			a.href = p;
+			a.textContent = recentLabel(p);
+			li.append(a);
+			ul.append(li);
+		}
+		main.append(h, ul);
+	};
+	document.addEventListener("DOMContentLoaded", () => {
+		visit();
+		recentIndex();
+		backlinks();
 	});
 
 	// The build stamp counts the seconds since the binary was built. It is

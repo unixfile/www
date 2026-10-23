@@ -294,6 +294,11 @@ pre.filtering > code.sourceCode > span { display: block; white-space: pre; }
 pre.numberSource.filtering code > span > a:first-child::before { content: attr(data-n); }
 ::highlight(search) { background-color: var(--target); }
 div.found ul.wider { opacity: 0.6; margin-top: 1.4em; }
+div.found p.note:first-child { margin-top: 0; }
+div.found ul.recent { margin-bottom: 1.4em; }
+/* Below a doc, the docs that link to it, in the program's quiet voice. */
+div.backlinks ul { list-style: none; padding: 0; text-align: left; font-size: 0.8em; }
+div.backlinks li { margin: 0.15em 0; overflow-wrap: anywhere; }
 p.unfound { color: var(--muted); font-size: 0.8em; }
 /* The entry or match the keys act on shows a quiet ring, as does a link
    Tab reached. */

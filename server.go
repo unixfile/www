@@ -205,6 +205,7 @@ type tree struct {
 	shared   bool        // served beyond loopback: only what other users could read
 	secret   bool        // mounted under a token, and left off the index
 	web      *webRepo    // the cached repo this tree is a worktree of, on the web address
+	linked   linkIndex   // the relative links of each doc, for ?backlinks
 }
 
 func newTree(root *os.Root, dir, prefix, label string) *tree {
@@ -698,6 +699,10 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if q, ok := r.URL.Query()["search"]; ok && info.IsDir() {
 		t.serveSearch(w, r, name, q[0])
+		return
+	}
+	if _, ok := r.URL.Query()["backlinks"]; ok && !info.IsDir() {
+		t.serveBacklinks(w, r, name)
 		return
 	}
 	if _, log := r.URL.Query()["log"]; log {

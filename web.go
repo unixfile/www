@@ -343,6 +343,7 @@ func (w *web) show(r *webRepo, wt string) error {
 	}
 	logInfo("serves %s at %s from %s", r.key, filepath.Base(wt), wt)
 	go t.warm()
+	go t.warmLinks()
 	return nil
 }
 
