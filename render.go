@@ -141,7 +141,7 @@ func renderFence(w util.BufWriter, src []byte, node ast.Node, entering bool) (as
 		w.WriteString("</code></pre>\n")
 		return ast.WalkSkipChildren, nil
 	}
-	highlight(w, lexer, code.String(), false)
+	highlight(w, lexer, code.String(), false, false)
 	w.WriteString("\n")
 	return ast.WalkSkipChildren, nil
 }
@@ -195,19 +195,27 @@ func warmLexers() {
 // highlight writes code in pandoc's markup with pandoc's short classes, so
 // the stylesheet's colours apply unchanged. Chroma only lexes. Numbered
 // lines carry the ids GitHub uses, so main.go#L42 lands on line 42.
-// Escaping keeps file content from forging an id.
-func highlight(w io.Writer, lexer chroma.Lexer, code string, numbered bool) {
+// Escaping keeps file content from forging an id. Scoped lines, which
+// must be numbered, draw each block of code as a box behind it.
+func highlight(w io.Writer, lexer chroma.Lexer, code string, numbered, scoped bool) {
 	lang := langName(lexer)
-	pre := "sourceCode " + lang
-	if numbered {
-		pre = "sourceCode numberSource " + lang + " numberLines"
-	}
-	io.WriteString(w, `<div class="sourceCode"><pre class="`+strings.Join(strings.Fields(pre), " ")+`"><code class="`+strings.TrimSpace("sourceCode "+lang)+`">`)
 	lines := chroma.SplitTokensIntoLines(tokenise(lexer, code))
 	// A final newline ends the last line; it does not start another.
 	if len(lines) > 0 && lineText(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
+	var scopes []scope
+	if numbered && scoped {
+		scopes = findScopes(lines, lang == "python")
+	}
+	pre := "sourceCode " + lang
+	if numbered {
+		pre = "sourceCode numberSource " + lang + " numberLines"
+	}
+	if len(scopes) > 0 {
+		pre += " scopes"
+	}
+	io.WriteString(w, `<div class="sourceCode"><pre class="`+strings.Join(strings.Fields(pre), " ")+`"><code class="`+strings.TrimSpace("sourceCode "+lang)+`">`)
 	for i, line := range lines {
 		if i > 0 {
 			io.WriteString(w, "\n")
@@ -215,6 +223,12 @@ func highlight(w io.Writer, lexer chroma.Lexer, code string, numbered bool) {
 		if numbered {
 			id := "L" + strconv.Itoa(i+1)
 			io.WriteString(w, `<span id="`+id+`"><a href="#`+id+`"></a>`)
+			n := 0
+			for n < len(scopes) && scopes[n].first == i {
+				n++
+			}
+			writeScopes(w, scopes[:n])
+			scopes = scopes[n:]
 		} else {
 			io.WriteString(w, "<span>")
 		}
@@ -231,14 +245,14 @@ func highlight(w io.Writer, lexer chroma.Lexer, code string, numbered bool) {
 var codeCache = newCache(16 << 20)
 
 // highlightPage is highlight for a code page, through codeCache.
-func highlightPage(lexer chroma.Lexer, b []byte) string {
+func highlightPage(lexer chroma.Lexer, b []byte, scoped bool) string {
 	sum := sha256.Sum256(b)
-	key := langName(lexer) + "\x00" + string(sum[:])
+	key := langName(lexer) + "\x00" + strconv.FormatBool(scoped) + "\x00" + string(sum[:])
 	if h, ok := codeCache.get(key); ok {
 		return h.(string)
 	}
 	var out strings.Builder
-	highlight(&out, lexer, string(b), true)
+	highlight(&out, lexer, string(b), true, scoped)
 	h := out.String()
 	codeCache.put(key, h, int64(len(h)))
 	return h

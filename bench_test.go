@@ -61,7 +61,8 @@ func BenchmarkSearch(b *testing.B) {
 }
 
 // BenchmarkCodePage times a code page's first view per language: lex
-// alone, then the whole page, whose difference is the page writer. Go and
+// alone, then the whole page, whose difference is the page writer, and
+// the page without scopes, whose difference is the scope boxes. Go and
 // CSS come from this repo, CSS through chroma; Python, JavaScript and
 // shell from Debian's packages, the files the README times, skipped where
 // they are not installed.
@@ -88,14 +89,16 @@ func BenchmarkCodePage(b *testing.B) {
 				}
 				perLine(b)
 			})
-			b.Run("page", func(b *testing.B) {
-				b.ReportAllocs()
-				for b.Loop() {
-					var out strings.Builder
-					highlight(&out, lexer, code, true)
-				}
-				perLine(b)
-			})
+			for _, view := range []string{"page", "flat"} {
+				b.Run(view, func(b *testing.B) {
+					b.ReportAllocs()
+					for b.Loop() {
+						var out strings.Builder
+						highlight(&out, lexer, code, true, view == "page")
+					}
+					perLine(b)
+				})
+			}
 		})
 	}
 }

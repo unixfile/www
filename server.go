@@ -774,7 +774,8 @@ func (t *tree) missing(name string) func(string) bool {
 }
 
 // serveCode shows a text file as a highlighted code page with numbered,
-// linkable lines. Binary files go raw.
+// linkable lines, each block of code drawn as a box unless ?flat asks for
+// plain lines. Binary files go raw.
 func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
 	b, err := fs.ReadFile(t.fsys, name)
 	if err != nil {
@@ -787,8 +788,13 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 	}
 	var body strings.Builder
 	body.WriteString(t.logLine(r.Context(), name))
-	body.WriteString(highlightPage(codeLexer(name), b))
-	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String()), Raw: true})
+	_, flat := r.URL.Query()["flat"]
+	body.WriteString(highlightPage(codeLexer(name), b, !flat))
+	view := "flat"
+	if flat {
+		view = "scopes"
+	}
+	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String()), Raw: true, View: view})
 }
 
 // serveRaw sends the file itself. Text goes as plain text, so a stray .html
@@ -912,6 +918,7 @@ type page struct {
 	Kind    string
 	Body    template.HTML
 	Raw     bool
+	View    string       // on a code page, the other view the header links: "flat" or "scopes"
 	Tree    string       // prefix the stop button withdraws, or "" for every tree
 	Search  string       // the tree's URL, which answers ?search=, or "" off a tree
 	Path    string       // the page's file or directory on disk, which the copy button copies; "" on a share or a failed page

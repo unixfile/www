@@ -14,6 +14,9 @@
   --faint: #b8b8b8;
   --added: #e4f2e4;
   --removed: #f8e6e2;
+  --shadow: #a8a8a8;
+  --light: #ffffff;
+  --sunk: rgb(0 0 0 / 2.5%);
 }
 /* The dark palette, a draft by the model for the user to adjust. Text is
    light grey on near black, not white on black, so a long read does not
@@ -30,6 +33,9 @@
     --faint: #555555;
     --added: #1f3322;
     --removed: #3b2420;
+    --shadow: #050505;
+    --light: #3a3a3a;
+    --sunk: rgb(0 0 0 / 14%);
   }
 }
 
@@ -347,6 +353,30 @@ pre.numberSource code > span > a:first-child::before
     color: var(--gutter);
   }
 pre.numberSource { margin-left: 3em; border-left: 1px solid var(--gutter);  padding-left: 4px; }
+/* Scopes: each block of code is a sunken box behind its text, like a
+   pressed Windows 3.1 button: shadow above and left, light below and
+   right. render.go places each box in its first line, after the line
+   number, and sizes it in cells and rows, so the boxes take no room and
+   no character moves. A box spans half a cell either side of its text.
+   Boxes nest without limit; deeper ones fade, so the code stays readable.
+   A row is the pre's line height, 1.35em; a line's span sits 0.05em
+   below its row's top. Browsers round each row's height, so a box over
+   hundreds of rows can end a pixel or two past its last line; the
+   scrolling div around the pre clips that rather than grow a scroll bar. */
+pre.scopes { isolation: isolate; }
+div.sourceCode:has(> pre.scopes) { overflow-y: hidden; }
+pre.scopes i.scope {
+  position: absolute; top: 0; z-index: -1;
+  margin-left: calc(var(--c) * 1ch - 0.5ch);
+  width: calc((var(--w) + 1) * 1ch);
+  height: calc(var(--r) * 1.35em - 0.1em);
+  box-sizing: border-box;
+  border: 1px solid; border-color: var(--shadow) var(--light) var(--light) var(--shadow);
+  background: var(--sunk);
+  opacity: max(0.3, 1 - (var(--d) - 1) * 0.15);
+  pointer-events: none;
+}
+pre.filtering i.scope { display: none; }
 div.sourceCode
   {   }
 @media screen {

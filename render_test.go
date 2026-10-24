@@ -26,7 +26,7 @@ func TestFences(t *testing.T) {
 // file content cannot forge a line id.
 func TestCodeLines(t *testing.T) {
 	var b strings.Builder
-	highlight(&b, codeLexer("x.txt"), "a\n\"<span id=\"L9\">\n\n", true)
+	highlight(&b, codeLexer("x.txt"), "a\n\"<span id=\"L9\">\n\n", true, false)
 	out := b.String()
 	if n := strings.Count(out, `<span id="L`); n != 3 {
 		t.Errorf("%d numbered lines, want 3: %s", n, out)
@@ -67,7 +67,7 @@ func TestGoTokens(t *testing.T) {
 		t.Fatalf("text not preserved:\n%q\n%q", text.String(), src)
 	}
 	var b strings.Builder
-	highlight(&b, codeLexer("a.go"), src, false)
+	highlight(&b, codeLexer("a.go"), src, false, false)
 	for _, want := range []string{`<span class="pp">//go:embed x</span>`, `<span class="kw">func</span> <span class="fu">F</span>`,
 		`<span class="dt">string</span>`, `<span class="bu">len</span>`, `<span class="bn">0x1F</span>`, `<span class="bn">0o7</span>`,
 		`<span class="st">` + "`raw</span>", `<span class="co">// c</span>`} {
