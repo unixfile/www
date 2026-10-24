@@ -408,8 +408,9 @@ func (t *tree) logLine(ctx context.Context, name string) string {
 // menu holds a link to the history.
 func topLine(c *commit, star, base, here string) string {
 	esc := template.HTMLEscapeString
-	line := fmt.Sprintf("<span class=\"subject\" title=\"%s %s\">%s</span> · <span class=\"date\" title=\"%s %s\">%s</span>",
-		esc(c.short), exact(c.date), esc(subjectOf(c)), esc(c.short), exact(c.date), esc(star))
+	// The stardate leads, as it does in histories and the version menu.
+	line := fmt.Sprintf("<span class=\"date\" title=\"%s %s\">%s</span> · <span class=\"subject\" title=\"%s %s\">%s</span>",
+		esc(c.short), exact(c.date), esc(star), esc(c.short), exact(c.date), esc(subjectOf(c)))
 	if here != "" {
 		here = " data-here=\"" + esc(here) + "\""
 	}

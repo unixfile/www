@@ -145,7 +145,7 @@ func TestPageTopNamesLastCommit(t *testing.T) {
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<details class="own latest" data-timeline="?timeline">`) || !strings.Contains(body, `">`+subject+`</span> · <span class="date" title=`) ||
+		if !strings.Contains(body, `<details class="own latest" data-timeline="?timeline">`) || !strings.Contains(body, `</span> · <span class="subject" title=`) || !strings.Contains(body, `">`+subject+`</span></summary>`) ||
 			!strings.Contains(body, `<div class="versions"><a href="?log">&lt;(git log)</a></div>`) {
 			t.Errorf("%s: no top line with %q:\n%s", p, subject, body)
 		}
