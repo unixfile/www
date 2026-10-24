@@ -283,9 +283,10 @@ main > .changed { animation: changed 3s ease-in; }
 /* The search box has a row of its own under the header and leaves the
    row's right end to the button that copies the page's text. Both take
    the scope boxes' look, a Windows 3.1 screen in greys: the box is a
-   sunken field, shadow above and left, light below and right, filled
-   like a box at the first depth; the button is raised, the inverse, on
-   the page's colour, and sinks while pressed. Corners are square, as the
+   sunken field, shadow above and left, light below and right; the button
+   is raised, the inverse, and sinks while pressed. Both keep the page's
+   colour: a grey fill made the box the heaviest thing above the content
+   and said nothing. Corners are square, as the
    boxes' are. The box holds the keyboard on every page, so focus changes
    nothing. */
 div.search {
@@ -305,7 +306,7 @@ input.search {
   flex: 1 1 auto;
   min-width: 0;
   color: inherit;
-  background: var(--shade);
+  background: var(--page);
   padding: 0.15em 0.4em;
 }
 input.search:focus { outline: none; }
