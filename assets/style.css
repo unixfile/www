@@ -14,6 +14,8 @@
   --faint: #b8b8b8;
   --added: #e4f2e4;
   --removed: #f8e6e2;
+  --added-strong: #bfe0bf;
+  --removed-strong: #efc6bc;
   --shadow: #a8a8a8;
   --light: #ffffff;
   --shade: #ebebeb;
@@ -33,6 +35,8 @@
     --faint: #555555;
     --added: #1f3322;
     --removed: #3b2420;
+    --added-strong: #2f5934;
+    --removed-strong: #6a3a30;
     --shadow: #050505;
     --light: #3a3a3a;
     --shade: #111111;
@@ -239,6 +243,15 @@ pre.diff span { display: block; min-height: 1.35em; }
 pre.diff span.add { background: var(--added); }
 pre.diff span.del { background: var(--removed); }
 pre.diff span.hunk, pre.diff span.meta { color: var(--muted); }
+/* The tokens a changed line changed, on a stronger tint. */
+pre.diff mark { color: inherit; }
+pre.diff span.add mark { background: var(--added-strong); }
+pre.diff span.del mark { background: var(--removed-strong); }
+/* The declarations a commit changed, one row each under its file. */
+div.semantic { margin-top: 1.5em; }
+div.semantic p.file { margin: 1em 0 0.2em; }
+ul.decls { list-style: none; padding: 0; margin: 0; font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; text-align: left; }
+ul.decls span.what { color: var(--muted); display: inline-block; min-width: 9ch; }
 /* A page's top line names its commit and opens the timeline, the menu
    of its versions, which drops over the page and scrolls on its own. The
    version shown is marked. */
@@ -330,7 +343,7 @@ button.copy:active { border-color: var(--shadow) var(--light) var(--light) var(-
    which the text would count as breaks. Line numbers are generated
    content, which the text never holds. */
 body.copying main .own, body.copying main div.view, body.copying main div.backlinks,
-body.copying main li.log, body.copying main li:has(> a[href="../"]), body.copying main i.scope, body.copying main a.web { display: none; }
+body.copying main li.log, body.copying main li:has(> a[href="../"]), body.copying main i.scope, body.copying main a.web, body.copying main div.semantic { display: none; }
 /* Search results: the path is the program's and mono, a matching line is
    the file's and stays mono too, in the muted colour. */
 div.found .line { color: var(--muted); font-size: 0.8em; hyphens: none; }

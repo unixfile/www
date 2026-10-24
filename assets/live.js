@@ -887,4 +887,26 @@
 			})
 			.catch(() => delete d.dataset.loaded);
 	}, true);
+
+	// A commit page shows its plain diff at once and asks for the semantic
+	// one after: the declarations the commit changed above the diff, and
+	// the changed tokens marked within it. A search on the page runs again
+	// over the new diff.
+	document.addEventListener("DOMContentLoaded", () => {
+		const unread = document.querySelector("div.semantic[data-src]");
+		if (!unread) return;
+		fetch(unread.dataset.src)
+			.then((r) => r.text())
+			.then((html) => {
+				const got = new DOMParser().parseFromString(html, "text/html");
+				const sem = got.querySelector("div.semantic");
+				const diffs = got.querySelector("div.diffs");
+				const old = document.querySelector("main div.diffs");
+				if (!sem || !diffs || !old) return;
+				unread.replaceWith(document.adoptNode(sem));
+				old.replaceWith(document.adoptNode(diffs));
+				if (searching() && filters()) filterPage(box().value.trim());
+			})
+			.catch(() => unread.remove());
+	});
 })();

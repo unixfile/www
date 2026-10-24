@@ -578,7 +578,8 @@ var hexHash = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
 // and the diff's lines below git's header. A file whose type changed has
 // two.
 type fileDiff struct {
-	name  string
+	name  string // relative to the tree
+	rel   string // relative to where git runs
 	lines []string
 }
 
@@ -630,13 +631,14 @@ func (t *tree) gitShow(ctx context.Context, name, hash string) (c *commit, diffs
 		if !ok || t.shared && hasDotName(f) {
 			continue
 		}
+		rel := f
 		switch {
 		case spec != ".":
 			f = name
 		case name != ".":
 			f = path.Join(name, f)
 		}
-		diffs = append(diffs, fileDiff{name: f, lines: diffLines(b)})
+		diffs = append(diffs, fileDiff{name: f, rel: rel, lines: diffLines(b)})
 	}
 	if key != "" {
 		c := log[0]
@@ -738,7 +740,30 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 	for _, para := range paragraphs(c.body) {
 		body.WriteString("<p>" + para + "</p>\n")
 	}
-	body.WriteString("</div>\n<div class=\"diffs\">\n")
+	body.WriteString("</div>\n")
+	// The semantic diff comes inline when it is kept or asked for with
+	// &semantic; otherwise the page asks for it once it shows the plain
+	// diff.
+	var sem *semantic
+	_, asked := r.URL.Query()["semantic"]
+	if key := t.semanticKey(name, c.hash); key != "" {
+		if v, ok := semanticCache.get(key); ok {
+			sem = v.(*semantic)
+		}
+	}
+	if sem == nil && asked {
+		sem = t.semanticDiff(r.Context(), name, c.hash, diffs)
+	}
+	switch {
+	case sem != nil:
+		body.WriteString(t.semanticHTML(r.Context(), name, c, sem))
+	case len(diffs) > 0:
+		q := r.URL.Query()
+		q.Set("commit", c.hash)
+		q.Set("semantic", "")
+		fmt.Fprintf(&body, "<div class=\"semantic\" data-src=\"%s\"><p class=\"own\">reading declarations</p></div>\n", esc((&url.URL{Path: r.URL.Path, RawQuery: q.Encode()}).String()))
+	}
+	body.WriteString("<div class=\"diffs\">\n")
 	all := (&url.URL{Path: t.prefix, RawQuery: "commit=" + c.hash}).String()
 	shown := name
 	if dir {
@@ -758,7 +783,11 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 			label = fmt.Sprintf("<a href=\"%s\">%s</a>", esc((&url.URL{Path: t.prefix + d.name}).String()), label)
 		}
 		fmt.Fprintf(&body, "<p class=\"own file\">%s</p>\n<pre class=\"diff\">", label)
-		for _, line := range d.lines {
+		var marks map[int][][2]int
+		if sem != nil {
+			marks = sem.marks[d.name]
+		}
+		for i, line := range d.lines {
 			class := "meta"
 			switch {
 			case strings.HasPrefix(line, "@@"):
@@ -770,7 +799,7 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 			case strings.HasPrefix(line, " "):
 				class = "same"
 			}
-			fmt.Fprintf(&body, "<span class=\"%s\">%s</span>", class, esc(line))
+			fmt.Fprintf(&body, "<span class=\"%s\">%s</span>", class, markLine(line, marks[i]))
 		}
 		body.WriteString("</pre>\n")
 	}
