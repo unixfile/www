@@ -593,14 +593,19 @@
 
 	// The copy button copies the page's path on disk: through the
 	// clipboard API where the origin is secure, else through a selection,
-	// which works on any origin. Its label says how it went.
+	// which works on any origin. Its glyph says how it went: a tick or a
+	// cross, then the copy glyph again.
 	document.addEventListener("click", (e) => {
 		const btn = e.target.closest && e.target.closest("button.copy");
 		if (!btn) return;
 		const text = btn.dataset.copy;
 		const done = (ok) => {
-			btn.textContent = ok ? "copied" : "copy failed";
-			setTimeout(() => (btn.textContent = "copy path"), 1500);
+			btn.textContent = ok ? "✓" : "✗";
+			btn.title = ok ? "copied" : "copy failed";
+			setTimeout(() => {
+				btn.textContent = "⧉";
+				btn.title = "copy " + text;
+			}, 1500);
 			hold();
 		};
 		const bySelection = () => {
