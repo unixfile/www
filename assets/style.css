@@ -297,7 +297,8 @@ table.locks form { display: inline; }
 main > .changed { animation: changed 3s ease-in; }
 @keyframes changed { from { background-color: var(--target); } to { background-color: transparent; } }
 /* The search box has a row of its own under the header and leaves the
-   row's right end to the button that copies the page's text. Both take
+   row's right end to the button that copies the page's text and the one
+   that copies a link. Both take
    the scope boxes' look, a Windows 3.1 screen in greys: the box is a
    sunken field, shadow above and left, light below and right; the button
    is raised, the inverse, and sinks while pressed. Both keep the page's
@@ -312,7 +313,7 @@ div.search {
   margin: -0.7em 0 1.5em;
   font-size: 0.8em;
 }
-input.search, button.copy {
+input.search, button.copy, button.share {
   font: inherit;
   border: 1px solid;
   border-radius: 0;
@@ -326,7 +327,7 @@ input.search {
   padding: 0.15em 0.4em;
 }
 input.search:focus { outline: none; }
-button.copy {
+button.copy, button.share {
   flex: none;
   color: var(--muted);
   background: var(--page);
@@ -335,8 +336,8 @@ button.copy {
   cursor: pointer;
   white-space: nowrap;
 }
-button.copy:hover, button.copy:focus-visible { color: inherit; outline: none; }
-button.copy:active { border-color: var(--shadow) var(--light) var(--light) var(--shadow); }
+button.copy:hover, button.copy:focus-visible, button.share:hover, button.share:focus-visible { color: inherit; outline: none; }
+button.copy:active, button.share:active { border-color: var(--shadow) var(--light) var(--light) var(--shadow); }
 /* While the copy button reads the page's text, the program's own lines and links
    leave the layout, so only the page's content is copied: a listing's
    history and parent entries, a code page's view links and scope boxes,

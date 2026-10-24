@@ -780,15 +780,16 @@
 	};
 	document.addEventListener("pointerover", approach);
 	document.addEventListener("focusin", approach);
-	document.addEventListener("click", (e) => {
-		const btn = e.target.closest && e.target.closest("button.copy");
-		if (!btn) return;
+	// clip writes text to the clipboard for the button btn, whose glyph
+	// then says how it went and comes back after a moment.
+	const clip = (btn, text) => {
+		const glyph = btn.textContent, title = btn.title;
 		const done = (ok) => {
 			btn.textContent = ok ? "✓" : "✗";
 			btn.title = ok ? "copied" : "copy failed";
 			setTimeout(() => {
-				btn.textContent = "⧉";
-				btn.title = "copy the page's text";
+				btn.textContent = glyph;
+				btn.title = title;
 			}, 1500);
 			hold();
 		};
@@ -811,10 +812,82 @@
 				navigator.clipboard.writeText(text).then(() => done(true), () => bySelection(text));
 			else bySelection(text);
 		};
+		if (typeof text === "string") write(text);
+		else text.then(write, () => done(false));
+	};
+	document.addEventListener("click", (e) => {
+		const btn = e.target.closest && e.target.closest("button.copy");
+		if (!btn) return;
 		const lines = rangeText();
-		if (lines !== null) return write(lines);
-		if (document.body.className === "doc") return docSource().then(write, () => done(false));
-		write(pageText());
+		if (lines !== null) return clip(btn, lines);
+		if (document.body.className === "doc") return clip(btn, docSource());
+		clip(btn, pageText());
+	});
+
+	// The share button copies a link to what is selected: lines selected
+	// or marked on a numbered page, eg #L3-L26, pinned to the commit's
+	// version when the file is committed and unchanged since, as a box's
+	// link is; other selected text as a text fragment, #:~:text=, which
+	// browsers scroll to and highlight; else the page itself, which on a
+	// commit page may be a declaration's page. The link has the address
+	// the page came from, so on a share it reaches other machines and on
+	// loopback only this one. The version menu that pinning reads loads as
+	// the pointer reaches the button, since a click may write the
+	// clipboard only at once.
+	const numbered = (node) => {
+		const el = node && (node.nodeType === 1 ? node : node.parentElement);
+		const line = el && el.closest("pre.numberSource code > span");
+		return line && /^L\d+$/.test(line.id) ? +line.id.slice(1) : null;
+	};
+	const selectedLines = () => {
+		const sel = getSelection();
+		if (!sel || sel.isCollapsed) return null;
+		const a = numbered(sel.anchorNode), b = numbered(sel.focusNode);
+		if (a === null || b === null) return null;
+		return a === b ? "#L" + a : "#L" + Math.min(a, b) + "-L" + Math.max(a, b);
+	};
+	const fragmentText = () => {
+		const sel = getSelection();
+		const main = document.querySelector("main");
+		if (!sel || sel.isCollapsed || !main || !main.contains(sel.anchorNode)) return null;
+		const words = sel.toString().trim().split(/\s+/).filter(Boolean);
+		if (!words.length) return null;
+		// Commas and dashes are the syntax's own, so they are escaped too.
+		const enc = (ws) => encodeURIComponent(ws.join(" ")).replace(/-/g, "%2D");
+		if (words.length <= 8) return "#:~:text=" + enc(words);
+		return "#:~:text=" + enc(words.slice(0, 4)) + "," + enc(words.slice(-4));
+	};
+	const pinnedPath = () => {
+		if (pinnedFrom) return location.pathname;
+		const d = document.querySelector("details.latest");
+		const li = d && !d.dataset.here && d.querySelector("ol.versions li[data-also]");
+		return li ? li.dataset.also : location.pathname;
+	};
+	const withoutQuery = () => {
+		const rest = location.search.slice(1).split("&").filter((s) => s && s !== "q" && !s.startsWith("q="));
+		return rest.length ? "?" + rest.join("&") : "";
+	};
+	const shareURL = () => {
+		const lines = selectedLines() || (/^#L\d+(-L\d+)?$/.test(location.hash) ? location.hash : null);
+		if (lines) return location.origin + pinnedPath() + withoutQuery() + lines;
+		const text = fragmentText();
+		if (text) return location.origin + location.pathname + withoutQuery() + text;
+		return location.href;
+	};
+	const nearShare = (e) => {
+		const d = document.querySelector("details.latest");
+		if (d && e.target.closest && e.target.closest("button.share")) versions(d).catch(() => {});
+	};
+	document.addEventListener("pointerover", nearShare);
+	document.addEventListener("focusin", nearShare);
+	// A click on the button would collapse the selection before it is
+	// read, so the button keeps the pointer from taking focus.
+	document.addEventListener("mousedown", (e) => {
+		if (e.target.closest && e.target.closest("button.share")) e.preventDefault();
+	});
+	document.addEventListener("click", (e) => {
+		const btn = e.target.closest && e.target.closest("button.share");
+		if (btn) clip(btn, shareURL());
 	});
 
 	// The top line opens the timeline, the menu of the page's versions.

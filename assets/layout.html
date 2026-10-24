@@ -13,7 +13,7 @@
 <nav>{{range $i, $c := .Crumbs}}{{if $i}}&nbsp;/ {{end}}{{if $c.Href}}<a href="{{$c.Href}}"{{with $c.Title}} title="{{.}}"{{end}}>{{$c.Label}}</a>{{else if $c.Title}}<span title="{{$c.Title}}">{{$c.Label}}</span>{{else}}<span>{{$c.Label}}</span>{{end}}{{end}}</nav>
 {{if not .Stopped}}<span>{{with .Status}}<span class="age">{{.}}</span>{{end}}{{if .Raw}}<a href="?raw">raw</a>{{end}}{{if not (or .Shared .NoStop)}}<form method="post" action="{{ownPath}}stop">{{if .Tree}}<input type="hidden" name="tree" value="{{.Tree}}"><button>Delete lock</button>{{else}}<button class="kill">Kill server</button>{{end}}</form>{{end}}</span>{{end}}
 </header>
-{{if not .Stopped}}{{with .Search}}<div class="search"><input type="search" class="search" data-search="{{.}}" placeholder="search" aria-label="Search this directory" autocomplete="off"><button class="copy" title="copy the page's text" aria-label="copy the page's text">⧉</button></div>
+{{if not .Stopped}}{{with .Search}}<div class="search"><input type="search" class="search" data-search="{{.}}" placeholder="search" aria-label="Search this directory" autocomplete="off"><button class="copy" title="copy the page's text" aria-label="copy the page's text">⧉</button><button class="share" title="copy a link to what is selected, or to the page" aria-label="copy a link to what is selected, or to the page">⤴</button></div>
 {{end}}{{end}}<main>
 {{.Body}}
 </main>
