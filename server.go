@@ -206,6 +206,9 @@ type tree struct {
 	secret   bool        // mounted under a token, and left off the index
 	web      *webRepo    // the cached repo this tree is a worktree of, on the web address
 	linked   linkIndex   // the relative links of each doc, for ?backlinks
+	at       *commit     // for a version, the commit it shows
+	base     *tree       // for a version, the tree it is a version of
+	versions sync.Map    // the versions served so far, by full hash
 }
 
 func newTree(root *os.Root, dir, prefix, label string) *tree {
@@ -679,6 +682,14 @@ func (t *tree) name(urlPath string) string {
 
 func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 	name := t.name(r.URL.Path)
+	// A first segment such as @5430ac3 names a version, unless the tree
+	// holds an entry by that name.
+	if first, _, _ := strings.Cut(name, "/"); t.at == nil && !t.shared && t.web == nil && atSegment.MatchString(first) {
+		if _, err := fs.Stat(t.fsys, first); err != nil {
+			t.serveVersion(w, r, first)
+			return
+		}
+	}
 	info, err := fs.Stat(t.fsys, name)
 	if ref := (*refusal)(nil); errors.As(err, &ref) {
 		t.fail(w, r, name, http.StatusForbidden, t.why(ref))
@@ -840,8 +851,12 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	}
 	// Entries reached through a link out of the tree are checked one by
 	// one, since each may be refused. So is every entry of a shared tree.
-	_, err = t.root.Stat(name)
-	outside := err != nil || t.shared
+	// A version holds only what git stored, so nothing leads out of it.
+	outside := false
+	if t.at == nil {
+		_, err = t.root.Stat(name)
+		outside = err != nil || t.shared
+	}
 	var items []item
 	for _, e := range entries {
 		n := e.Name()
@@ -873,6 +888,9 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	})
 
 	var body strings.Builder
+	if t.at != nil {
+		body.WriteString(t.versionLine(name, true))
+	}
 	body.WriteString("<ul class=\"listing\">\n")
 	if t.lastCommit(r.Context(), name) != nil {
 		body.WriteString("<li class=\"log\"><a href=\"?log\">" + template.HTMLEscapeString(logLabel) + "</a></li>\n")
@@ -936,8 +954,15 @@ type page struct {
 }
 
 func (t *tree) title(name string) string {
+	at := ""
+	if t.at != nil {
+		at = "@" + t.at.short
+	}
 	if name == "." {
-		return path.Base(t.label)
+		return path.Base(t.label) + at
+	}
+	if at != "" {
+		return name + " " + at
 	}
 	return name
 }
@@ -945,6 +970,9 @@ func (t *tree) title(name string) string {
 // rootCrumb is the tree's first breadcrumb: its base name, with the full
 // path on hover. The address bar already shows the path.
 func (t *tree) rootCrumb() crumb {
+	if t.at != nil {
+		return crumb{Label: path.Base(t.label) + "@" + t.at.short, Title: t.label + " as of " + t.at.hash}
+	}
 	return crumb{Label: path.Base(t.label), Title: t.label}
 }
 
@@ -1005,9 +1033,15 @@ func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page
 	if t.web != nil {
 		p.NoStop, p.Status = true, t.web.status()
 	}
+	// A version never changes and has no lock or path on disk: no live
+	// reload, no stop button, nothing to copy.
+	if t.at != nil {
+		p.NoStop = true
+		r = r.WithContext(context.WithValue(r.Context(), liveKey{}, ""))
+	}
 	if status == http.StatusOK {
 		p.Search = searchURL(r.URL.Path)
-		if !t.shared {
+		if !t.shared && t.at == nil {
 			p.Path = filepath.Join(t.dir, filepath.FromSlash(strings.TrimPrefix(r.URL.Path, t.prefix)))
 		}
 	}

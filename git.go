@@ -332,6 +332,9 @@ var trailer = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*[ \t]*:[ \t]*\S`)
 // lastCommit is the newest commit that touched name, or nil when none
 // did or name lies outside a repo.
 func (t *tree) lastCommit(ctx context.Context, name string) *commit {
+	if t.at != nil {
+		return nil
+	}
 	log, err := t.gitLog(ctx, name, 1)
 	if err != nil || len(log) == 0 {
 		return nil
@@ -373,6 +376,9 @@ func commitLine(c *commit) string {
 // history and names its last commit, or "" when it has none. The commit's
 // time shows as its age, eg 3d; its full date is on hover.
 func (t *tree) logLine(ctx context.Context, name string) string {
+	if t.at != nil {
+		return t.versionLine(name, false)
+	}
 	c := t.lastCommit(ctx, name)
 	if c == nil {
 		return ""
@@ -442,8 +448,21 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	for i := range log {
 		c := &log[i]
 		show := esc("?commit=" + c.hash)
-		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"own\">%s</span> <span class=\"subject\">%s</span></summary>\n",
-			show, commitLine(c), esc(c.subject))
+		// A local tree links each commit's version of the page: the
+		// file or directory as it was then.
+		then := ""
+		if t.at == nil && !t.shared && t.web == nil {
+			p := t.prefix + "@" + c.short + "/"
+			if name != "." {
+				p += name
+				if dir {
+					p += "/"
+				}
+			}
+			then = fmt.Sprintf(" <a class=\"then\" href=\"%s\">browse</a>", esc((&url.URL{Path: p}).String()))
+		}
+		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"own\">%s%s</span> <span class=\"subject\">%s</span></summary>\n",
+			show, commitLine(c), then, esc(c.subject))
 		for _, para := range paragraphs(c.body) {
 			body.WriteString("<p>" + para + "</p>\n")
 		}

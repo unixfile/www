@@ -44,7 +44,12 @@ type backlinks struct {
 func (t *tree) serveBacklinks(w http.ResponseWriter, r *http.Request, name string) {
 	ctx, cancel := context.WithTimeout(r.Context(), searchBudget)
 	defer cancel()
-	res := t.backlinks(ctx, name)
+	// A version has no link index, and walking a commit to build one runs
+	// git for every directory, so its docs list no backlinks.
+	res := backlinks{Links: []hit{}}
+	if t.at == nil {
+		res = t.backlinks(ctx, name)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(res)
