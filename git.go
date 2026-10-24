@@ -414,9 +414,12 @@ func topLine(c *commit, star, base, here string) string {
 	if here != "" {
 		here = " data-here=\"" + esc(here) + "\""
 	}
-	return fmt.Sprintf("<details class=\"own latest\" data-timeline=\"%s?timeline\"%s>\n<summary><span class=\"menu\">timeline</span> · %s</summary>\n"+
+	// The whole line opens the timeline, so no word labels it; the name
+	// shows on hover and is read out first.
+	label := "timeline, " + star + ", " + subjectOf(c)
+	return fmt.Sprintf("<details class=\"own latest\" data-timeline=\"%s?timeline\"%s>\n<summary title=\"timeline\" aria-label=\"%s\">%s</summary>\n"+
 		"<div class=\"versions\"><a href=\"%s?log\">%s</a></div>\n</details>\n",
-		esc(base), here, line, esc(base), esc(logLabel))
+		esc(base), here, esc(label), line, esc(base), esc(logLabel))
 }
 
 // changed reports whether name, a file or everything below a directory,
