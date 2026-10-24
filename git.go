@@ -447,8 +447,9 @@ func exact(t time.Time) string {
 // on its top line: each commit that touched it, by subject and stardate, then
 // its history. The newest commit's row leads to the current page and says
 // so, unless the page has changes not yet committed; then a row of its
-// own leads there and says that. A tree without versions, eg a share,
-// links each commit's page instead.
+// own leads there and says that. A page whose history the tree's
+// versions do not hold, eg in a share or a nested repo, links each
+// commit's page instead.
 func (t *tree) serveTimeline(w http.ResponseWriter, r *http.Request, name string, dir bool) {
 	crumbs := append(t.pageCrumbs(name, dir), crumb{Label: "timeline"})
 	title := "timeline " + t.title(name)
@@ -461,14 +462,8 @@ func (t *tree) serveTimeline(w http.ResponseWriter, r *http.Request, name string
 	if len(log) > maxLog {
 		log = log[:maxLog]
 	}
-	rest := ""
-	if name != "." {
-		rest = name
-		if dir {
-			rest += "/"
-		}
-	}
-	versions := t.at == nil && !t.shared && t.web == nil
+	rest := below(name, dir)
+	versions := t.historyInVersions(r.Context(), name)
 	stars := t.starsFor(r.Context(), name)
 	esc := template.HTMLEscapeString
 	var body strings.Builder
@@ -536,23 +531,16 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	// from the commit page when the fold opens, through the one script;
 	// without it, the link in its place opens that page. A row is one
 	// target, the fold, so the links to the commit and its version wait
-	// inside it.
+	// inside it. A local tree links each commit's version of the page:
+	// the file or directory as it was then.
+	browse := t.historyInVersions(r.Context(), name)
 	body.WriteString("<ol class=\"log\">\n")
 	for i := range log {
 		c := &log[i]
 		show := esc("?commit=" + c.hash)
-		// A local tree links each commit's version of the page: the
-		// file or directory as it was then.
 		then := ""
-		if t.at == nil && !t.shared && t.web == nil {
-			rest := ""
-			if name != "." {
-				rest = name
-				if dir {
-					rest += "/"
-				}
-			}
-			then = fmt.Sprintf(" · <a class=\"then\" href=\"%s\">browse</a>", esc(t.versionURL(stars, c, rest)))
+		if browse {
+			then = fmt.Sprintf(" · <a class=\"then\" href=\"%s\">browse</a>", esc(t.versionURL(stars, c, below(name, dir))))
 		}
 		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"subject\">%s</span> <span class=\"own\">%s</span></summary>\n"+
 			"<p class=\"own links\">commit <a href=\"%s\">%s</a>%s</p>\n",

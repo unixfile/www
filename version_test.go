@@ -84,3 +84,33 @@ func TestVersion(t *testing.T) {
 		t.Errorf("version page without the script, or with a stream:\n%s", body)
 	}
 }
+
+// A page whose history comes from another repo, or through a link, links
+// no versions from its menu or history, since the tree's versions would
+// not hold it.
+func TestVersionLinksOnlyForOwnHistory(t *testing.T) {
+	s, dir := repoTree(t)
+	h := s.handler()
+	sub := filepath.Join(dir, "sub")
+	os.Mkdir(sub, 0o755)
+	if out, err := exec.Command("git", "init", "-q", sub).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	for _, text := range []string{"one\n", "two\n"} {
+		os.WriteFile(filepath.Join(sub, "x.md"), []byte(text), 0o644)
+		commitAll(t, sub, "Write "+text)
+	}
+	os.Symlink("index.md", filepath.Join(dir, "link.md"))
+	commitAll(t, dir, "Link the index")
+	for _, p := range []string{"/sub/x.md", "/link.md"} {
+		if body := get(h, p+"?timeline").Body.String(); !strings.Contains(body, "?commit=") || strings.Contains(body, "/@") {
+			t.Errorf("%s?timeline: want commit links and no versions:\n%s", p, body)
+		}
+		if body := get(h, p+"?log").Body.String(); strings.Contains(body, "browse</a>") {
+			t.Errorf("%s?log links versions:\n%s", p, body)
+		}
+	}
+	if body := get(h, "/index.md?timeline").Body.String(); !strings.Contains(body, "/@") {
+		t.Errorf("index.md lost its versions:\n%s", body)
+	}
+}

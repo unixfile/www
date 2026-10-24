@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -85,13 +86,7 @@ func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first string
 // the page alone, eg by browsing a directory's history, names the commit
 // that last changed the page, so the menu can mark it.
 func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
-	rest := ""
-	if name != "." {
-		rest = name
-		if dir {
-			rest += "/"
-		}
-	}
+	rest := below(name, dir)
 	c := t.base.lastAt(ctx, name, t.at)
 	now := (&url.URL{Path: t.base.prefix + rest}).String()
 	stars := stardatesIn(ctx, t.dir)
@@ -120,6 +115,41 @@ func (t *tree) lastAt(ctx context.Context, name string, at *commit) *commit {
 	}
 	gitCache.put(key, c, int64(len(c.hash)+len(c.short)+len(c.subject)+len(c.body))+64)
 	return c
+}
+
+// below is the page at name as a path below its tree's URL: "" for the
+// root, and a directory's ends in a slash.
+func below(name string, dir bool) string {
+	switch {
+	case name == ".":
+		return ""
+	case dir:
+		return name + "/"
+	}
+	return name
+}
+
+// hasVersions reports whether t serves its versions at @: a local tree as
+// it is now.
+func (t *tree) hasVersions() bool {
+	return t.at == nil && !t.shared && t.web == nil
+}
+
+// historyInVersions reports whether the history of the page at name is
+// the one t's versions show. Versions read the repo t lies in, at name's
+// own path, while a history follows links and runs git where the page's
+// file lies, which may be another repo: one nested in t, or one of many
+// in a tree that lies in none.
+func (t *tree) historyInVersions(ctx context.Context, name string) bool {
+	if !t.hasVersions() {
+		return false
+	}
+	dir, spec, err := t.gitPlace(name)
+	if err != nil || filepath.Join(dir, spec) != filepath.Join(t.realDir, filepath.FromSlash(name)) {
+		return false
+	}
+	here, there := repoAt(ctx, t.dir), repoAt(ctx, dir)
+	return here.complaint == "" && there.complaint == "" && here.gitDir == there.gitDir
 }
 
 // versionURL is the URL of rest, a path below t, in commit c's version,
