@@ -70,11 +70,12 @@ func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first string
 	v.serve(w, r)
 }
 
-// versionLine is the top line of a page in a version: links to the
-// page's older and newer versions around its commit, and to the page as
-// it is now, whose versions the menu lists.
+// versionLine is the top line of a page in a version: the page's last
+// commit as of the version, the menu of the page's versions, and a link
+// to the page as it is now. A version reached through a commit that left
+// the page alone, eg by browsing a directory's history, names the commit
+// that last changed the page, so the menu can mark it.
 func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
-	c := t.at
 	rest := ""
 	if name != "." {
 		rest = name
@@ -82,52 +83,39 @@ func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
 			rest += "/"
 		}
 	}
-	older, newer := t.base.neighbours(ctx, name, c.hash)
-	o, n := "", ""
-	if older != nil {
-		o = olderLink(t.base.versionURL(older, rest), older)
-	}
-	if newer != nil {
-		n = newerLink(t.base.versionURL(newer, rest), newer)
-	}
+	c := t.base.lastAt(ctx, name, t.at)
 	now := (&url.URL{Path: t.base.prefix + rest}).String()
-	return topLine(c, t.base.prefixURL()+"?commit="+c.hash, o, n, "<a href=\""+template.HTMLEscapeString(now)+"\">now</a>", now)
+	return topLine(c, t.base.prefixURL()+"?commit="+c.hash, "<a href=\""+template.HTMLEscapeString(now)+"\">current</a>", now,
+		t.base.versionURL(c, rest))
+}
+
+// lastAt is the newest commit up to at that touched name, a path below
+// t, or at itself if git cannot say. A commit never changes, so the
+// answer is kept under at's hash.
+func (t *tree) lastAt(ctx context.Context, name string, at *commit) *commit {
+	spec := "./"
+	if name != "." {
+		spec = "./" + name
+	}
+	key := "lastAt\x00" + t.dir + "\x00" + at.hash + "\x00" + spec
+	if v, ok := gitCache.get(key); ok {
+		return v.(*commit)
+	}
+	out, err := git(ctx, t.dir, "log", "--no-show-signature", "-z", "--format="+commitFormat, "-1", at.hash, "--", spec)
+	if err != nil {
+		return at
+	}
+	c := at
+	if cs := t.commits(out); len(cs) > 0 {
+		c = &cs[0]
+	}
+	gitCache.put(key, c, int64(len(c.hash)+len(c.short)+len(c.subject)+len(c.body))+64)
+	return c
 }
 
 // versionURL is the URL of rest, a path below t, in commit c's version.
 func (t *tree) versionURL(c *commit, rest string) string {
 	return (&url.URL{Path: t.prefix + "@" + c.short + "/" + rest}).String()
-}
-
-// neighbours are the commits before and after rev that touched name, a
-// path below t: the next older and the next newer versions of its page.
-// The newer is the next on the way from rev to HEAD. Older is fixed by
-// rev, so it is cached under rev; newer under HEAD as well.
-func (t *tree) neighbours(ctx context.Context, name, rev string) (older, newer *commit) {
-	spec := "./"
-	if name != "." {
-		spec = "./" + name
-	}
-	one := func(key string, args ...string) *commit {
-		if v, ok := gitCache.get(key); ok {
-			return v.(*commit)
-		}
-		out, err := git(ctx, t.dir, append(append([]string{"log", "--no-show-signature", "-z", "--format=" + commitFormat}, args...), "--", spec)...)
-		if err != nil {
-			return nil
-		}
-		var c *commit
-		if cs := t.commits(out); len(cs) > 0 {
-			c = &cs[len(cs)-1]
-		}
-		gitCache.put(key, c, 128)
-		return c
-	}
-	older = one("older\x00"+t.dir+"\x00"+rev+"\x00"+spec, "-1", rev+"^")
-	if r := repoAt(ctx, t.dir); r.complaint == "" {
-		newer = one("newer\x00"+t.dir+"\x00"+rev+"\x00"+r.head(ctx)+"\x00"+spec, "--ancestry-path", rev+"..HEAD")
-	}
-	return older, newer
 }
 
 // commitFS reads a directory as it was in one commit: listings from git

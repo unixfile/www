@@ -374,55 +374,49 @@ func commitLine(c *commit) string {
 }
 
 // logLine is the line at the top of a doc or code page in a repo, or ""
-// when no commit touched the page. On a local tree, older leads to the
-// version before the last commit, where a walk back through the page's
-// versions starts.
+// when no commit touched the page.
 func (t *tree) logLine(ctx context.Context, name string) string {
 	if t.at != nil {
 		return t.versionLine(ctx, name, false)
 	}
-	if t.lastCommit(ctx, name) == nil {
+	c := t.lastCommit(ctx, name)
+	if c == nil {
 		return ""
 	}
-	log, _ := t.gitLog(ctx, name, 2)
-	older := ""
-	if len(log) > 1 && !t.shared && t.web == nil {
-		older = olderLink(t.versionURL(&log[1], name), &log[1])
-	}
-	return topLine(&log[0], "?commit="+log[0].hash, older, "", "", "")
+	return topLine(c, "?commit="+c.hash, "", "", "")
 }
 
 // topLine is the line at the top of a page in a repo. Its ≡ opens a menu
 // of the page's versions, which loads from base?versions on first open,
 // and the line names the commit shown: its subject, which links show,
-// and its day, with hash and exact time on hover. Older, newer and now
-// link other versions when they are not "". Without the script the menu
-// holds a link to the history.
-func topLine(c *commit, show, older, newer, now, base string) string {
+// and its day, with hash and exact time on hover. current, when not "",
+// links the page as it is now. here, when not "", is the URL of the
+// version shown, which the menu marks. Without the script the menu holds
+// a link to the history.
+func topLine(c *commit, show, current, base, here string) string {
 	esc := template.HTMLEscapeString
-	parts := []string{fmt.Sprintf("<a class=\"subject\" href=\"%s\" title=\"%s %s\">%s</a>", esc(show), esc(c.short), exact(c.date), esc(label(c))),
-		fmt.Sprintf("<span class=\"date\" title=\"%s\">%s</span>", exact(c.date), day(c.date, time.Now()))}
-	if older != "" {
-		parts = append([]string{older}, parts...)
+	line := fmt.Sprintf("<a class=\"subject\" href=\"%s\" title=\"%s %s\">%s</a> · <span class=\"date\" title=\"%s\">%s</span>",
+		esc(show), esc(c.short), exact(c.date), esc(label(c)), exact(c.date), day(c.date, time.Now()))
+	if current != "" {
+		line += " · " + current
 	}
-	for _, p := range []string{newer, now} {
-		if p != "" {
-			parts = append(parts, p)
-		}
+	if here != "" {
+		here = " data-here=\"" + esc(here) + "\""
 	}
-	return fmt.Sprintf("<details class=\"own latest\" data-versions=\"%s?versions\">\n<summary><span class=\"menu\" title=\"versions\">≡</span> %s</summary>\n"+
+	return fmt.Sprintf("<details class=\"own latest\" data-versions=\"%s?versions\"%s>\n<summary><span class=\"menu\" title=\"versions\">≡</span> %s</summary>\n"+
 		"<div class=\"versions\"><a href=\"%s?log\">%s</a></div>\n</details>\n",
-		esc(base), strings.Join(parts, " · "), esc(base), esc(logLabel))
+		esc(base), here, line, esc(base), esc(logLabel))
 }
 
-// olderLink and newerLink lead to the versions either side of the one
-// shown; the subject of each is on hover.
-func olderLink(href string, c *commit) string {
-	return fmt.Sprintf("<a href=\"%s\" title=\"%s\">‹ older</a>", template.HTMLEscapeString(href), template.HTMLEscapeString(c.subject))
-}
-
-func newerLink(href string, c *commit) string {
-	return fmt.Sprintf("<a href=\"%s\" title=\"%s\">newer ›</a>", template.HTMLEscapeString(href), template.HTMLEscapeString(c.subject))
+// changed reports whether name, a file or everything below a directory,
+// differs from its last commit: edited, staged, added or untracked.
+func (t *tree) changed(ctx context.Context, name string) bool {
+	dir, spec, err := t.gitPlace(name)
+	if err != nil {
+		return false
+	}
+	out, err := git(ctx, dir, "status", "--porcelain", "-z", "--", spec)
+	return err == nil && len(out) > 0
 }
 
 // label is what a link to a commit says: its subject, or its hash when
@@ -461,9 +455,11 @@ func day(t, now time.Time) string {
 }
 
 // serveVersions lists every version of name, newest first, for the menu
-// on its top line: the page as it is now, then each commit that touched
-// it, by subject and day, then its history. A tree without versions, eg
-// a share, links each commit's page instead.
+// on its top line: each commit that touched it, by subject and day, then
+// its history. The newest commit's row leads to the current page and says
+// so, unless the page has changes not yet committed; then a row of its
+// own leads there and says that. A tree without versions, eg a share,
+// links each commit's page instead.
 func (t *tree) serveVersions(w http.ResponseWriter, r *http.Request, name string, dir bool) {
 	crumbs := append(t.pageCrumbs(name, dir), crumb{Label: "versions"})
 	title := "versions " + t.title(name)
@@ -487,17 +483,24 @@ func (t *tree) serveVersions(w http.ResponseWriter, r *http.Request, name string
 	esc := template.HTMLEscapeString
 	var body strings.Builder
 	body.WriteString("<ol class=\"versions\">\n")
-	if versions {
-		fmt.Fprintf(&body, "<li><a href=\"%s\">now</a></li>\n", esc((&url.URL{Path: t.prefix + rest}).String()))
+	current := (&url.URL{Path: t.prefix + rest}).String()
+	clean := versions && !t.changed(r.Context(), name)
+	if versions && !clean {
+		fmt.Fprintf(&body, "<li><a href=\"%s\">current</a> <span class=\"date\">uncommitted changes</span></li>\n", esc(current))
 	}
 	for i := range log {
 		c := &log[i]
-		href := "?commit=" + c.hash
+		href, also, note := "?commit="+c.hash, "", ""
 		if versions {
 			href = t.versionURL(c, rest)
 		}
-		fmt.Fprintf(&body, "<li><a href=\"%s\" title=\"%s %s\">%s</a> <span class=\"date\">%s</span></li>\n",
-			esc(href), esc(c.short), exact(c.date), esc(label(c)), day(c.date, time.Now()))
+		// The current page is the newest commit's version, so its row
+		// leads there and is marked on either page.
+		if clean && i == 0 {
+			href, also, note = current, fmt.Sprintf(" data-also=\"%s\"", esc(href)), " · current"
+		}
+		fmt.Fprintf(&body, "<li%s><a href=\"%s\" title=\"%s %s\">%s</a> <span class=\"date\">%s%s</span></li>\n",
+			also, esc(href), esc(c.short), exact(c.date), esc(label(c)), day(c.date, time.Now()), note)
 	}
 	fmt.Fprintf(&body, "<li class=\"log\"><a href=\"?log\">%s</a></li>\n</ol>\n", esc(logLabel))
 	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "versions", Body: template.HTML(body.String())})

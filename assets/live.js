@@ -667,7 +667,10 @@
 			.catch(() => delete d.dataset.loaded);
 	};
 	const markHere = (d) => {
-		const here = [...d.querySelectorAll("ol.versions a")].find((a) => a.pathname === location.pathname && !a.search);
+		const at = d.dataset.here || location.pathname;
+		const here = [...d.querySelectorAll("ol.versions a")].find(
+			(a) => (a.pathname === at && !a.search) || a.parentElement.dataset.also === at,
+		);
 		if (!here) return;
 		here.parentElement.classList.add("here");
 		if (d.open) {
