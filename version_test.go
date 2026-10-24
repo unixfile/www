@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -44,5 +47,53 @@ func TestVersion(t *testing.T) {
 	}
 	if body := get(h, "/a/b.go?log").Body.String(); !strings.Contains(body, `<a class="then" href="`+at+`a/b.go">browse</a>`) {
 		t.Errorf("history links no version:\n%s", body)
+	}
+}
+
+// A version's older link leads to the commit before the one whose content
+// it shows, even when rev itself left the page alone.
+func TestVersionOlderSkipsUntouched(t *testing.T) {
+	s, dir := repoTree(t)
+	h := s.handler()
+	first, second := head(t, dir, "HEAD~1")[:7], head(t, dir, "HEAD")[:7]
+	os.WriteFile(filepath.Join(dir, "index.md"), []byte("# Title\nchanged\n"), 0o644)
+	commitAll(t, dir, "Touch the index")
+	third := head(t, dir, "HEAD")[:7]
+	body := get(h, "/@"+third+"/a/b.go").Body.String()
+	if !strings.Contains(body, `<a href="/@`+first+`/a/b.go" title="Add the docs">‹ older</a>`) {
+		t.Errorf("older from %s skips no version:\n%s", third, body)
+	}
+	if body := get(h, "/@"+second+"/a/b.go").Body.String(); strings.Contains(body, "newer ›") {
+		t.Errorf("newer from %s, though no later commit touches a/b.go:\n%s", second, body)
+	}
+}
+
+// A page whose history comes from another repo, or through a link, has no
+// older or browse links, since the tree's versions would not hold it.
+func TestVersionLinksOnlyForOwnHistory(t *testing.T) {
+	s, dir := repoTree(t)
+	h := s.handler()
+	sub := filepath.Join(dir, "sub")
+	os.Mkdir(sub, 0o755)
+	if out, err := exec.Command("git", "init", "-q", sub).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	for _, text := range []string{"one\n", "two\n"} {
+		os.WriteFile(filepath.Join(sub, "x.md"), []byte(text), 0o644)
+		commitAll(t, sub, "Write "+text)
+	}
+	os.WriteFile(filepath.Join(dir, "index.md"), []byte("# Title\nchanged\n"), 0o644)
+	os.Symlink("index.md", filepath.Join(dir, "link.md"))
+	commitAll(t, dir, "Change the index and link it")
+	for _, p := range []string{"/sub/x.md", "/link.md"} {
+		if body := get(h, p).Body.String(); !strings.Contains(body, "?log") || strings.Contains(body, "older</a>") {
+			t.Errorf("%s: want a history line and no older link:\n%s", p, body)
+		}
+		if body := get(h, p+"?log").Body.String(); strings.Contains(body, "browse</a>") {
+			t.Errorf("%s?log links versions:\n%s", p, body)
+		}
+	}
+	if body := get(h, "/index.md").Body.String(); !strings.Contains(body, "older</a>") {
+		t.Errorf("index.md lost its older link:\n%s", body)
 	}
 }

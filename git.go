@@ -382,13 +382,14 @@ func (t *tree) logLine(ctx context.Context, name string) string {
 	if t.at != nil {
 		return t.versionLine(ctx, name, false)
 	}
-	if t.lastCommit(ctx, name) == nil {
+	// Two commits, as lastCommit reads them, so both share a cache entry.
+	log, err := t.gitLog(ctx, name, 2)
+	if err != nil || len(log) == 0 {
 		return ""
 	}
-	log, _ := t.gitLog(ctx, name, 2)
 	c, esc := &log[0], template.HTMLEscapeString
 	older := ""
-	if len(log) > 1 && !t.shared && t.web == nil {
+	if len(log) > 1 && t.historyInVersions(ctx, name) {
 		older = fmt.Sprintf(" · <a href=\"%s\" title=\"%s\">‹ older</a>", esc(t.versionURL(&log[1], name)), esc(log[1].subject))
 	}
 	return fmt.Sprintf("<p class=\"own latest\"><a href=\"?log\">%s</a> <a class=\"hash\" href=\"?commit=%s\" title=\"%s\">%s</a> <span class=\"date\" title=\"%s\">%s</span> %s%s</p>\n",
@@ -451,22 +452,16 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	// Each commit folds out to its message and its diff. The diff comes
 	// from the commit page when the fold opens, through the one script;
 	// without it, the link in its place opens that page.
+	// A local tree links each commit's version of the page: the file or
+	// directory as it was then.
+	browse := t.historyInVersions(r.Context(), name)
 	body.WriteString("<ol class=\"log\">\n")
 	for i := range log {
 		c := &log[i]
 		show := esc("?commit=" + c.hash)
-		// A local tree links each commit's version of the page: the
-		// file or directory as it was then.
 		then := ""
-		if t.at == nil && !t.shared && t.web == nil {
-			p := t.prefix + "@" + c.short + "/"
-			if name != "." {
-				p += name
-				if dir {
-					p += "/"
-				}
-			}
-			then = fmt.Sprintf(" <a class=\"then\" href=\"%s\">browse</a>", esc((&url.URL{Path: p}).String()))
+		if browse {
+			then = fmt.Sprintf(" <a class=\"then\" href=\"%s\">browse</a>", esc(t.versionURL(c, below(name, dir))))
 		}
 		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"own\">%s%s</span> <span class=\"subject\">%s</span></summary>\n",
 			show, commitLine(c), then, esc(c.subject))

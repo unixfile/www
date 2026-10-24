@@ -684,7 +684,7 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 	name := t.name(r.URL.Path)
 	// A first segment such as @5430ac3 names a version, unless the tree
 	// holds an entry by that name.
-	if first, _, _ := strings.Cut(name, "/"); t.at == nil && !t.shared && t.web == nil && atSegment.MatchString(first) {
+	if first, _, _ := strings.Cut(name, "/"); t.hasVersions() && atSegment.MatchString(first) {
 		if _, err := fs.Stat(t.fsys, first); err != nil {
 			t.serveVersion(w, r, first)
 			return

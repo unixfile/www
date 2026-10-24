@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -75,13 +76,7 @@ func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first string
 // and a link to the page as it is now.
 func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
 	c, esc := t.at, template.HTMLEscapeString
-	rest := ""
-	if name != "." {
-		rest = name
-		if dir {
-			rest += "/"
-		}
-	}
+	rest := below(name, dir)
 	older, newer := t.base.neighbours(ctx, name, c.hash)
 	var b strings.Builder
 	b.WriteString("<p class=\"own latest\">")
@@ -103,34 +98,105 @@ func (t *tree) versionURL(c *commit, rest string) string {
 	return (&url.URL{Path: t.prefix + "@" + c.short + "/" + rest}).String()
 }
 
-// neighbours are the commits before and after rev that touched name, a
-// path below t: the next older and the next newer versions of its page.
-// The newer is the next on the way from rev to HEAD. Older is fixed by
-// rev, so it is cached under rev; newer under HEAD as well.
+// below is the page at name as a path below its tree's URL: "" for the
+// root, and a directory's ends in a slash.
+func below(name string, dir bool) string {
+	switch {
+	case name == ".":
+		return ""
+	case dir:
+		return name + "/"
+	}
+	return name
+}
+
+// hasVersions reports whether t serves its versions at @: a local tree as
+// it is now.
+func (t *tree) hasVersions() bool {
+	return t.at == nil && !t.shared && t.web == nil
+}
+
+// historyInVersions reports whether the history of the page at name is
+// the one t's versions show. Versions read the repo t lies in, at name's
+// own path, while a history follows links and runs git where the page's
+// file lies, which may be another repo: one nested in t, or one of many
+// in a tree that lies in none.
+func (t *tree) historyInVersions(ctx context.Context, name string) bool {
+	if !t.hasVersions() {
+		return false
+	}
+	dir, spec, err := t.gitPlace(name)
+	if err != nil || filepath.Join(dir, spec) != filepath.Join(t.realDir, filepath.FromSlash(name)) {
+		return false
+	}
+	here, there := repoAt(ctx, t.dir), repoAt(ctx, dir)
+	return here.complaint == "" && there.complaint == "" && here.gitDir == there.gitDir
+}
+
+// neighbours are the commits before and after the version of name, a path
+// below t, that rev shows: the next older and the next newer versions of
+// its page. That version is the newest commit up to rev that touched
+// name, which need not be rev. Both walk in topological order, so skewed
+// dates and merged branches leave no version out, and the newer is the
+// next on the way from rev to HEAD. Older is fixed by rev, so it is cached
+// under rev; newer under HEAD's commit as well.
 func (t *tree) neighbours(ctx context.Context, name, rev string) (older, newer *commit) {
 	spec := "./"
 	if name != "." {
 		spec = "./" + name
 	}
-	one := func(key string, args ...string) *commit {
+	// A failure is left out of the cache, as it may pass.
+	cached := func(key string, find func() (*commit, error)) *commit {
 		if v, ok := gitCache.get(key); ok {
 			return v.(*commit)
 		}
-		out, err := git(ctx, t.dir, append(append([]string{"log", "--no-show-signature", "-z", "--format=" + commitFormat}, args...), "--", spec)...)
+		c, err := find()
 		if err != nil {
 			return nil
-		}
-		var c *commit
-		if cs := t.commits(out); len(cs) > 0 {
-			c = &cs[len(cs)-1]
 		}
 		gitCache.put(key, c, 128)
 		return c
 	}
-	older = one("older\x00"+t.dir+"\x00"+rev+"\x00"+spec, "-1", rev+"^")
-	if r := repoAt(ctx, t.dir); r.complaint == "" {
-		newer = one("newer\x00"+t.dir+"\x00"+rev+"\x00"+r.head(ctx)+"\x00"+spec, "--ancestry-path", rev+"..HEAD")
+	log := func(args ...string) ([]commit, error) {
+		out, err := git(ctx, t.dir, append(append([]string{"log", "--no-show-signature", "-z", "--format=" + commitFormat}, args...), "--", spec)...)
+		if err != nil {
+			return nil, err
+		}
+		return t.commits(out), nil
 	}
+	older = cached("older\x00"+t.dir+"\x00"+rev+"\x00"+spec, func() (*commit, error) {
+		cs, err := log("--topo-order", "-2", rev)
+		if err != nil || len(cs) < 2 {
+			return nil, err
+		}
+		return &cs[1], nil
+	})
+	r := repoAt(ctx, t.dir)
+	if r.complaint != "" {
+		return older, nil
+	}
+	// git reads HEAD again, so it is given the commit the key names.
+	head := r.head(ctx)
+	if !isHash(head) {
+		return older, nil
+	}
+	newer = cached("newer\x00"+t.dir+"\x00"+rev+"\x00"+head+"\x00"+spec, func() (*commit, error) {
+		// Hashes alone, as only the first is wanted, and --reverse comes
+		// after any limit, so git cannot stop at it.
+		out, err := git(ctx, t.dir, "rev-list", "--topo-order", "--reverse", "--ancestry-path", rev+".."+head, "--", spec)
+		if err != nil {
+			return nil, err
+		}
+		next, _, _ := strings.Cut(string(out), "\n")
+		if next == "" {
+			return nil, nil
+		}
+		cs, err := log("-1", next)
+		if err != nil || len(cs) == 0 {
+			return nil, err
+		}
+		return &cs[0], nil
+	})
 	return older, newer
 }
 
