@@ -129,10 +129,12 @@ func below(name string, dir bool) string {
 	return name
 }
 
-// hasVersions reports whether t serves its versions at @: a local tree as
-// it is now.
+// hasVersions reports whether t serves its versions at @: a tree as it is
+// now, on loopback. A repo on the web address has them too: its clone
+// holds every commit and tree, and git fetches the old files a version
+// shows from the forge as a page needs them.
 func (t *tree) hasVersions() bool {
-	return t.at == nil && !t.shared && t.web == nil
+	return t.at == nil && !t.shared
 }
 
 // historyInVersions reports whether the history of the page at name is

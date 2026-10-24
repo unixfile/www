@@ -22,7 +22,7 @@ www first finds where the repo ends in the path. It asks `git ls-remote` on ever
 
 A URL that ends in `.git` redirects to the one without, so a repo has one URL.
 
-When another website links to a repo not yet cached, the browser marks the request as cross-site, and www asks before fetching anything. A URL typed, bookmarked or followed from a www page fetches at once. So no site can make your browser fill the disk.
+When another website links to a repo not yet cached, the browser marks the request as cross-site, and www asks before fetching anything. The page's read link keeps the link's fragment, eg the lines `#L10-L12` marks, and the page never reloads on its own, so nothing is fetched until you follow it. A URL typed, bookmarked or followed from a www page fetches at once. So no site can make your browser fill the disk.
 
 ## The cache
 
@@ -37,6 +37,12 @@ Delete the directory any time; www fetches what it needs again.
 A visit to a repo fetched over five minutes ago serves the cached commit at once and fetches in the background. When the branch moved, www builds the new commit's worktree beside the old one and swaps the link, so no page sees a half-updated tree, and open pages reload onto the new commit. The header of every page in the repo names the commit shown and when it was fetched. When a fetch fails, the page keeps the commit it has and says the fetch failed.
 
 A fetch takes the branches and tags. It leaves out GitHub's pull request refs, which would fill a large repo's cache with commits nobody asked for.
+
+## Versions and links
+
+A repo here has versions as a local tree has: `@` and a commit below the repo's address, eg `/github.com/junegunn/fzf/@b412a45/main.go`, shows the repo as it was then, and its pages, history and share button link them. The clone holds every commit and tree, so a version's listings come at once; its files are fetched from the forge as a page first needs them.
+
+The share button here copies the forge's own link at the commit the page shows, eg `https://github.com/junegunn/fzf/blob/<commit>/main.go#L10-L12`, since a link to this address opens only on this machine. Lines take the forge's form: `#L10-L12` on GitHub and Codeberg, `#L10-12` on GitLab and `#lines-10:12` on Bitbucket. A host www knows no link form for gets the page's own address.
 
 ## Listings
 

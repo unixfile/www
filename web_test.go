@@ -148,6 +148,15 @@ func TestWebReadsARepoOnTheVisit(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "# Old") {
 		t.Errorf("first commit's diff: %d\n%s", rec.Code, rec.Body)
 	}
+	// A version shows the repo as it was, fetching the old file; a hash
+	// redirects to the commit's stardate.
+	rec = webGet(w, "/"+f.host+"/acct/docs/@"+first[:7]+"/README.md")
+	if rec.Code == http.StatusMovedPermanently {
+		rec = webGet(w, rec.Header().Get("Location"))
+	}
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Old</h1>") {
+		t.Errorf("first commit's version: %d\n%s", rec.Code, rec.Body)
+	}
 	if rec := webGet(w, "/"+f.host+"/acct/docs.git"); rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/"+f.host+"/acct/docs" {
 		t.Errorf(".git: %d %s", rec.Code, rec.Header().Get("Location"))
 	}
@@ -212,6 +221,11 @@ func TestWebAsksWhenAnotherSiteSends(t *testing.T) {
 	}
 	if len(w.jobs) != 0 {
 		t.Error("a cross-site visit started a job")
+	}
+	// The page runs the script, which keeps the link's fragment, but
+	// holds no stream that could reload it into a fetch.
+	if body := rec.Body.String(); !strings.Contains(body, `<script data-live="">`) {
+		t.Errorf("confirm page script: %s", body)
 	}
 	if rec := webGet(w, "/"+f.host+"/acct/r/", "Sec-Fetch-Site", "same-origin"); rec.Code != http.StatusAccepted {
 		t.Errorf("same-origin: %d", rec.Code)
@@ -361,5 +375,39 @@ func TestWebLinksHome(t *testing.T) {
 	w.srv.homeURL = "http://127.31.1.1:8080"
 	if body := webGet(w, "/").Body.String(); !strings.Contains(body, `Trees: <a href="http://127.31.1.1:8080/">127.31.1.1:8080/</a>`) {
 		t.Errorf("no link home: %s", body)
+	}
+}
+
+// A page of a repo on the web address links its forge's own permanent
+// URL: a file or directory at the commit shown, or a commit.
+func TestForgeLink(t *testing.T) {
+	needGit(t)
+	_, tr, dir := serveTree(t)
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	commitAll(t, dir, "one")
+	out, _ := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	head := strings.TrimSpace(string(out))
+	tr.web = &webRepo{key: "github.com/junegunn/fzf"}
+	for _, c := range []struct{ path, kind, want string }{
+		{"/a/b.go", "code", "https://github.com/junegunn/fzf/blob/" + head + "/a/b.go"},
+		{"/a/", "dir", "https://github.com/junegunn/fzf/tree/" + head + "/a"},
+		{"/", "dir", "https://github.com/junegunn/fzf/tree/" + head},
+		{"/?commit=" + head, "commit", "https://github.com/junegunn/fzf/commit/" + head},
+		{"/?log", "log", ""},
+	} {
+		got, lines := tr.forgeLink(httptest.NewRequest("GET", c.path, nil), c.kind)
+		if got != c.want || c.want != "" && lines != "github" {
+			t.Errorf("%s: %q %q, want %q", c.path, got, lines, c.want)
+		}
+	}
+	tr.web.key = "gitlab.com/a/b/c"
+	if got, lines := tr.forgeLink(httptest.NewRequest("GET", "/a/b.go", nil), "code"); got != "https://gitlab.com/a/b/c/-/blob/"+head+"/a/b.go" || lines != "gitlab" {
+		t.Errorf("gitlab: %q %q", got, lines)
+	}
+	tr.web.key = "git.suckless.org/dwm"
+	if got, _ := tr.forgeLink(httptest.NewRequest("GET", "/a/b.go", nil), "code"); got != "" {
+		t.Errorf("an unknown forge: %q", got)
 	}
 }

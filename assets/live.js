@@ -867,8 +867,21 @@
 		const rest = location.search.slice(1).split("&").filter((s) => s && s !== "q" && !s.startsWith("q="));
 		return rest.length ? "?" + rest.join("&") : "";
 	};
-	const shareURL = () => {
+	// On the web address the link is the forge's own, at the commit the
+	// page shows, which opens in any browser; lines take the forge's form.
+	const forgeLines = (hash, style) => {
+		const [, a, b] = /^#L(\d+)(?:-L(\d+))?$/.exec(hash);
+		if (style === "gitlab") return "#L" + a + (b ? "-" + b : "");
+		if (style === "bitbucket") return "#lines-" + a + (b ? ":" + b : "");
+		return hash;
+	};
+	const shareURL = (btn) => {
 		const lines = selectedLines() || (/^#L\d+(-L\d+)?$/.test(location.hash) ? location.hash : null);
+		const forge = btn.dataset.forge;
+		if (forge) {
+			if (lines) return forge + forgeLines(lines, btn.dataset.lines);
+			return forge + (fragmentText() || "");
+		}
 		if (lines) return location.origin + pinnedPath() + withoutQuery() + lines;
 		const text = fragmentText();
 		if (text) return location.origin + location.pathname + withoutQuery() + text;
@@ -887,7 +900,7 @@
 	});
 	document.addEventListener("click", (e) => {
 		const btn = e.target.closest && e.target.closest("button.share");
-		if (btn) clip(btn, shareURL());
+		if (btn) clip(btn, shareURL(btn));
 	});
 
 	// The top line opens the timeline, the menu of the page's versions.
@@ -960,6 +973,15 @@
 			})
 			.catch(() => delete d.dataset.loaded);
 	}, true);
+
+	// A link another site sent to a repo not yet read lands on a page
+	// that asks first; its read link keeps the link's fragment, eg the
+	// lines it marks.
+	document.addEventListener("DOMContentLoaded", () => {
+		if (document.body.className !== "confirm" || !location.hash) return;
+		const a = document.querySelector("main a");
+		if (a) a.href = a.href.split("#")[0] + location.hash;
+	});
 
 	// A commit page shows its plain diff at once and asks for the semantic
 	// one after: the declarations the commit changed above the diff, and

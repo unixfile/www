@@ -991,7 +991,11 @@ type page struct {
 	Shared  bool   // a shared server's page, which has no button
 	NoStop  bool   // a page on the web address, which has no button
 	Live    string // the URL of the page's live reload stream, or ""
-	Fixed   bool   // a version, which never changes: the script runs but holds no stream
+	Fixed   bool   // a version, which never changes, or a page that must not reload: the script runs but holds no stream
+	// Forge is, for a page of a repo on the web address, the forge's own
+	// permanent URL for it, which the share button copies; ForgeLines is
+	// how that forge marks lines.
+	Forge, ForgeLines string
 	Built   *stamp // when the binary was built, above the header, with --stamp; none on a share
 }
 
@@ -1053,7 +1057,9 @@ func (t *tree) crumbs(name string) []crumb {
 }
 
 func render(w http.ResponseWriter, r *http.Request, status int, p page) {
-	p.Live = liveURL(r)
+	if p.Live == "" {
+		p.Live = liveURL(r)
+	}
 	if showBuilt && !p.Shared && !built.IsZero() {
 		p.Built = &stamp{Clock: clock(built), Millis: built.UnixMilli(), Ago: int(time.Since(built).Seconds()),
 			Commit: buildCommit, Rendered: rendered(r)}
@@ -1088,6 +1094,7 @@ func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page
 	}
 	if status == http.StatusOK {
 		p.Search = searchURL(r.URL.Path)
+		p.Forge, p.ForgeLines = t.forgeLink(r, p.Kind)
 	}
 	render(w, r, status, p)
 }

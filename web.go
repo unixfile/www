@@ -542,6 +542,63 @@ func webPath(u *url.URL) (key, p string) {
 	return "", ""
 }
 
+// forgeStyle is how a forge links a file, a directory and a commit, each
+// followed by a commit's hash, and how it marks lines in a fragment:
+// github as #L10-L12, gitlab as #L10-12, bitbucket as #lines-10:12.
+type forgeStyle struct{ file, dir, commit, lines string }
+
+var forgeStyles = map[string]forgeStyle{
+	"github.com":    {"/blob/", "/tree/", "/commit/", "github"},
+	"codeberg.org":  {"/src/commit/", "/src/commit/", "/commit/", "github"},
+	"gitlab.com":    {"/-/blob/", "/-/tree/", "/-/commit/", "gitlab"},
+	"bitbucket.org": {"/src/", "/src/", "/commits/", "bitbucket"},
+}
+
+// forgeLink is the forge's own permanent URL for the page of kind that r
+// asks of t, a repo on the web address or a version of one, and how the
+// forge marks lines; "" where the forge or the page has none. A file or
+// directory is linked at the commit the page shows, so the link keeps
+// naming the same text after the forge moves on.
+func (t *tree) forgeLink(r *http.Request, kind string) (link, lines string) {
+	repo := t.web
+	if t.base != nil {
+		repo = t.base.web
+	}
+	if repo == nil {
+		return "", ""
+	}
+	host, _, _ := strings.Cut(repo.key, "/")
+	st, ok := forgeStyles[host]
+	if !ok {
+		return "", ""
+	}
+	base := "https://" + repo.key
+	var commit, prefix string
+	switch kind {
+	case "commit":
+		if h := r.URL.Query().Get("commit"); hexHash.MatchString(h) {
+			return base + st.commit + h, st.lines
+		}
+		return "", ""
+	case "doc", "code", "tree":
+		prefix = st.file
+	case "dir":
+		prefix = st.dir
+	default:
+		return "", ""
+	}
+	if t.at != nil {
+		commit = t.at.hash
+	} else if commit = repoAt(r.Context(), t.dir).head(r.Context()); !isHash(commit) {
+		return "", ""
+	}
+	link = base + prefix + commit
+	if name := t.name(r.URL.Path); name != "." {
+		link += (&url.URL{Path: "/" + name}).EscapedPath()
+	}
+	return link, st.lines
+}
+
 // probe asks every prefix of the path at once whether a repo answers
 // there, each with and without .git, and takes the longest that does. It
 // returns the repo's key and URL, or "" and whether it probed at all.
@@ -1210,7 +1267,10 @@ func (w *web) serveConfirm(rw http.ResponseWriter, r *http.Request, key string) 
 	u := (&url.URL{Path: "/" + key}).String()
 	body := fmt.Sprintf("<p class=\"own\">Another site sent you here, so nothing is fetched yet. <a href=\"%s\">Read %s</a> fetches it from %s into the cache.</p>\n",
 		esc(u), esc(key), esc(webScheme+"://"+key))
-	w.render(rw, r, http.StatusOK, key, webCrumbs(key), "confirm", body)
+	// The page runs the script, which carries the link's fragment, eg
+	// #L10-L12, onto the read link, but holds no stream: a reload must
+	// not fetch what the user has not asked for.
+	render(rw, r, http.StatusOK, page{Title: key, Crumbs: webCrumbs(key), Kind: "confirm", Body: template.HTML(body), NoStop: true, Live: "-", Fixed: true})
 }
 
 // serveListing lists a host's or account's repos, and names its source.
