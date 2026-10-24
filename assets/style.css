@@ -366,6 +366,15 @@ pre.numberSource { margin-left: 3em; border-left: 1px solid var(--gutter);  padd
    or two past its last line; the scrolling div around the pre clips that
    rather than grow a scroll bar. */
 pre.scopes { isolation: isolate; }
+/* The link between the plain and the scoped view sits over the code's top
+   right corner, at the size of technical background, on the page's colour
+   so a long first line runs under it. The code's top margin collapses
+   through div.code, so top 0 is the code's first row. */
+div.code { position: relative; }
+a.view { position: absolute; top: 0; right: 0; z-index: 1; padding: 0 0.4em;
+  font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px);
+  background: var(--page); color: var(--muted); text-decoration-color: var(--rule); }
+a.view:hover { text-decoration-color: currentColor; }
 div.sourceCode:has(> pre.scopes) { overflow-y: hidden; }
 pre.scopes i.scope {
   position: absolute; z-index: -1;

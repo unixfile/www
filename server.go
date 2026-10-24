@@ -788,13 +788,16 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 	}
 	var body strings.Builder
 	body.WriteString(t.logLine(r.Context(), name))
+	// The link to the other view sits over the code's top right corner.
 	_, scoped := r.URL.Query()["scopes"]
-	body.WriteString(highlightPage(codeLexer(name), b, scoped))
-	view := "scopes"
 	if scoped {
-		view = "flat"
+		body.WriteString(`<div class="code"><a class="view" href="?">flat</a>`)
+	} else {
+		body.WriteString(`<div class="code"><a class="view" href="?scopes">scopes</a>`)
 	}
-	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String()), Raw: true, View: view})
+	body.WriteString(highlightPage(codeLexer(name), b, scoped))
+	body.WriteString(`</div>`)
+	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String()), Raw: true})
 }
 
 // serveRaw sends the file itself. Text goes as plain text, so a stray .html
@@ -918,7 +921,6 @@ type page struct {
 	Kind    string
 	Body    template.HTML
 	Raw     bool
-	View    string       // on a code page, the other view the header links: "flat" or "scopes"
 	Tree    string       // prefix the stop button withdraws, or "" for every tree
 	Search  string       // the tree's URL, which answers ?search=, or "" off a tree
 	Path    string       // the page's file or directory on disk, which the copy button copies; "" on a share or a failed page
