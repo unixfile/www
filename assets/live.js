@@ -591,6 +591,21 @@
 		e.preventDefault();
 	});
 
+	// A line's number marks the line and puts it in the address, eg #L42;
+	// clicking the marked line's number again clears both. An empty
+	// fragment unmarks the line, since replaceState alone leaves :target
+	// as it was; the scroll position is kept, and the bare # dropped.
+	document.addEventListener("click", (e) => {
+		const a = e.target.closest && e.target.closest("pre.numberSource code > span > a:first-child");
+		if (!a || a.getAttribute("href") !== location.hash) return;
+		e.preventDefault();
+		const x = scrollX, y = scrollY;
+		location.hash = "";
+		scrollTo(x, y);
+		history.replaceState(history.state, "", location.pathname + location.search);
+		hold();
+	});
+
 	// The copy button copies the page's path on disk: through the
 	// clipboard API where the origin is secure, else through a selection,
 	// which works on any origin. Its glyph says how it went: a tick or a
