@@ -889,7 +889,7 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 
 	var body strings.Builder
 	if t.at != nil {
-		body.WriteString(t.versionLine(name, true))
+		body.WriteString(t.versionLine(r.Context(), name, true))
 	}
 	body.WriteString("<ul class=\"listing\">\n")
 	if t.lastCommit(r.Context(), name) != nil {

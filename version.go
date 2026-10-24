@@ -70,21 +70,68 @@ func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first string
 	v.serve(w, r)
 }
 
-// versionLine is the line at the top of a page in a version: the commit,
-// its age and subject, and a link to the page as it is now.
-func (t *tree) versionLine(name string, dir bool) string {
+// versionLine is the line at the top of a page in a version: links to
+// the page's older and newer versions, the commit, its age and subject,
+// and a link to the page as it is now.
+func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
 	c, esc := t.at, template.HTMLEscapeString
-	now := t.base.prefix
+	rest := ""
 	if name != "." {
-		now += name
+		rest = name
 		if dir {
-			now += "/"
+			rest += "/"
 		}
 	}
-	return fmt.Sprintf("<p class=\"own latest\">as of <a class=\"hash\" href=\"%s?commit=%s\" title=\"%s\">%s</a> "+
-		"<span class=\"date\" title=\"%s\">%s</span> %s · <a href=\"%s\">now</a></p>\n",
+	older, newer := t.base.neighbours(ctx, name, c.hash)
+	var b strings.Builder
+	b.WriteString("<p class=\"own latest\">")
+	if older != nil {
+		fmt.Fprintf(&b, "<a href=\"%s\" title=\"%s\">‹ older</a> · ", esc(t.base.versionURL(older, rest)), esc(older.subject))
+	}
+	fmt.Fprintf(&b, "as of <a class=\"hash\" href=\"%s?commit=%s\" title=\"%s\">%s</a> <span class=\"date\" title=\"%s\">%s</span> %s",
 		esc(t.base.prefixURL()), esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"),
-		age(time.Since(c.date)), esc(c.subject), esc((&url.URL{Path: now}).String()))
+		age(time.Since(c.date)), esc(c.subject))
+	if newer != nil {
+		fmt.Fprintf(&b, " · <a href=\"%s\" title=\"%s\">newer ›</a>", esc(t.base.versionURL(newer, rest)), esc(newer.subject))
+	}
+	fmt.Fprintf(&b, " · <a href=\"%s\">now</a></p>\n", esc((&url.URL{Path: t.base.prefix + rest}).String()))
+	return b.String()
+}
+
+// versionURL is the URL of rest, a path below t, in commit c's version.
+func (t *tree) versionURL(c *commit, rest string) string {
+	return (&url.URL{Path: t.prefix + "@" + c.short + "/" + rest}).String()
+}
+
+// neighbours are the commits before and after rev that touched name, a
+// path below t: the next older and the next newer versions of its page.
+// The newer is the next on the way from rev to HEAD. Older is fixed by
+// rev, so it is cached under rev; newer under HEAD as well.
+func (t *tree) neighbours(ctx context.Context, name, rev string) (older, newer *commit) {
+	spec := "./"
+	if name != "." {
+		spec = "./" + name
+	}
+	one := func(key string, args ...string) *commit {
+		if v, ok := gitCache.get(key); ok {
+			return v.(*commit)
+		}
+		out, err := git(ctx, t.dir, append(append([]string{"log", "--no-show-signature", "-z", "--format=" + commitFormat}, args...), "--", spec)...)
+		if err != nil {
+			return nil
+		}
+		var c *commit
+		if cs := t.commits(out); len(cs) > 0 {
+			c = &cs[len(cs)-1]
+		}
+		gitCache.put(key, c, 128)
+		return c
+	}
+	older = one("older\x00"+t.dir+"\x00"+rev+"\x00"+spec, "-1", rev+"^")
+	if r := repoAt(ctx, t.dir); r.complaint == "" {
+		newer = one("newer\x00"+t.dir+"\x00"+rev+"\x00"+r.head(ctx)+"\x00"+spec, "--ancestry-path", rev+"..HEAD")
+	}
+	return older, newer
 }
 
 // commitFS reads a directory as it was in one commit: listings from git

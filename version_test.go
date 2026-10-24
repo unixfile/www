@@ -33,6 +33,15 @@ func TestVersion(t *testing.T) {
 	if rec := get(h, "/@0000000/a/b.go"); rec.Code != 404 {
 		t.Errorf("unknown commit: %d", rec.Code)
 	}
+	// Older and newer walk a page's versions; the current page starts
+	// the walk.
+	if body := get(h, "/a/b.go").Body.String(); !strings.Contains(body, `<a href="`+at+`a/b.go" title="Add the docs">‹ older</a>`) {
+		t.Errorf("current page has no older link:\n%s", body)
+	}
+	second := head(t, dir, "HEAD")[:7]
+	if body := get(h, at+"a/b.go").Body.String(); !strings.Contains(body, `<a href="/@`+second+`/a/b.go" title="Rename the package &lt;b&gt;">newer ›</a>`) || strings.Contains(body, "older</a>") {
+		t.Errorf("first version has no newer link, or an older one:\n%s", body)
+	}
 	if body := get(h, "/a/b.go?log").Body.String(); !strings.Contains(body, `<a class="then" href="`+at+`a/b.go">browse</a>`) {
 		t.Errorf("history links no version:\n%s", body)
 	}

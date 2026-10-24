@@ -335,7 +335,8 @@ func (t *tree) lastCommit(ctx context.Context, name string) *commit {
 	if t.at != nil {
 		return nil
 	}
-	log, err := t.gitLog(ctx, name, 1)
+	// Two commits, as the page's top line asks for, share one cache entry.
+	log, err := t.gitLog(ctx, name, 2)
 	if err != nil || len(log) == 0 {
 		return nil
 	}
@@ -374,18 +375,24 @@ func commitLine(c *commit) string {
 
 // logLine is the line at the top of a doc or code page that leads to its
 // history and names its last commit, or "" when it has none. The commit's
-// time shows as its age, eg 3d; its full date is on hover.
+// time shows as its age, eg 3d; its full date is on hover. On a local
+// tree, older leads to the version before the last commit, where a walk
+// back through the page's versions starts.
 func (t *tree) logLine(ctx context.Context, name string) string {
 	if t.at != nil {
-		return t.versionLine(name, false)
+		return t.versionLine(ctx, name, false)
 	}
-	c := t.lastCommit(ctx, name)
-	if c == nil {
+	if t.lastCommit(ctx, name) == nil {
 		return ""
 	}
-	esc := template.HTMLEscapeString
-	return fmt.Sprintf("<p class=\"own latest\"><a href=\"?log\">%s</a> <a class=\"hash\" href=\"?commit=%s\" title=\"%s\">%s</a> <span class=\"date\" title=\"%s\">%s</span> %s</p>\n",
-		esc(logLabel), esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"), age(time.Since(c.date)), esc(c.subject))
+	log, _ := t.gitLog(ctx, name, 2)
+	c, esc := &log[0], template.HTMLEscapeString
+	older := ""
+	if len(log) > 1 && !t.shared && t.web == nil {
+		older = fmt.Sprintf(" · <a href=\"%s\" title=\"%s\">‹ older</a>", esc(t.versionURL(&log[1], name)), esc(log[1].subject))
+	}
+	return fmt.Sprintf("<p class=\"own latest\"><a href=\"?log\">%s</a> <a class=\"hash\" href=\"?commit=%s\" title=\"%s\">%s</a> <span class=\"date\" title=\"%s\">%s</span> %s%s</p>\n",
+		esc(logLabel), esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"), age(time.Since(c.date)), esc(c.subject), older)
 }
 
 // age says how long ago in one unit, rounded down: now, 5m, 2h, 3d, 4mo

@@ -145,7 +145,7 @@ func TestPageTopNamesLastCommit(t *testing.T) {
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<p class="own latest"><a href="?log">&lt;(git log)</a> <a class="hash" href="?commit=`) || !strings.Contains(body, "</span> "+subject+"</p>") {
+		if !strings.Contains(body, `<p class="own latest"><a href="?log">&lt;(git log)</a> <a class="hash" href="?commit=`) || !strings.Contains(body, "</span> "+subject) {
 			t.Errorf("%s: no top line with %q:\n%s", p, subject, body)
 		}
 	}
@@ -364,7 +364,7 @@ func TestWarmCachesFirstPages(t *testing.T) {
 	r := repoAt(t.Context(), dir)
 	for _, name := range []string{".", "ReadMe.md"} {
 		d, spec, _ := tr.gitPlace(name)
-		key := fmt.Sprintf("log\x00%s\x00%s\x00%s\x00%s\x00%d\x00%t", r.gitDir, r.head(t.Context()), d, spec, 1, false)
+		key := fmt.Sprintf("log\x00%s\x00%s\x00%s\x00%s\x00%d\x00%t", r.gitDir, r.head(t.Context()), d, spec, 2, false)
 		if _, ok := gitCache.get(key); !ok {
 			t.Errorf("%s: top line not cached", name)
 		}
