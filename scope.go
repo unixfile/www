@@ -55,11 +55,13 @@ func lineCells(lines [][]chroma.Token) (indent, width []int) {
 }
 
 // findScopes finds the blocks of code: bracket pairs whose ends lie on
-// different lines, and in Python the lines indented under a line that
-// ends with a colon. Bracket pairs within a line, with something between
-// them, are leaves. Brackets count only in punctuation and operator
-// tokens, so a brace inside a string or comment opens nothing. Blocks
-// come first, outer before inner, then leaves by row, outer before inner.
+// different lines, strings that span lines, and in Python the lines
+// indented under a line that ends with a colon. Bracket pairs and strings
+// within a line, with something inside them, are leaves, the units vim's
+// ci( and ci" act on. Brackets count only in punctuation and operator
+// tokens, so a brace inside a string or comment opens nothing; a string
+// is a run of string tokens, its quotes and escapes included. Blocks come
+// first, outer before inner, then leaves by row, outer before inner.
 func findScopes(lines [][]chroma.Token, python bool) []scope {
 	indent, width := lineCells(lines)
 	type open struct {
@@ -68,11 +70,47 @@ func findScopes(lines [][]chroma.Token, python bool) []scope {
 	}
 	var stack []open
 	var found, leaves []scope
+	// level counts the brackets open on row, plus one: a leaf's level
+	// among the leaves around it.
+	level := func(open []open, row int) int {
+		n := 1
+		for _, e := range open {
+			if e.row == row {
+				n++
+			}
+		}
+		return n
+	}
+	// str is the string being read: where it starts and where it has got
+	// to, row and cell.
+	var str struct {
+		on                 bool
+		row, col, end, top int
+	}
+	endString := func() {
+		if !str.on {
+			return
+		}
+		str.on = false
+		switch {
+		case str.end > str.row:
+			found = append(found, scope{first: str.row, last: str.end})
+		case str.top > str.col+2:
+			leaves = append(leaves, scope{first: str.row, last: str.row, left: str.col, right: str.top, leaf: level(stack, str.row)})
+		}
+	}
 	for row, line := range lines {
 		col := 0
 		for _, tok := range line {
 			cat := tok.Type.Category()
 			bracketed := cat == chroma.Punctuation || cat == chroma.Operator
+			if tok.Type.SubCategory() == chroma.LiteralString {
+				if !str.on {
+					str.on, str.row, str.col = true, row, col
+				}
+			} else {
+				endString()
+			}
 			for j := 0; j < len(tok.Value); j++ {
 				c := tok.Value[j]
 				switch {
@@ -94,19 +132,16 @@ func findScopes(lines [][]chroma.Token, python bool) []scope {
 						if o.row < row {
 							found = append(found, scope{first: o.row, last: row})
 						} else if col > o.col+1 {
-							level := 1
-							for _, e := range stack[:k] {
-								if e.row == row {
-									level++
-								}
-							}
-							leaves = append(leaves, scope{first: row, last: row, left: o.col, right: col + 1, leaf: level})
+							leaves = append(leaves, scope{first: row, last: row, left: o.col, right: col + 1, leaf: level(stack[:k], row)})
 						}
 						stack = stack[:k]
 						break
 					}
 				}
 				col++
+			}
+			if str.on {
+				str.end, str.top = row, col
 			}
 		}
 		if python && len(stack) == 0 && endsWithColon(line) {
@@ -125,6 +160,7 @@ func findScopes(lines [][]chroma.Token, python bool) []scope {
 			}
 		}
 	}
+	endString()
 
 	// Outer scopes first; two brackets that open and close on the same
 	// rows, as in foo(func() {, draw one box.

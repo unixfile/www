@@ -12,9 +12,9 @@ func scopesOf(name, code string) []scope {
 	return findScopes(chroma.SplitTokensIntoLines(tokenise(codeLexer(name), code)), langName(codeLexer(name)) == "python")
 }
 
-// A block that spans lines is a scope, and brackets on one line around
-// something are a leaf; brackets inside a string or comment, or around
-// nothing, are neither. A box reaches past each box inside it, and a call
+// A block that spans lines is a scope, and brackets or a string on one
+// line around something are a leaf; brackets inside a string or comment,
+// or around nothing, are neither. A box reaches past each box inside it, and a call
 // whose argument is a function draws one box.
 func TestScopesGo(t *testing.T) {
 	src := "func f() {\n" + // 0
@@ -30,6 +30,7 @@ func TestScopesGo(t *testing.T) {
 		{first: 0, last: 7, left: 0, right: 30, depth: 1},
 		{first: 1, last: 1, left: 13, right: 20, depth: 2, leaf: 1},
 		{first: 2, last: 6, left: 8, right: 29, depth: 2},
+		{first: 3, last: 3, left: 21, right: 24, depth: 3, leaf: 1},
 		{first: 4, last: 5, left: 16, right: 27, depth: 3},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -69,6 +70,20 @@ func TestScopeLeaves(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("leaves\n%+v, want\n%+v", got, want)
+	}
+}
+
+// A string is a leaf with its quotes and escapes, inside the brackets
+// around it; an empty one is not, and one that spans lines is a block.
+func TestScopeStrings(t *testing.T) {
+	got := scopesOf("a.go", "f(\"a\\n\", \"\")\nx := `one\ntwo`\n")
+	want := []scope{
+		{first: 0, last: 0, left: 1, right: 12, depth: 1, leaf: 1},
+		{first: 0, last: 0, left: 2, right: 7, depth: 2, leaf: 2},
+		{first: 1, last: 2, left: 0, right: 9, depth: 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("strings\n%+v, want\n%+v", got, want)
 	}
 }
 
