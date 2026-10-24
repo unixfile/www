@@ -231,14 +231,13 @@ pre.diff span { display: block; min-height: 1.35em; }
 pre.diff span.add { background: var(--added); }
 pre.diff span.del { background: var(--removed); }
 pre.diff span.hunk, pre.diff span.meta { color: var(--muted); }
-/* A page's top line names its commit; ≡ opens the menu of its versions,
-   which drops over the page and scrolls on its own. The version shown is
-   marked. */
+/* A page's top line names its commit and opens the timeline, the menu
+   of its versions, which drops over the page and scrolls on its own. The
+   version shown is marked. */
 details.latest { position: relative; margin-bottom: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 0.6em; color: var(--muted); }
 details.latest > summary { list-style: none; cursor: pointer; }
 details.latest > summary::-webkit-details-marker { display: none; }
 details.latest a, details.latest span.subject { color: var(--text); }
-details.latest span.menu { padding-right: 0.2em; }
 details.latest > summary:hover span.subject { text-decoration: underline; text-decoration-color: var(--rule); }
 details.latest > div.versions, details.latest > ol.versions { position: absolute; z-index: 1; top: 100%; left: 0; margin: 0;
   max-height: 60vh; overflow-y: auto; min-width: 20em; max-width: 100%; padding: 0.4em 0; list-style: none;

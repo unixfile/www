@@ -397,7 +397,7 @@ func topLine(c *commit, base, here string) string {
 	if here != "" {
 		here = " data-here=\"" + esc(here) + "\""
 	}
-	return fmt.Sprintf("<details class=\"own latest\" data-timeline=\"%s?timeline\"%s>\n<summary><span class=\"menu\" title=\"timeline\" aria-label=\"timeline\">≡</span> %s</summary>\n"+
+	return fmt.Sprintf("<details class=\"own latest\" data-timeline=\"%s?timeline\"%s>\n<summary><span class=\"menu\">timeline</span> · %s</summary>\n"+
 		"<div class=\"versions\"><a href=\"%s?log\">%s</a></div>\n</details>\n",
 		esc(base), here, line, esc(base), esc(logLabel))
 }
