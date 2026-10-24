@@ -143,15 +143,20 @@ header nav > *, .seg { display: inline-block; max-width: 100%; overflow-wrap: an
 }
 header > span { display: inline-flex; gap: 1em; align-items: baseline; flex: none; margin-left: auto; }
 header form { display: inline; }
-header button {
+/* Buttons are raised, as the copy button is: light above and left,
+   shadow below and right, sunk while pressed, square corners. */
+header button, table.locks button {
   font: inherit;
   color: inherit;
-  background: none;
-  border: 1px solid currentColor;
-  border-radius: 0.2em;
+  background: var(--page);
+  border: 1px solid;
+  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  border-radius: 0;
   padding: 0.15em 0.7em;
   cursor: pointer;
+  white-space: nowrap;
 }
+header button:active, table.locks button:active { border-color: var(--shadow) var(--light) var(--light) var(--shadow); }
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
 pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound { font-family: ui-monospace, "Iosevka", monospace; }
@@ -256,7 +261,7 @@ p.reading::after { content: "..."; display: inline-block; vertical-align: bottom
 ul.listing .desc { color: var(--muted); font-size: 0.8em; margin-left: 1em; }
 header .age { color: var(--muted); }
 /* Kill server reaches every tree, so it alone wears the danger colour. */
-header button.kill { background: var(--danger); border-color: var(--danger); color: var(--page); }
+header button.kill { background: var(--danger); color: var(--page); }
 p.own { font-size: 0.8em; text-align: left; hyphens: none; }
 p.warn { color: var(--danger); }
 p.own code { font-size: inherit; }
@@ -270,7 +275,6 @@ table.locks td:first-child { width: 100%; }
 table.locks .since { white-space: nowrap; color: var(--muted); margin-left: 1em; }
 table.locks td + td { text-align: right; }
 table.locks form { display: inline; }
-table.locks button { font: inherit; color: inherit; background: none; border: 1px solid currentColor; border-radius: 0.2em; padding: 0.15em 0.7em; cursor: pointer; white-space: nowrap; }
 
 /* A block that changed with the last save fills with the target colour
    and fades to none in 3 s, so the eye finds where the change landed. */
