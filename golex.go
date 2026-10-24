@@ -41,9 +41,9 @@ func goTokens(code string) []chroma.Token {
 		// end is found in the source, not from the literal's length.
 		end := min(start+len(text), len(src))
 		if tok == token.COMMENT || tok == token.STRING && strings.HasPrefix(lit, "`") {
-			end = rawEnd(src, start, tok)
+			end = rawEnd(code, start, tok)
 		}
-		lexemes = append(lexemes, lexeme{start, end, tok, string(src[start:end])})
+		lexemes = append(lexemes, lexeme{start, end, tok, code[start:end]})
 	}
 
 	var out []chroma.Token
@@ -70,8 +70,10 @@ func goTokens(code string) []chroma.Token {
 }
 
 // rawEnd finds the end of a comment or raw string that starts at start.
-func rawEnd(src []byte, start int, tok token.Token) int {
-	rest := string(src[start:])
+// It slices code rather than converting the source's bytes, which would
+// copy the rest of the file for each comment.
+func rawEnd(code string, start int, tok token.Token) int {
+	rest := code[start:]
 	var close string
 	var from int
 	switch {
@@ -83,12 +85,12 @@ func rawEnd(src []byte, start int, tok token.Token) int {
 		if i := strings.IndexByte(rest, '\n'); i >= 0 {
 			return start + i
 		}
-		return len(src)
+		return len(code)
 	}
 	if i := strings.Index(rest[from:], close); i >= 0 {
 		return start + from + i + len(close)
 	}
-	return len(src)
+	return len(code)
 }
 
 var goBuiltinFuncs = setOf("uint", "uint8", "uint16", "uint32", "uint64", "int", "int8", "int16", "int32", "int64",
