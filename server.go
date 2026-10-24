@@ -635,7 +635,7 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 		body.WriteString("</table>\n")
 	}
 	render(w, r, status, page{Title: progName, Crumbs: []crumb{{Label: "index"}}, Kind: "index",
-		Body: template.HTML(body.String()), Status: s.about.status()})
+		Body: template.HTML(body.String()), Status: template.HTML(template.HTMLEscapeString(s.about.status()))})
 }
 
 // segments writes a path or URL as one box per name, each ending in its
@@ -1006,7 +1006,7 @@ type page struct {
 	Raw     bool
 	Tree    string       // prefix the stop button withdraws, or "" for every tree
 	Search  string       // the tree's URL, which answers ?search=, or "" off a tree
-	Status  string       // the server's age, on the index
+	Status  template.HTML // the server's age, on the index, or a repo's commit on the web address
 	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
 	Shared  bool   // a shared server's page, which has no button
@@ -1105,7 +1105,7 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Tree, p.Shared, p.Search = t.prefix, t.shared, t.prefixURL()
 	if t.web != nil {
-		p.NoStop, p.Status = true, t.web.status()
+		p.NoStop, p.Status = true, t.web.status(t.prefix, r.URL.Path)
 	}
 	// A version never changes and has no lock: no live reload and no stop
 	// button. Its page still runs the script, for the keys, the search box,

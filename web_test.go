@@ -137,7 +137,7 @@ func TestWebReadsARepoOnTheVisit(t *testing.T) {
 	if n := len(w.srv.list()); n != 1 {
 		t.Errorf("%d trees serve one repo", n)
 	}
-	if !strings.Contains(rec.Body.String(), "at "+head[:7]+", fetched ") {
+	if !strings.Contains(rec.Body.String(), `@ <a href="/`+f.host+`/acct/docs/@`+head[:12]+`/guide/a.md">`+head[:7]+"</a> · fetched ") {
 		t.Errorf("no commit and fetch time in the header:\n%s", rec.Body)
 	}
 	if strings.Contains(rec.Body.String(), "Delete lock") {
@@ -202,7 +202,7 @@ func TestWebRefreshes(t *testing.T) {
 			break
 		}
 	}
-	if !strings.Contains(body, "two") || !strings.Contains(body, "at "+head[:7]) {
+	if !strings.Contains(body, "two") || !strings.Contains(body, ">"+head[:7]+"</a> · fetched") {
 		t.Fatalf("not refreshed:\n%s", body)
 	}
 	if exists(old) {

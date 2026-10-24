@@ -139,17 +139,22 @@ type webRepo struct {
 
 // status is what a page of the repo says in its header: the commit shown
 // and when it was fetched.
-func (r *webRepo) status() string {
+func (r *webRepo) status(prefix, urlPath string) template.HTML {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	s := "at " + strings.TrimPrefix(filepath.Base(r.tree.dir), ".wt-")[:7] + ", fetched " + clock(r.fetched)
+	// The commit is written as the crumbs of a version write it, @ and
+	// the hash, and links this page in that version, so the address
+	// keeps naming it after the next fetch.
+	hash := strings.TrimPrefix(filepath.Base(r.tree.dir), ".wt-")
+	href := (&url.URL{Path: prefix + "@" + hash + "/" + strings.TrimPrefix(urlPath, prefix)}).String()
+	s := "@ <a href=\"" + template.HTMLEscapeString(href) + "\">" + hash[:7] + "</a> · fetched " + clock(r.fetched)
 	switch {
 	case r.fetching:
-		s += ", fetching"
+		s += " · fetching"
 	case r.failed != "":
-		s += ", fetch at " + clock(r.tried) + " failed"
+		s += " · fetch at " + clock(r.tried) + " failed"
 	}
-	return s
+	return template.HTML(s)
 }
 
 // webJob is what one visit set going: a probe for the repo the path lies
