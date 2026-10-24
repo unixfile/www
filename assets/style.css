@@ -358,7 +358,9 @@ pre.numberSource code > span > a:first-child::before
     padding: 0 4px; width: 4em;
     color: var(--gutter);
   }
-pre.numberSource { margin-left: 3em; border-left: 1px solid var(--gutter);  padding-left: 4px; }
+/* No rule between the numbers and the code; the space between them
+   suffices, and the padding takes the rule's pixel so the text stays put. */
+pre.numberSource { margin-left: 3em; padding-left: 5px; }
 /* Scopes: each block of code is a sunken box behind its text, like a
    pressed Windows 3.1 button: shadow above and left, light below and
    right. render.go places each box in its first line and sizes it in
@@ -414,8 +416,9 @@ pre.scopes i.scope.leaf {
 pre.filtering i.scope { display: none; }
 div.sourceCode
   {   }
+/* A number links to its line, eg #L42; it shows as a link on hover. */
 @media screen {
-pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+pre > code.sourceCode > span > a:first-child:hover::before { text-decoration: underline; }
 }
 code span.al { color: #ff0000; font-weight: bold; } /* Alert */
 code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
