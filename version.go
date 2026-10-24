@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"io/fs"
 	"net/http"
@@ -71,8 +70,8 @@ func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first string
 }
 
 // versionLine is the top line of a page in a version: the page's last
-// commit as of the version, the menu of the page's versions, and a link
-// to the page as it is now. A version reached through a commit that left
+// commit as of the version, and the menu of the page's versions, whose
+// first row leads to the page as it is now. A version reached through a commit that left
 // the page alone, eg by browsing a directory's history, names the commit
 // that last changed the page, so the menu can mark it.
 func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
@@ -85,8 +84,7 @@ func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
 	}
 	c := t.base.lastAt(ctx, name, t.at)
 	now := (&url.URL{Path: t.base.prefix + rest}).String()
-	return topLine(c, t.base.prefixURL()+"?commit="+c.hash, "<a href=\""+template.HTMLEscapeString(now)+"\">current</a>", now,
-		t.base.versionURL(c, rest))
+	return topLine(c, now, t.base.versionURL(c, rest))
 }
 
 // lastAt is the newest commit up to at that touched name, a path below

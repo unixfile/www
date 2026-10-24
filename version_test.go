@@ -16,7 +16,7 @@ func TestVersion(t *testing.T) {
 	short := first[:7]
 	at := "/@" + short + "/"
 
-	if body := get(h, at+"a/b.go").Body.String(); strings.Contains(body, "package b") || !strings.Contains(body, "<details class=\"own latest\" data-versions=\"/a/b.go?versions\" data-here=\""+at+"a/b.go\">") || !strings.Contains(body, `<a href="/a/b.go">current</a>`) {
+	if body := get(h, at+"a/b.go").Body.String(); strings.Contains(body, "package b") || !strings.Contains(body, "<details class=\"own latest\" data-timeline=\"/a/b.go?timeline\" data-here=\""+at+"a/b.go\">") {
 		t.Errorf("a/b.go as first committed:\n%s", body)
 	}
 	if body := get(h, "/a/b.go").Body.String(); !strings.Contains(body, `package</span> b`) {
@@ -42,18 +42,18 @@ func TestVersion(t *testing.T) {
 	// newest leads to the current page while it matches the commit; once
 	// it changes, a row of its own says so.
 	second := head(t, dir, "HEAD")[:7]
-	body := get(h, "/a/b.go?versions").Body.String()
+	body := get(h, "/a/b.go?timeline").Body.String()
 	if !strings.Contains(body, `<li data-also="/@`+second+`/a/b.go"><a href="/a/b.go" title="`+second) || !strings.Contains(body, "· current</span>") ||
 		!strings.Contains(body, `<li><a href="`+at+`a/b.go" title="`+short) || !strings.Contains(body, `<li class="log"><a href="?log">`) || strings.Contains(body, "uncommitted") {
 		t.Errorf("versions of a/b.go:\n%s", body)
 	}
 	// A version through a commit that left the page alone names the
 	// commit that last changed it, which the menu marks.
-	if body := get(h, "/@"+second+"/index.md").Body.String(); !strings.Contains(body, `data-here="`+at+`index.md"`) || !strings.Contains(body, `">Add the docs</a>`) {
+	if body := get(h, "/@"+second+"/index.md").Body.String(); !strings.Contains(body, `data-here="`+at+`index.md"`) || !strings.Contains(body, `">Add the docs</span>`) {
 		t.Errorf("index.md as of %s:\n%s", second, body)
 	}
 	os.WriteFile(filepath.Join(dir, "a", "b.go"), []byte("package c\n"), 0o644)
-	body = get(h, "/a/b.go?versions").Body.String()
+	body = get(h, "/a/b.go?timeline").Body.String()
 	if !strings.Contains(body, `<li><a href="/a/b.go">current</a> <span class="date">uncommitted changes</span></li>`) || !strings.Contains(body, `<li><a href="/@`+second+`/a/b.go"`) {
 		t.Errorf("versions of a/b.go with changes:\n%s", body)
 	}

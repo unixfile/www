@@ -182,7 +182,16 @@ div.graph svg [stroke="black"] { stroke: var(--text); }
 div.graph svg [fill="black"] { fill: var(--text); }
 div.graph svg text { fill: var(--text); font-family: "STIX Two Text", Georgia, serif; }
 ul.listing { list-style: none; padding: 0; text-align: left; }
-ul.listing li { margin: 0.15em 0; overflow-wrap: anywhere; }
+ul.listing li { padding: 0.075em 0; overflow-wrap: anywhere; }
+/* A row is one target: its link covers the whole row, the words beside it
+   and the space to its right included, so where on the row a click lands
+   does not matter. Padding, not margin, spaces the rows, so no gap
+   between them is dead. A button in the row, eg Delete lock, sits above. */
+ul.listing li, ol.versions > li, div.backlinks li, table.locks tr { position: relative; }
+ul.listing li > a:first-child::after, ol.versions > li > a::after, div.backlinks li > a::after,
+  table.locks td:first-child > a::after { content: ""; position: absolute; inset: 0; }
+table.locks form { position: relative; z-index: 1; }
+ul.listing li:hover > a, ol.versions > li:hover > a, div.backlinks li:hover > a, table.locks tr:hover a { text-decoration-color: currentColor; }
 /* The program's own links, in the header, listings and the index, are quiet,
    not lost: the text colour with a faint underline, which tells a link
    from the current crumb or a refused entry on a share. The underline
@@ -209,7 +218,8 @@ ol.log summary { cursor: pointer; text-align: left; }
 ol.log summary > .own { color: var(--muted); font-size: 0.8em; }
 ol.log details[open] { margin-bottom: 2em; }
 ol.log details > p { margin: 0.45em 0 0.45em 1.2em; text-align: left; }
-ol.log div.diffs > p.own:only-child { margin-left: 1.2em; }
+ol.log div.diffs > p.own:only-child, ol.log p.links { margin-left: 1.2em; }
+ol.log p.links { color: var(--muted); font-size: max(0.5em, 11px); }
 div.commit p.subject { font-weight: bold; margin-top: 0.2em; }
 div.commit p { text-align: left; }
 div.commit p.own { color: var(--muted); margin-bottom: 0; }
@@ -225,10 +235,11 @@ pre.diff span.hunk, pre.diff span.meta { color: var(--muted); }
    which drops over the page and scrolls on its own. The version shown is
    marked. */
 details.latest { position: relative; margin-bottom: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 0.6em; color: var(--muted); }
-details.latest > summary { list-style: none; cursor: default; }
+details.latest > summary { list-style: none; cursor: pointer; }
 details.latest > summary::-webkit-details-marker { display: none; }
-details.latest a { color: var(--text); }
-details.latest span.menu { cursor: pointer; padding-right: 0.2em; }
+details.latest a, details.latest span.subject { color: var(--text); }
+details.latest span.menu { padding-right: 0.2em; }
+details.latest > summary:hover span.subject { text-decoration: underline; text-decoration-color: var(--rule); }
 details.latest > div.versions, details.latest > ol.versions { position: absolute; z-index: 1; top: 100%; left: 0; margin: 0;
   max-height: 60vh; overflow-y: auto; min-width: 20em; max-width: 100%; padding: 0.4em 0; list-style: none;
   background: var(--page); border: 1px solid var(--rule); box-shadow: 0 2px 6px var(--shadow); }
@@ -317,7 +328,7 @@ div.found p.note:first-child { margin-top: 0; }
 div.found ul.recent { margin-bottom: 1.4em; }
 /* Below a doc, the docs that link to it, in the program's quiet voice. */
 div.backlinks ul { list-style: none; padding: 0; text-align: left; font-size: 0.8em; }
-div.backlinks li { margin: 0.15em 0; overflow-wrap: anywhere; }
+div.backlinks li { padding: 0.075em 0; overflow-wrap: anywhere; }
 p.unfound { color: var(--muted); font-size: 0.8em; }
 /* The entry or match the keys act on shows a quiet ring, as does a link
    Tab reached. */

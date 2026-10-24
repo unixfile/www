@@ -365,12 +365,10 @@ func (t *tree) gitHead(name string) (gitDir, state string) {
 	return r.gitDir, r.gitDir + "\n" + r.head(ctx)
 }
 
-// commitLine is a commit's day, as a history and a commit page show it.
-// The day links the commit page; its hash and exact time are on hover.
+// commitLine is a commit's day, as a history and a commit page show it,
+// with its hash and exact time on hover.
 func commitLine(c *commit) string {
-	esc := template.HTMLEscapeString
-	return fmt.Sprintf("<a class=\"date\" href=\"?commit=%s\" title=\"%s %s\">%s</a>",
-		esc(c.hash), esc(c.short), exact(c.date), day(c.date, time.Now()))
+	return fmt.Sprintf("<span class=\"date\" title=\"%s %s\">%s</span>", template.HTMLEscapeString(c.short), exact(c.date), day(c.date, time.Now()))
 }
 
 // logLine is the line at the top of a doc or code page in a repo, or ""
@@ -383,27 +381,23 @@ func (t *tree) logLine(ctx context.Context, name string) string {
 	if c == nil {
 		return ""
 	}
-	return topLine(c, "?commit="+c.hash, "", "", "")
+	return topLine(c, "", "")
 }
 
-// topLine is the line at the top of a page in a repo. Its ≡ opens a menu
-// of the page's versions, which loads from base?versions on first open,
-// and the line names the commit shown: its subject, which links show,
-// and its day, with hash and exact time on hover. current, when not "",
-// links the page as it is now. here, when not "", is the URL of the
-// version shown, which the menu marks. Without the script the menu holds
-// a link to the history.
-func topLine(c *commit, show, current, base, here string) string {
+// topLine is the line at the top of a page in a repo. It names the
+// commit shown, by subject and day, with hash and exact time on hover,
+// and the whole line is one target: it opens a menu of the page's
+// versions, which loads from base?timeline. here, when not "", is the
+// URL of the version shown, which the menu marks. Without the script the
+// menu holds a link to the history.
+func topLine(c *commit, base, here string) string {
 	esc := template.HTMLEscapeString
-	line := fmt.Sprintf("<a class=\"subject\" href=\"%s\" title=\"%s %s\">%s</a> · <span class=\"date\" title=\"%s\">%s</span>",
-		esc(show), esc(c.short), exact(c.date), esc(label(c)), exact(c.date), day(c.date, time.Now()))
-	if current != "" {
-		line += " · " + current
-	}
+	line := fmt.Sprintf("<span class=\"subject\" title=\"%s %s\">%s</span> · <span class=\"date\">%s</span>",
+		esc(c.short), exact(c.date), esc(label(c)), day(c.date, time.Now()))
 	if here != "" {
 		here = " data-here=\"" + esc(here) + "\""
 	}
-	return fmt.Sprintf("<details class=\"own latest\" data-versions=\"%s?versions\"%s>\n<summary><span class=\"menu\" title=\"versions\">≡</span> %s</summary>\n"+
+	return fmt.Sprintf("<details class=\"own latest\" data-timeline=\"%s?timeline\"%s>\n<summary><span class=\"menu\" title=\"timeline\" aria-label=\"timeline\">≡</span> %s</summary>\n"+
 		"<div class=\"versions\"><a href=\"%s?log\">%s</a></div>\n</details>\n",
 		esc(base), here, line, esc(base), esc(logLabel))
 }
@@ -454,15 +448,15 @@ func day(t, now time.Time) string {
 	return t.Format("Jan 2006")
 }
 
-// serveVersions lists every version of name, newest first, for the menu
+// serveTimeline lists every version of name, newest first, for the menu
 // on its top line: each commit that touched it, by subject and day, then
 // its history. The newest commit's row leads to the current page and says
 // so, unless the page has changes not yet committed; then a row of its
 // own leads there and says that. A tree without versions, eg a share,
 // links each commit's page instead.
-func (t *tree) serveVersions(w http.ResponseWriter, r *http.Request, name string, dir bool) {
-	crumbs := append(t.pageCrumbs(name, dir), crumb{Label: "versions"})
-	title := "versions " + t.title(name)
+func (t *tree) serveTimeline(w http.ResponseWriter, r *http.Request, name string, dir bool) {
+	crumbs := append(t.pageCrumbs(name, dir), crumb{Label: "timeline"})
+	title := "timeline " + t.title(name)
 	log, err := t.gitLog(r.Context(), name, maxLog+1)
 	if err != nil {
 		t.render(w, r, http.StatusNotFound, page{Title: title, Crumbs: crumbs, Kind: "error",
@@ -503,7 +497,7 @@ func (t *tree) serveVersions(w http.ResponseWriter, r *http.Request, name string
 			also, esc(href), esc(c.short), exact(c.date), esc(label(c)), day(c.date, time.Now()), note)
 	}
 	fmt.Fprintf(&body, "<li class=\"log\"><a href=\"?log\">%s</a></li>\n</ol>\n", esc(logLabel))
-	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "versions", Body: template.HTML(body.String())})
+	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "timeline", Body: template.HTML(body.String())})
 }
 
 // serveLog lists the commits that touched name, newest first, each with
@@ -543,7 +537,9 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	}
 	// Each commit folds out to its message and its diff. The diff comes
 	// from the commit page when the fold opens, through the one script;
-	// without it, the link in its place opens that page.
+	// without it, the link in its place opens that page. A row is one
+	// target, the fold, so the links to the commit and its version wait
+	// inside it.
 	body.WriteString("<ol class=\"log\">\n")
 	for i := range log {
 		c := &log[i]
@@ -559,10 +555,11 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 					p += "/"
 				}
 			}
-			then = fmt.Sprintf(" <a class=\"then\" href=\"%s\">browse</a>", esc((&url.URL{Path: p}).String()))
+			then = fmt.Sprintf(" · <a class=\"then\" href=\"%s\">browse</a>", esc((&url.URL{Path: p}).String()))
 		}
-		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"subject\">%s</span> <span class=\"own\">%s%s</span></summary>\n",
-			show, esc(c.subject), commitLine(c), then)
+		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"subject\">%s</span> <span class=\"own\">%s</span></summary>\n"+
+			"<p class=\"own links\">commit <a href=\"%s\">%s</a>%s</p>\n",
+			show, esc(c.subject), commitLine(c), show, esc(c.short), then)
 		for _, para := range paragraphs(c.body) {
 			body.WriteString("<p>" + para + "</p>\n")
 		}

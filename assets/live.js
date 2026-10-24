@@ -647,15 +647,15 @@
 		else bySelection();
 	});
 
-	// The top line's ≡ opens the menu of the page's versions. It loads
-	// from ?versions when the pointer first comes over the line, so it is
-	// there when it opens, or on opening. The version shown is marked and
+	// The top line opens the timeline, the menu of the page's versions.
+	// It loads from ?timeline when the pointer first comes over the line,
+	// so it is there when it opens, or on opening. The version shown is marked and
 	// highlighted, so Up and Down walk from it and Enter opens one; Escape
 	// or a click outside closes it.
 	const versions = (d) => {
 		if (d.dataset.loaded) return;
 		d.dataset.loaded = "1";
-		fetch(d.dataset.versions)
+		fetch(d.dataset.timeline)
 			.then((r) => (r.ok ? r.text() : Promise.reject()))
 			.then((html) => {
 				const got = new DOMParser().parseFromString(html, "text/html").querySelector("ol.versions");

@@ -84,7 +84,8 @@ func TestHistoryPage(t *testing.T) {
 	// fold also links in its place.
 	c := head(t, dir, "HEAD")
 	for _, want := range []string{
-		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"subject\">Rename the package &lt;b&gt;</span> <span class=\"own\"><a class=\"date\" href=\"?commit=" + c + `"`,
+		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"subject\">Rename the package &lt;b&gt;</span> <span class=\"own\"><span class=\"date\" title=\"" + c[:7],
+		`</span></summary>` + "\n" + `<p class="own links">commit <a href="?commit=` + c + `">` + c[:7] + `</a> · <a class="then"`,
 		`<div class="diffs"><p class="own"><a href="?commit=` + c + `">diff</a></p></div>` + "\n</details></li>",
 	} {
 		if !strings.Contains(body, want) {
@@ -144,7 +145,7 @@ func TestPageTopNamesLastCommit(t *testing.T) {
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<details class="own latest" data-versions="?versions">`) || !strings.Contains(body, `">`+subject+`</a> · <span class="date"`) ||
+		if !strings.Contains(body, `<details class="own latest" data-timeline="?timeline">`) || !strings.Contains(body, `">`+subject+`</span> · <span class="date">`) ||
 			!strings.Contains(body, `<div class="versions"><a href="?log">&lt;(git log)</a></div>`) {
 			t.Errorf("%s: no top line with %q:\n%s", p, subject, body)
 		}

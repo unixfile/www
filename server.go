@@ -720,8 +720,8 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		t.serveLog(w, r, name, info.IsDir())
 		return
 	}
-	if _, ok := r.URL.Query()["versions"]; ok {
-		t.serveVersions(w, r, name, info.IsDir())
+	if _, ok := r.URL.Query()["timeline"]; ok {
+		t.serveTimeline(w, r, name, info.IsDir())
 		return
 	}
 	if hash, ok := r.URL.Query()["commit"]; ok {
