@@ -84,8 +84,7 @@ func TestHistoryPage(t *testing.T) {
 	// fold also links in its place.
 	c := head(t, dir, "HEAD")
 	for _, want := range []string{
-		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"own\"><a class=\"hash\" href=\"?commit=" + c + `"`,
-		`</span> <span class="subject">Rename the package &lt;b&gt;</span></summary>`,
+		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"subject\">Rename the package &lt;b&gt;</span> <span class=\"own\"><a class=\"date\" href=\"?commit=" + c + `"`,
 		`<div class="diffs"><p class="own"><a href="?commit=` + c + `">diff</a></p></div>` + "\n</details></li>",
 	} {
 		if !strings.Contains(body, want) {
@@ -121,9 +120,9 @@ func TestHistoryOddMessages(t *testing.T) {
 	empty, long := head(t, dir, "HEAD~1"), head(t, dir, "HEAD")
 	for _, want := range []string{
 		`<details data-diff="?commit=` + empty + `">`,
-		`</span> <span class="subject"></span></summary>`,
+		`<summary><span class="subject"></span> <span class="own">`,
 		`<details data-diff="?commit=` + long + `">`,
-		`<span class="subject">One paragraph that runs on</span></summary>`,
+		`<span class="subject">One paragraph that runs on</span> <span class="own">`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("no %q:\n%s", want, body)
@@ -145,7 +144,8 @@ func TestPageTopNamesLastCommit(t *testing.T) {
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<p class="own latest"><a href="?log">&lt;(git log)</a> <a class="hash" href="?commit=`) || !strings.Contains(body, "</span> "+subject) {
+		if !strings.Contains(body, `<details class="own latest" data-versions="?versions">`) || !strings.Contains(body, `">`+subject+`</a> · <span class="date"`) ||
+			!strings.Contains(body, `<div class="versions"><a href="?log">&lt;(git log)</a></div>`) {
 			t.Errorf("%s: no top line with %q:\n%s", p, subject, body)
 		}
 	}
@@ -387,12 +387,18 @@ func TestGitRunsNoFsmonitor(t *testing.T) {
 	}
 }
 
-// A commit's age takes one unit, rounded down.
-func TestAge(t *testing.T) {
-	for d, want := range map[time.Duration]string{30 * time.Second: "now", 5 * time.Minute: "5m", 59 * time.Minute: "59m",
-		2 * time.Hour: "2h", 3 * 24 * time.Hour: "3d", 45 * 24 * time.Hour: "1mo", 400 * 24 * time.Hour: "1y"} {
-		if got := age(d); got != want {
-			t.Errorf("age(%v) = %q, want %q", d, got, want)
+// A commit's day goes by the calendar, not by hours passed.
+func TestDay(t *testing.T) {
+	now := time.Date(2026, 10, 24, 0, 30, 0, 0, time.Local)
+	for when, want := range map[time.Time]string{
+		now.Add(-10 * time.Minute):                     "today",
+		now.Add(-time.Hour):                            "yesterday",
+		now.AddDate(0, 0, -3):                          "3 days ago",
+		now.AddDate(0, 0, -7):                          "17 Oct",
+		time.Date(2025, 10, 3, 9, 0, 0, 0, time.Local): "Oct 2025",
+	} {
+		if got := day(when, now); got != want {
+			t.Errorf("day(%v) = %q, want %q", when, got, want)
 		}
 	}
 }

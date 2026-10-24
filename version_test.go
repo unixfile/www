@@ -14,14 +14,14 @@ func TestVersion(t *testing.T) {
 	short := first[:7]
 	at := "/@" + short + "/"
 
-	if body := get(h, at+"a/b.go").Body.String(); strings.Contains(body, "package b") || !strings.Contains(body, "as of <a class=\"hash\"") || !strings.Contains(body, "now</a>") {
+	if body := get(h, at+"a/b.go").Body.String(); strings.Contains(body, "package b") || !strings.Contains(body, "<details class=\"own latest\" data-versions=\"/a/b.go?versions\">") || !strings.Contains(body, "now</a>") {
 		t.Errorf("a/b.go as first committed:\n%s", body)
 	}
 	if body := get(h, "/a/b.go").Body.String(); !strings.Contains(body, `package</span> b`) {
 		t.Errorf("a/b.go now:\n%s", body)
 	}
 	listing := get(h, at+"a/").Body.String()
-	if !strings.Contains(listing, "@"+short+"</a>") || !strings.Contains(listing, `href="b.go"`) || strings.Contains(listing, "Delete lock") || strings.Contains(listing, "?log") {
+	if !strings.Contains(listing, " @ "+short+"</a>") || !strings.Contains(listing, `href="b.go"`) || strings.Contains(listing, "Delete lock") || strings.Contains(listing, `<li class="log">`) {
 		t.Errorf("listing of a/ as of %s:\n%s", short, listing)
 	}
 	if body := get(h, at+"untracked/x.txt"); body.Code != 404 {
@@ -44,6 +44,12 @@ func TestVersion(t *testing.T) {
 	}
 	if body := get(h, "/a/b.go?log").Body.String(); !strings.Contains(body, `<a class="then" href="`+at+`a/b.go">browse</a>`) {
 		t.Errorf("history links no version:\n%s", body)
+	}
+	// The menu lists every version of the page: now, each commit's
+	// version, then the history.
+	if body := get(h, "/a/b.go?versions").Body.String(); !strings.Contains(body, `<li><a href="/a/b.go">now</a></li>`) ||
+		!strings.Contains(body, `<li><a href="`+at+`a/b.go" title="`+short) || !strings.Contains(body, `<li class="log"><a href="?log">`) {
+		t.Errorf("versions of a/b.go:\n%s", body)
 	}
 	// A version runs the page's script, for keys, search and line marks,
 	// but holds no stream, since it never changes.

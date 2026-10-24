@@ -720,6 +720,10 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		t.serveLog(w, r, name, info.IsDir())
 		return
 	}
+	if _, ok := r.URL.Query()["versions"]; ok {
+		t.serveVersions(w, r, name, info.IsDir())
+		return
+	}
 	if hash, ok := r.URL.Query()["commit"]; ok {
 		t.serveCommit(w, r, name, info.IsDir(), hash[0])
 		return
@@ -957,13 +961,13 @@ type page struct {
 func (t *tree) title(name string) string {
 	at := ""
 	if t.at != nil {
-		at = "@" + t.at.short
+		at = " @ " + t.at.short
 	}
 	if name == "." {
 		return path.Base(t.label) + at
 	}
 	if at != "" {
-		return name + " " + at
+		return name + at
 	}
 	return name
 }
@@ -972,7 +976,7 @@ func (t *tree) title(name string) string {
 // path on hover. The address bar already shows the path.
 func (t *tree) rootCrumb() crumb {
 	if t.at != nil {
-		return crumb{Label: path.Base(t.label) + "@" + t.at.short, Title: t.label + " as of " + t.at.hash}
+		return crumb{Label: path.Base(t.label) + " @ " + t.at.short, Title: t.label + " as of " + t.at.hash}
 	}
 	return crumb{Label: path.Base(t.label), Title: t.label}
 }

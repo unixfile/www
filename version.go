@@ -70,11 +70,11 @@ func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first string
 	v.serve(w, r)
 }
 
-// versionLine is the line at the top of a page in a version: links to
-// the page's older and newer versions, the commit, its age and subject,
-// and a link to the page as it is now.
+// versionLine is the top line of a page in a version: links to the
+// page's older and newer versions around its commit, and to the page as
+// it is now, whose versions the menu lists.
 func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
-	c, esc := t.at, template.HTMLEscapeString
+	c := t.at
 	rest := ""
 	if name != "." {
 		rest = name
@@ -83,19 +83,15 @@ func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
 		}
 	}
 	older, newer := t.base.neighbours(ctx, name, c.hash)
-	var b strings.Builder
-	b.WriteString("<p class=\"own latest\">")
+	o, n := "", ""
 	if older != nil {
-		fmt.Fprintf(&b, "<a href=\"%s\" title=\"%s\">‹ older</a> · ", esc(t.base.versionURL(older, rest)), esc(older.subject))
+		o = olderLink(t.base.versionURL(older, rest), older)
 	}
-	fmt.Fprintf(&b, "as of <a class=\"hash\" href=\"%s?commit=%s\" title=\"%s\">%s</a> <span class=\"date\" title=\"%s\">%s</span> %s",
-		esc(t.base.prefixURL()), esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"),
-		age(time.Since(c.date)), esc(c.subject))
 	if newer != nil {
-		fmt.Fprintf(&b, " · <a href=\"%s\" title=\"%s\">newer ›</a>", esc(t.base.versionURL(newer, rest)), esc(newer.subject))
+		n = newerLink(t.base.versionURL(newer, rest), newer)
 	}
-	fmt.Fprintf(&b, " · <a href=\"%s\">now</a></p>\n", esc((&url.URL{Path: t.base.prefix + rest}).String()))
-	return b.String()
+	now := (&url.URL{Path: t.base.prefix + rest}).String()
+	return topLine(c, t.base.prefixURL()+"?commit="+c.hash, o, n, "<a href=\""+template.HTMLEscapeString(now)+"\">now</a>", now)
 }
 
 // versionURL is the URL of rest, a path below t, in commit c's version.

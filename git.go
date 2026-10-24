@@ -365,19 +365,18 @@ func (t *tree) gitHead(name string) (gitDir, state string) {
 	return r.gitDir, r.gitDir + "\n" + r.head(ctx)
 }
 
-// commitLine is a commit's hash and date, as a history and a page's top
-// show them.
+// commitLine is a commit's day, as a history and a commit page show it.
+// The day links the commit page; its hash and exact time are on hover.
 func commitLine(c *commit) string {
 	esc := template.HTMLEscapeString
-	return fmt.Sprintf("<a class=\"hash\" href=\"?commit=%s\" title=\"%s\">%s</a> <span class=\"date\">%s</span>",
-		esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"))
+	return fmt.Sprintf("<a class=\"date\" href=\"?commit=%s\" title=\"%s %s\">%s</a>",
+		esc(c.hash), esc(c.short), exact(c.date), day(c.date, time.Now()))
 }
 
-// logLine is the line at the top of a doc or code page that leads to its
-// history and names its last commit, or "" when it has none. The commit's
-// time shows as its age, eg 3d; its full date is on hover. On a local
-// tree, older leads to the version before the last commit, where a walk
-// back through the page's versions starts.
+// logLine is the line at the top of a doc or code page in a repo, or ""
+// when no commit touched the page. On a local tree, older leads to the
+// version before the last commit, where a walk back through the page's
+// versions starts.
 func (t *tree) logLine(ctx context.Context, name string) string {
 	if t.at != nil {
 		return t.versionLine(ctx, name, false)
@@ -386,31 +385,122 @@ func (t *tree) logLine(ctx context.Context, name string) string {
 		return ""
 	}
 	log, _ := t.gitLog(ctx, name, 2)
-	c, esc := &log[0], template.HTMLEscapeString
 	older := ""
 	if len(log) > 1 && !t.shared && t.web == nil {
-		older = fmt.Sprintf(" · <a href=\"%s\" title=\"%s\">‹ older</a>", esc(t.versionURL(&log[1], name)), esc(log[1].subject))
+		older = olderLink(t.versionURL(&log[1], name), &log[1])
 	}
-	return fmt.Sprintf("<p class=\"own latest\"><a href=\"?log\">%s</a> <a class=\"hash\" href=\"?commit=%s\" title=\"%s\">%s</a> <span class=\"date\" title=\"%s\">%s</span> %s%s</p>\n",
-		esc(logLabel), esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"), age(time.Since(c.date)), esc(c.subject), older)
+	return topLine(&log[0], "?commit="+log[0].hash, older, "", "", "")
 }
 
-// age says how long ago in one unit, rounded down: now, 5m, 2h, 3d, 4mo
-// or 2y.
-func age(d time.Duration) string {
-	switch {
-	case d < time.Minute:
-		return "now"
-	case d < time.Hour:
-		return strconv.Itoa(int(d/time.Minute)) + "m"
-	case d < 24*time.Hour:
-		return strconv.Itoa(int(d/time.Hour)) + "h"
-	case d < 30*24*time.Hour:
-		return strconv.Itoa(int(d/(24*time.Hour))) + "d"
-	case d < 365*24*time.Hour:
-		return strconv.Itoa(int(d/(30*24*time.Hour))) + "mo"
+// topLine is the line at the top of a page in a repo. Its ≡ opens a menu
+// of the page's versions, which loads from base?versions on first open,
+// and the line names the commit shown: its subject, which links show,
+// and its day, with hash and exact time on hover. Older, newer and now
+// link other versions when they are not "". Without the script the menu
+// holds a link to the history.
+func topLine(c *commit, show, older, newer, now, base string) string {
+	esc := template.HTMLEscapeString
+	parts := []string{fmt.Sprintf("<a class=\"subject\" href=\"%s\" title=\"%s %s\">%s</a>", esc(show), esc(c.short), exact(c.date), esc(label(c))),
+		fmt.Sprintf("<span class=\"date\" title=\"%s\">%s</span>", exact(c.date), day(c.date, time.Now()))}
+	if older != "" {
+		parts = append([]string{older}, parts...)
 	}
-	return strconv.Itoa(int(d/(365*24*time.Hour))) + "y"
+	for _, p := range []string{newer, now} {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return fmt.Sprintf("<details class=\"own latest\" data-versions=\"%s?versions\">\n<summary><span class=\"menu\" title=\"versions\">≡</span> %s</summary>\n"+
+		"<div class=\"versions\"><a href=\"%s?log\">%s</a></div>\n</details>\n",
+		esc(base), strings.Join(parts, " · "), esc(base), esc(logLabel))
+}
+
+// olderLink and newerLink lead to the versions either side of the one
+// shown; the subject of each is on hover.
+func olderLink(href string, c *commit) string {
+	return fmt.Sprintf("<a href=\"%s\" title=\"%s\">‹ older</a>", template.HTMLEscapeString(href), template.HTMLEscapeString(c.subject))
+}
+
+func newerLink(href string, c *commit) string {
+	return fmt.Sprintf("<a href=\"%s\" title=\"%s\">newer ›</a>", template.HTMLEscapeString(href), template.HTMLEscapeString(c.subject))
+}
+
+// label is what a link to a commit says: its subject, or its hash when
+// the message is empty, so the link stays visible.
+func label(c *commit) string {
+	if c.subject == "" {
+		return c.short
+	}
+	return c.subject
+}
+
+// exact is a commit's time to the minute, as hover shows it.
+func exact(t time.Time) string {
+	return t.Local().Format("2006-01-02 15:04")
+}
+
+// day says when t was by the local calendar, in the words a reader
+// thinks in: today, yesterday, 3 days ago within a week, 12 Oct within the
+// year, Oct 2025 before it. The hour rarely matters; hover gives it.
+func day(t, now time.Time) string {
+	t, now = t.Local(), now.Local()
+	y, m, d := t.Date()
+	ny, nm, nd := now.Date()
+	days := int(time.Date(ny, nm, nd, 12, 0, 0, 0, time.UTC).Sub(time.Date(y, m, d, 12, 0, 0, 0, time.UTC)) / (24 * time.Hour))
+	switch {
+	case days <= 0:
+		return "today"
+	case days == 1:
+		return "yesterday"
+	case days < 7:
+		return strconv.Itoa(days) + " days ago"
+	case y == ny:
+		return t.Format("2 Jan")
+	}
+	return t.Format("Jan 2006")
+}
+
+// serveVersions lists every version of name, newest first, for the menu
+// on its top line: the page as it is now, then each commit that touched
+// it, by subject and day, then its history. A tree without versions, eg
+// a share, links each commit's page instead.
+func (t *tree) serveVersions(w http.ResponseWriter, r *http.Request, name string, dir bool) {
+	crumbs := append(t.pageCrumbs(name, dir), crumb{Label: "versions"})
+	title := "versions " + t.title(name)
+	log, err := t.gitLog(r.Context(), name, maxLog+1)
+	if err != nil {
+		t.render(w, r, http.StatusNotFound, page{Title: title, Crumbs: crumbs, Kind: "error",
+			Body: template.HTML("<pre class=\"error\">" + template.HTMLEscapeString(err.Error()) + "</pre>")})
+		return
+	}
+	if len(log) > maxLog {
+		log = log[:maxLog]
+	}
+	rest := ""
+	if name != "." {
+		rest = name
+		if dir {
+			rest += "/"
+		}
+	}
+	versions := t.at == nil && !t.shared && t.web == nil
+	esc := template.HTMLEscapeString
+	var body strings.Builder
+	body.WriteString("<ol class=\"versions\">\n")
+	if versions {
+		fmt.Fprintf(&body, "<li><a href=\"%s\">now</a></li>\n", esc((&url.URL{Path: t.prefix + rest}).String()))
+	}
+	for i := range log {
+		c := &log[i]
+		href := "?commit=" + c.hash
+		if versions {
+			href = t.versionURL(c, rest)
+		}
+		fmt.Fprintf(&body, "<li><a href=\"%s\" title=\"%s %s\">%s</a> <span class=\"date\">%s</span></li>\n",
+			esc(href), esc(c.short), exact(c.date), esc(label(c)), day(c.date, time.Now()))
+	}
+	fmt.Fprintf(&body, "<li class=\"log\"><a href=\"?log\">%s</a></li>\n</ol>\n", esc(logLabel))
+	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "versions", Body: template.HTML(body.String())})
 }
 
 // serveLog lists the commits that touched name, newest first, each with
@@ -468,8 +558,8 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 			}
 			then = fmt.Sprintf(" <a class=\"then\" href=\"%s\">browse</a>", esc((&url.URL{Path: p}).String()))
 		}
-		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"own\">%s%s</span> <span class=\"subject\">%s</span></summary>\n",
-			show, commitLine(c), then, esc(c.subject))
+		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"subject\">%s</span> <span class=\"own\">%s%s</span></summary>\n",
+			show, esc(c.subject), commitLine(c), then)
 		for _, para := range paragraphs(c.body) {
 			body.WriteString("<p>" + para + "</p>\n")
 		}

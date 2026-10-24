@@ -196,9 +196,9 @@ main a:hover { text-decoration-color: currentColor; }
 /* A link whose target is missing keeps its words and wears a dotted
    underline in the danger colour; its title names the missing path. */
 main a.broken { text-decoration-style: dotted; text-decoration-color: var(--danger); }
-header a, ul.listing a, table.locks a, p.latest a, .own a { color: inherit; text-decoration-color: var(--rule); }
-header a:visited, ul.listing a:visited, table.locks a:visited, p.latest a:visited, .own a:visited { color: var(--muted); }
-header a:hover, ul.listing a:hover, table.locks a:hover, p.latest a:hover, .own a:hover { text-decoration-color: currentColor; }
+header a, ul.listing a, table.locks a, .latest a, .own a { color: inherit; text-decoration-color: var(--rule); }
+header a:visited, ul.listing a:visited, table.locks a:visited, .latest a:visited, .own a:visited { color: var(--muted); }
+header a:hover, ul.listing a:hover, table.locks a:hover, .latest a:hover, .own a:hover { text-decoration-color: currentColor; }
 ul.listing li.refused span { color: var(--muted); font-size: 0.8em; }
 /* A history: hash and date are the program's and mono, subject and body the
    author's and serif. A page's top line leads to its history. */
@@ -221,8 +221,21 @@ pre.diff span { display: block; min-height: 1.35em; }
 pre.diff span.add { background: var(--added); }
 pre.diff span.del { background: var(--removed); }
 pre.diff span.hunk, pre.diff span.meta { color: var(--muted); }
-p.latest { margin-bottom: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 0.6em; color: var(--muted); }
-p.latest a { color: var(--text); }
+/* A page's top line names its commit; ≡ opens the menu of its versions,
+   which drops over the page and scrolls on its own. The version shown is
+   marked. */
+details.latest { position: relative; margin-bottom: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 0.6em; color: var(--muted); }
+details.latest > summary { list-style: none; cursor: default; }
+details.latest > summary::-webkit-details-marker { display: none; }
+details.latest a { color: var(--text); }
+details.latest span.menu { cursor: pointer; padding-right: 0.2em; }
+details.latest > div.versions, details.latest > ol.versions { position: absolute; z-index: 1; top: 100%; left: 0; margin: 0;
+  max-height: 60vh; overflow-y: auto; min-width: 20em; max-width: 100%; padding: 0.4em 0; list-style: none;
+  background: var(--page); border: 1px solid var(--rule); box-shadow: 0 2px 6px var(--shadow); }
+details.latest > div.versions { padding: 0.4em 0.8em; }
+ol.versions > li { padding: 0.15em 0.8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+ol.versions > li.here { background: var(--target); }
+ol.versions > li.log { border-top: 1px solid var(--rule); margin-top: 0.3em; padding-top: 0.3em; }
 pre.error { white-space: pre-wrap; color: var(--danger); }
 /* While git reads a repo, its page names each step git takes and the
    dots after "reading" keep moving, so a slow clone shows it is alive. */
@@ -319,7 +332,7 @@ p.conn.fade { animation: conn 3s ease-in forwards; }
 /* Technical background, what a page says about its data rather than the
    data itself, is set at code size: half the body, never under 11px. It
    follows the rules above, which set these at 0.8em. */
-p.latest, ol.log summary > .own, div.commit > p.own, div.found p.note { font-size: max(0.5em, 11px); }
+details.latest, ol.log summary > .own, div.commit > p.own, div.found p.note { font-size: max(0.5em, 11px); }
 
 /* the line a #L42 link points at */
 pre > code.sourceCode > span:target { background: var(--target); }

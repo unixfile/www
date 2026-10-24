@@ -108,6 +108,9 @@
 	// Any other page, a page from a new stylesheet, or a doc that is gone
 	// reloads whole.
 	const blockKey = (el) => {
+		// The top line counts by what it says, not whether its menu
+		// was opened.
+		if (el.matches("details.latest")) return el.querySelector("summary").outerHTML;
 		if (!el.classList.contains("changed")) return el.outerHTML;
 		const c = el.cloneNode(true);
 		c.classList.remove("changed");
@@ -133,7 +136,7 @@
 					shown.set(k, (shown.get(k) || 0) + 1);
 				}
 				for (const el of main.children) {
-					const k = el.outerHTML;
+					const k = blockKey(el);
 					if (shown.get(k)) shown.set(k, shown.get(k) - 1);
 					else el.classList.add("changed");
 				}
@@ -528,8 +531,9 @@
 	// types. Shift+Tab in the box enters the header at the crumb Escape
 	// goes to, so Delete lock is never one key from the box; Escape on any
 	// other focused control comes back to the box.
+	const openMenu = () => document.querySelector("details.latest[open]");
 	const walkable = () =>
-		(searching() ? [...matches, ...document.querySelectorAll("div.found a")] : [...document.querySelectorAll("main ul.listing a")])
+		openMenu() ? [...openMenu().querySelectorAll("ol.versions a")] : (searching() ? [...matches, ...document.querySelectorAll("div.found a")] : [...document.querySelectorAll("main ul.listing a")])
 			.filter((el) => el.offsetParent !== null);
 	const up = () => {
 		const crumbs = document.querySelectorAll("header nav a");
@@ -578,7 +582,8 @@
 				break;
 			}
 			case "Escape":
-				if (b && !inBox && document.activeElement !== document.body) b.focus({ preventScroll: true });
+				if (openMenu()) openMenu().open = false;
+				else if (b && !inBox && document.activeElement !== document.body) b.focus({ preventScroll: true });
 				else if (q) clearSearch();
 				else up();
 				break;
@@ -642,11 +647,53 @@
 		else bySelection();
 	});
 
+	// The top line's ≡ opens the menu of the page's versions. It loads
+	// from ?versions when the pointer first comes over the line, so it is
+	// there when it opens, or on opening. The version shown is marked and
+	// highlighted, so Up and Down walk from it and Enter opens one; Escape
+	// or a click outside closes it.
+	const versions = (d) => {
+		if (d.dataset.loaded) return;
+		d.dataset.loaded = "1";
+		fetch(d.dataset.versions)
+			.then((r) => (r.ok ? r.text() : Promise.reject()))
+			.then((html) => {
+				const got = new DOMParser().parseFromString(html, "text/html").querySelector("ol.versions");
+				const slot = d.querySelector("div.versions");
+				if (!got || !slot) return Promise.reject();
+				slot.replaceWith(document.adoptNode(got));
+				markHere(d);
+			})
+			.catch(() => delete d.dataset.loaded);
+	};
+	const markHere = (d) => {
+		const here = [...d.querySelectorAll("ol.versions a")].find((a) => a.pathname === location.pathname && !a.search);
+		if (!here) return;
+		here.parentElement.classList.add("here");
+		if (d.open) {
+			select(here);
+			here.parentElement.scrollIntoView({ block: "nearest" });
+		}
+	};
+	document.addEventListener("pointerover", (e) => {
+		const d = e.target.closest && e.target.closest("details.latest");
+		if (d) versions(d);
+	});
+	document.addEventListener("click", (e) => {
+		const d = openMenu();
+		if (d && !d.contains(e.target)) d.open = false;
+	});
+
 	// A history's fold loads its commit's diff from the commit page the
 	// first time it opens. toggle does not bubble, so it is caught on the
 	// way down.
 	document.addEventListener("toggle", (e) => {
 		const d = e.target;
+		if (d.matches && d.matches("details.latest")) {
+			if (!d.open) return select(null);
+			versions(d);
+			return markHere(d);
+		}
 		if (!d.open || !d.dataset || !d.dataset.diff || d.dataset.loaded) return;
 		d.dataset.loaded = "1";
 		fetch(d.dataset.diff)
