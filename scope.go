@@ -224,15 +224,23 @@ func endsWithColon(line []chroma.Token) bool {
 
 // writeScopes writes the boxes that start on one row. Each is empty and
 // positioned on its own, so it adds no text and moves none; the
-// stylesheet turns the cells and rows into lengths.
+// stylesheet turns the cells and rows into lengths. Boxes at odd depths
+// are shaded, so shade and page alternate inward.
 func writeScopes(w io.Writer, scopes []scope) {
 	for _, s := range scopes {
+		class := "scope"
 		if s.leaf > 0 {
-			io.WriteString(w, `<i class="scope leaf" style="--c:`+strconv.Itoa(s.left)+`;--w:`+strconv.Itoa(s.right-s.left)+
-				`;--k:`+strconv.Itoa(s.leaf)+`;--d:`+strconv.Itoa(s.depth)+`"></i>`)
-			continue
+			class += " leaf"
 		}
-		io.WriteString(w, `<i class="scope" style="--c:`+strconv.Itoa(s.left)+`;--w:`+strconv.Itoa(s.right-s.left)+
-			`;--r:`+strconv.Itoa(s.last-s.first+1)+`;--d:`+strconv.Itoa(s.depth)+`"></i>`)
+		if s.depth%2 == 1 {
+			class += " shade"
+		}
+		io.WriteString(w, `<i class="`+class+`" style="--c:`+strconv.Itoa(s.left)+`;--w:`+strconv.Itoa(s.right-s.left))
+		if s.leaf > 0 {
+			io.WriteString(w, `;--k:`+strconv.Itoa(s.leaf))
+		} else {
+			io.WriteString(w, `;--r:`+strconv.Itoa(s.last-s.first+1))
+		}
+		io.WriteString(w, `;--d:`+strconv.Itoa(s.depth)+`"></i>`)
 	}
 }

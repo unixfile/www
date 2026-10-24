@@ -16,6 +16,7 @@
   --removed: #f8e6e2;
   --shadow: #a8a8a8;
   --light: #ffffff;
+  --shade: #ebebeb;
 }
 /* The dark palette, a draft by the model for the user to adjust. Text is
    light grey on near black, not white on black, so a long read does not
@@ -34,6 +35,7 @@
     --removed: #3b2420;
     --shadow: #050505;
     --light: #3a3a3a;
+    --shade: #111111;
   }
 }
 
@@ -365,9 +367,10 @@ pre.numberSource { margin-left: 3em; border-left: 1px solid var(--gutter);  padd
    starts half a cell before its first row's text. A row is the pre's line
    height, 1.35em, and a line's span sits 0.05em below its row's top, so a
    box covers whole rows and its borders clear the glyphs. Boxes nest
-   without limit; deeper ones fade, so the code stays readable. Boxes
-   have no fill, as a Windows 3.1 button keeps its face colour, so depth
-   shows in the edges and the page never darkens. A leaf, a bracket pair
+   without limit; deeper ones' edges fade, so the code stays readable.
+   Fills alternate: a box at an odd depth is shaded, one at an even depth
+   has the page's colour. Both are opaque, so each box hides the one
+   behind it and the page never darkens with depth. A leaf, a bracket pair
    within a line, spans its brackets' cells and its whole row: brackets
    fill nearly the row's height, so a shorter box would cut them. */
 pre.scopes { isolation: isolate; }
@@ -395,10 +398,14 @@ pre.scopes i.scope {
   width: calc((var(--w) + 1) * 1ch);
   height: calc(var(--r) * 1.35em);
   box-sizing: border-box;
-  border: 1px solid; border-color: var(--shadow) var(--light) var(--light) var(--shadow);
-  opacity: max(0.3, 1 - (var(--d) - 1) * 0.15);
+  --f: max(30%, 100% - (var(--d) - 1) * 15%);
+  border: 1px solid;
+  border-color: color-mix(in srgb, var(--shadow) var(--f), var(--page)) color-mix(in srgb, var(--light) var(--f), var(--page))
+    color-mix(in srgb, var(--light) var(--f), var(--page)) color-mix(in srgb, var(--shadow) var(--f), var(--page));
+  background: var(--page);
   pointer-events: none;
 }
+pre.scopes i.scope.shade { background: var(--shade); }
 pre.scopes i.scope.leaf {
   left: calc(4em + 8px + var(--c) * 1ch);
   width: calc(var(--w) * 1ch);

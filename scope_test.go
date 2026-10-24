@@ -80,7 +80,7 @@ func TestScopeBoxes(t *testing.T) {
 	highlight(&b, codeLexer("a.go"), src, true, true)
 	out := b.String()
 	if !strings.Contains(out, `<pre class="sourceCode numberSource go numberLines scopes">`) ||
-		!strings.Contains(out, `<span id="L1"><a href="#L1"></a><i class="scope" style="--c:0;--w:14;--r:3;--d:1"></i><span class="kw">func</span>`) {
+		!strings.Contains(out, `<span id="L1"><a href="#L1"></a><i class="scope shade" style="--c:0;--w:14;--r:3;--d:1"></i><span class="kw">func</span>`) {
 		t.Errorf("no box in the first line: %s", out)
 	}
 	b.Reset()
