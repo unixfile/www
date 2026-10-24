@@ -386,3 +386,13 @@ func TestGitRunsNoFsmonitor(t *testing.T) {
 		t.Error("git ran the repo's fsmonitor")
 	}
 }
+
+// A commit's age takes one unit, rounded down.
+func TestAge(t *testing.T) {
+	for d, want := range map[time.Duration]string{30 * time.Second: "now", 5 * time.Minute: "5m", 59 * time.Minute: "59m",
+		2 * time.Hour: "2h", 3 * 24 * time.Hour: "3d", 45 * 24 * time.Hour: "1mo", 400 * 24 * time.Hour: "1y"} {
+		if got := age(d); got != want {
+			t.Errorf("age(%v) = %q, want %q", d, got, want)
+		}
+	}
+}

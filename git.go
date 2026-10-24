@@ -370,14 +370,34 @@ func commitLine(c *commit) string {
 }
 
 // logLine is the line at the top of a doc or code page that leads to its
-// history and names its last commit, or "" when it has none.
+// history and names its last commit, or "" when it has none. The commit's
+// time shows as its age, eg 3d; its full date is on hover.
 func (t *tree) logLine(ctx context.Context, name string) string {
 	c := t.lastCommit(ctx, name)
 	if c == nil {
 		return ""
 	}
-	return fmt.Sprintf("<p class=\"own latest\"><a href=\"?log\">%s</a> %s %s</p>\n",
-		template.HTMLEscapeString(logLabel), commitLine(c), template.HTMLEscapeString(c.subject))
+	esc := template.HTMLEscapeString
+	return fmt.Sprintf("<p class=\"own latest\"><a href=\"?log\">%s</a> <a class=\"hash\" href=\"?commit=%s\" title=\"%s\">%s</a> <span class=\"date\" title=\"%s\">%s</span> %s</p>\n",
+		esc(logLabel), esc(c.hash), esc(c.hash), esc(c.short), c.date.Local().Format("2006-01-02 15:04"), age(time.Since(c.date)), esc(c.subject))
+}
+
+// age says how long ago in one unit, rounded down: now, 5m, 2h, 3d, 4mo
+// or 2y.
+func age(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return strconv.Itoa(int(d/time.Minute)) + "m"
+	case d < 24*time.Hour:
+		return strconv.Itoa(int(d/time.Hour)) + "h"
+	case d < 30*24*time.Hour:
+		return strconv.Itoa(int(d/(24*time.Hour))) + "d"
+	case d < 365*24*time.Hour:
+		return strconv.Itoa(int(d/(30*24*time.Hour))) + "mo"
+	}
+	return strconv.Itoa(int(d/(365*24*time.Hour))) + "y"
 }
 
 // serveLog lists the commits that touched name, newest first, each with

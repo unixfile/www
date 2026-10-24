@@ -68,7 +68,7 @@ The server on your default address also serves 127.31.N.2, where a URL names a r
 
 ## History
 
-Add `?log` to a path for its git history, newest first: one line per commit, which opens to the full message and the diff. A tracked directory's listing opens it from its first entry, `<(git log)`, and a tracked doc or code page from a line at its top that names its last commit. A commit's hash opens its diff for that path, with a link to all its files. Shares show it without trailers, and only when other users could read the repo. See [doc/history.md](doc/history.md).
+Add `?log` to a path for its git history, newest first: one line per commit, which opens to the full message and the diff. A tracked directory's listing opens it from its first entry, `<(git log)`, and a tracked doc or code page from a line at its top that names its last commit and its age, eg 3d, with the full date on hover. A commit's hash opens its diff for that path, with a link to all its files. Shares show it without trailers, and only when other users could read the repo. See [doc/history.md](doc/history.md).
 
 ## Log
 
