@@ -309,6 +309,13 @@ button.copy {
   white-space: nowrap;
 }
 button.copy:hover, button.copy:focus-visible { color: inherit; border-color: var(--muted); outline: none; }
+/* While the copy button reads the page's text, the program's own lines and links
+   leave the layout, so only the page's content is copied: a listing's
+   history and parent entries, a code page's view links and scope boxes,
+   which the text would count as breaks. Line numbers are generated
+   content, which the text never holds. */
+body.copying main .own, body.copying main div.view, body.copying main div.backlinks,
+body.copying main li.log, body.copying main li:has(> a[href="../"]), body.copying main i.scope { display: none; }
 /* Search results: the path is the program's and mono, a matching line is
    the file's and stays mono too, in the muted colour. */
 div.found .line { color: var(--muted); font-size: 0.8em; hyphens: none; }

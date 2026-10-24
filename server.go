@@ -947,7 +947,6 @@ type page struct {
 	Raw     bool
 	Tree    string       // prefix the stop button withdraws, or "" for every tree
 	Search  string       // the tree's URL, which answers ?search=, or "" off a tree
-	Path    string       // the page's file or directory on disk, which the copy button copies; "" on a share or a failed page
 	Status  string       // the server's age, on the index
 	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
@@ -1043,17 +1042,14 @@ func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page
 	if t.web != nil {
 		p.NoStop, p.Status = true, t.web.status()
 	}
-	// A version never changes and has no lock or path on disk: no live
-	// reload, no stop button, nothing to copy. Its page still runs the
-	// script, for the keys, the search box and line marks.
+	// A version never changes and has no lock: no live reload and no stop
+	// button. Its page still runs the script, for the keys, the search box,
+	// line marks and the copy button.
 	if t.at != nil {
 		p.NoStop, p.Fixed = true, true
 	}
 	if status == http.StatusOK {
 		p.Search = searchURL(r.URL.Path)
-		if !t.shared && t.at == nil {
-			p.Path = filepath.Join(t.dir, filepath.FromSlash(strings.TrimPrefix(r.URL.Path, t.prefix)))
-		}
 	}
 	render(w, r, status, p)
 }

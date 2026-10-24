@@ -738,20 +738,30 @@
 		if (line) line.scrollIntoView({ block: "start" });
 	});
 
-	// The copy button copies the page's path on disk: through the
+	// The copy button copies the page's text: what lies under the search
+	// box as the browser lays it out, without the program's own lines, the view
+	// links, line numbers or what a search hides. It copies through the
 	// clipboard API where the origin is secure, else through a selection,
 	// which works on any origin. Its glyph says how it went: a tick or a
 	// cross, then the copy glyph again.
+	const pageText = () => {
+		const main = document.querySelector("main");
+		if (!main) return "";
+		document.body.classList.add("copying");
+		const text = main.innerText;
+		document.body.classList.remove("copying");
+		return text.replace(/\s+$/, "") + "\n";
+	};
 	document.addEventListener("click", (e) => {
 		const btn = e.target.closest && e.target.closest("button.copy");
 		if (!btn) return;
-		const text = btn.dataset.copy;
+		const text = pageText();
 		const done = (ok) => {
 			btn.textContent = ok ? "✓" : "✗";
 			btn.title = ok ? "copied" : "copy failed";
 			setTimeout(() => {
 				btn.textContent = "⧉";
-				btn.title = "copy " + text;
+				btn.title = "copy the page's text";
 			}, 1500);
 			hold();
 		};
