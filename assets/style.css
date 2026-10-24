@@ -16,7 +16,6 @@
   --removed: #f8e6e2;
   --shadow: #a8a8a8;
   --light: #ffffff;
-  --sunk: rgb(0 0 0 / 2.5%);
 }
 /* The dark palette, a draft by the model for the user to adjust. Text is
    light grey on near black, not white on black, so a long read does not
@@ -35,7 +34,6 @@
     --removed: #3b2420;
     --shadow: #050505;
     --light: #3a3a3a;
-    --sunk: rgb(0 0 0 / 14%);
   }
 }
 
@@ -340,12 +338,18 @@ pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
 }
 pre.numberSource code
   { counter-reset: source-line 0; }
+/* The number sits in its line's padding, not before its text, so the
+   text starts where the line's tab stops start: a line with no leading
+   tab and a line indented by tabs share one grid of cells. Pandoc set the
+   number inline, 4em and 8px wide, which put untabbed text 8px off the
+   tab grid. The number stays inline, so an empty line keeps its height,
+   but a negative margin as wide as the number cancels its advance. */
 pre.numberSource code > span
-  { position: relative; left: -4em; counter-increment: source-line; }
+  { position: relative; margin-left: -4em; padding-left: calc(4em + 8px); counter-increment: source-line; }
 pre.numberSource code > span > a:first-child::before
   { content: counter(source-line);
     position: relative; left: -1em; text-align: right; vertical-align: baseline;
-    border: none; display: inline-block;
+    border: none; display: inline-block; margin-left: calc(-4em - 8px);
     -webkit-touch-callout: none; -webkit-user-select: none;
     -khtml-user-select: none; -moz-user-select: none;
     -ms-user-select: none; user-select: none;
@@ -357,36 +361,48 @@ pre.numberSource { margin-left: 3em; border-left: 1px solid var(--gutter);  padd
    pressed Windows 3.1 button: shadow above and left, light below and
    right. render.go places each box in its first line and sizes it in
    cells and rows, so the boxes take no room and no character moves. A
-   line's text starts 4em into its span, past the line number, and a box
+   line's text starts 4em and 8px into its span, past the line number, and a box
    starts half a cell before its first row's text. A row is the pre's line
    height, 1.35em, and a line's span sits 0.05em below its row's top, so a
    box covers whole rows and its borders clear the glyphs. Boxes nest
-   without limit; deeper ones fade, so the code stays readable. Browsers
-   round each row's height, so a box over hundreds of rows can end a pixel
-   or two past its last line; the scrolling div around the pre clips that
-   rather than grow a scroll bar. */
+   without limit; deeper ones fade, so the code stays readable. Boxes
+   have no fill, as a Windows 3.1 button keeps its face colour, so depth
+   shows in the edges and the page never darkens. A leaf, a bracket pair
+   within a line, spans its brackets' cells and its whole row: brackets
+   fill nearly the row's height, so a shorter box would cut them. */
 pre.scopes { isolation: isolate; }
-/* The link between the plain and the scoped view sits over the code's top
-   right corner, at the size of technical background, on the page's colour
-   so a long first line runs under it. The code's top margin collapses
-   through div.code, so top 0 is the code's first row. */
-div.code { position: relative; }
-a.view { position: absolute; top: 0; right: 0; z-index: 1; padding: 0 0.4em;
-  font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px);
-  background: var(--page); color: var(--muted); text-decoration-color: var(--rule); }
-a.view:hover { text-decoration-color: currentColor; }
+/* A code page's links, to the other view and to the raw file, start over
+   the code's top right corner and, once the page scrolls past it, stay at
+   the top right of the window until the code ends. div.code carries the
+   code's margin, and the links take the code's size and line height, so
+   they start level with the first row. Their row has no height, so it
+   takes no room; the links sit on the page's colour, so code runs under
+   them. */
+div.code { margin: 0.7em 0; }
+div.code > div.sourceCode { margin: 0; }
+div.view { position: sticky; top: 0; z-index: 1; height: 0; text-align: right;
+  font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; }
+div.view a { padding: 0 0.4em; margin-left: 0.4em; background: var(--page); color: var(--muted); text-decoration-color: var(--rule); }
+div.view a:hover { text-decoration-color: currentColor; }
+/* Browsers round each row's height, so a box over hundreds of rows can
+   end a pixel or two past its last line; the scrolling div around the pre
+   clips that rather than grow a scroll bar. */
 div.sourceCode:has(> pre.scopes) { overflow-y: hidden; }
 pre.scopes i.scope {
   position: absolute; z-index: -1;
-  left: calc(4em + (var(--c) - 0.5) * 1ch);
+  left: calc(4em + 8px + (var(--c) - 0.5) * 1ch);
   top: -0.05em;
   width: calc((var(--w) + 1) * 1ch);
   height: calc(var(--r) * 1.35em);
   box-sizing: border-box;
   border: 1px solid; border-color: var(--shadow) var(--light) var(--light) var(--shadow);
-  background: var(--sunk);
   opacity: max(0.3, 1 - (var(--d) - 1) * 0.15);
   pointer-events: none;
+}
+pre.scopes i.scope.leaf {
+  left: calc(4em + 8px + var(--c) * 1ch);
+  width: calc(var(--w) * 1ch);
+  height: 1.35em;
 }
 pre.filtering i.scope { display: none; }
 div.sourceCode

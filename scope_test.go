@@ -12,9 +12,10 @@ func scopesOf(name, code string) []scope {
 	return findScopes(chroma.SplitTokensIntoLines(tokenise(codeLexer(name), code)), langName(codeLexer(name)) == "python")
 }
 
-// A block that spans lines is a scope; brackets on one line, or inside a
-// string or comment, are not. A box reaches past each box inside it, and
-// a call whose argument is a function draws one box.
+// A block that spans lines is a scope, and brackets on one line around
+// something are a leaf; brackets inside a string or comment, or around
+// nothing, are neither. A box reaches past each box inside it, and a call
+// whose argument is a function draws one box.
 func TestScopesGo(t *testing.T) {
 	src := "func f() {\n" + // 0
 		"\tif x { y() }\n" + // 1
@@ -27,6 +28,7 @@ func TestScopesGo(t *testing.T) {
 	got := scopesOf("a.go", src)
 	want := []scope{
 		{first: 0, last: 7, left: 0, right: 30, depth: 1},
+		{first: 1, last: 1, left: 13, right: 20, depth: 2, leaf: 1},
 		{first: 2, last: 6, left: 8, right: 29, depth: 2},
 		{first: 4, last: 5, left: 16, right: 27, depth: 3},
 	}
@@ -44,9 +46,29 @@ func TestScopesPython(t *testing.T) {
 		"\n" + // 3
 		"        return x\n" + // 4
 		"y = 1\n" // 5
-	got := scopesOf("a.py", src)
+	var got []scope
+	for _, s := range scopesOf("a.py", src) {
+		if s.leaf == 0 {
+			got = append(got, s)
+		}
+	}
 	if len(got) != 2 || got[0].first != 0 || got[0].last != 4 || got[1].first != 1 || got[1].last != 4 || got[1].left != 4 {
 		t.Errorf("scopes %+v, want class 0-4 and def 1-4 at 4", got)
+	}
+}
+
+// Leaves nest within a line, each a level below the one around it, and
+// sit below the blocks around their row.
+func TestScopeLeaves(t *testing.T) {
+	got := scopesOf("a.go", "x := f(g(a), [2]int{1, 2})\n")
+	want := []scope{
+		{first: 0, last: 0, left: 6, right: 26, depth: 1, leaf: 1},
+		{first: 0, last: 0, left: 8, right: 11, depth: 2, leaf: 2},
+		{first: 0, last: 0, left: 13, right: 16, depth: 2, leaf: 2},
+		{first: 0, last: 0, left: 19, right: 25, depth: 2, leaf: 2},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("leaves\n%+v, want\n%+v", got, want)
 	}
 }
 

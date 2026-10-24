@@ -788,16 +788,18 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 	}
 	var body strings.Builder
 	body.WriteString(t.logLine(r.Context(), name))
-	// The link to the other view sits over the code's top right corner.
+	// The links to the other view and to the raw file float over the
+	// code's top right corner; div.code bounds how far they follow the
+	// page down.
 	_, scoped := r.URL.Query()["scopes"]
 	if scoped {
-		body.WriteString(`<div class="code"><a class="view" href="?">flat</a>`)
+		body.WriteString(`<div class="code"><div class="view"><a href="?">flat</a><a href="?raw">raw</a></div>`)
 	} else {
-		body.WriteString(`<div class="code"><a class="view" href="?scopes">scopes</a>`)
+		body.WriteString(`<div class="code"><div class="view"><a href="?scopes">scopes</a><a href="?raw">raw</a></div>`)
 	}
 	body.WriteString(highlightPage(codeLexer(name), b, scoped))
 	body.WriteString(`</div>`)
-	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String()), Raw: true})
+	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String())})
 }
 
 // serveRaw sends the file itself. Text goes as plain text, so a stray .html
