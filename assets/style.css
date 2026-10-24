@@ -210,6 +210,9 @@ main a:hover { text-decoration-color: currentColor; }
 /* A link whose target is missing keeps its words and wears a dotted
    underline in the danger colour; its title names the missing path. */
 main a.broken { text-decoration-style: dotted; text-decoration-color: var(--danger); }
+/* The mark after a forge link reads that repo on the web address. */
+main a.web { font-family: ui-monospace, "Iosevka", monospace; font-size: 0.6em; vertical-align: super; line-height: 0; margin-left: 0.2em; color: var(--muted); text-decoration: none; }
+main a.web:hover { color: inherit; }
 header a, ul.listing a, table.locks a, .latest a, .own a { color: inherit; text-decoration-color: var(--rule); }
 header a:visited, ul.listing a:visited, table.locks a:visited, .latest a:visited, .own a:visited { color: var(--muted); }
 header a:hover, ul.listing a:hover, table.locks a:hover, .latest a:hover, .own a:hover { text-decoration-color: currentColor; }
@@ -327,7 +330,7 @@ button.copy:active { border-color: var(--shadow) var(--light) var(--light) var(-
    which the text would count as breaks. Line numbers are generated
    content, which the text never holds. */
 body.copying main .own, body.copying main div.view, body.copying main div.backlinks,
-body.copying main li.log, body.copying main li:has(> a[href="../"]), body.copying main i.scope { display: none; }
+body.copying main li.log, body.copying main li:has(> a[href="../"]), body.copying main i.scope, body.copying main a.web { display: none; }
 /* Search results: the path is the program's and mono, a matching line is
    the file's and stays mono too, in the muted colour. */
 div.found .line { color: var(--muted); font-size: 0.8em; hyphens: none; }
@@ -343,7 +346,7 @@ pre.numberSource.filtering code > span > a:first-child::before { content: attr(d
 ::highlight(search) { background-color: var(--target); }
 div.found ul.wider { opacity: 0.6; margin-top: 1.4em; }
 div.found p.note:first-child { margin-top: 0; }
-div.found ul.recent { margin-bottom: 1.4em; }
+div.found ul.recent, div.found ul.web { margin-bottom: 1.4em; }
 /* Below a doc, the docs that link to it, in the program's quiet voice. */
 div.backlinks ul { list-style: none; padding: 0; text-align: left; font-size: 0.8em; }
 div.backlinks li { padding: 0.075em 0; overflow-wrap: anywhere; }

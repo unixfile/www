@@ -43,10 +43,17 @@ var markdown = goldmark.New(
 // renderMarkdown renders a doc. missing, when given, reports whether a
 // relative link's path, unescaped and without query or fragment, names
 // nothing; such a link gets the class broken and a title that says so.
-func renderMarkdown(src []byte, missing func(dest string) bool) (template.HTML, error) {
+// web, when given, is where the web address serves, eg
+// http://127.31.1.2:8080 or "" on the web address itself; a link to a
+// repo on a forge, or a file in one, is followed by a mark that reads it
+// there.
+func renderMarkdown(src []byte, missing func(dest string) bool, web *string) (template.HTML, error) {
 	doc := markdown.Parser().Parse(text.NewReader(src))
 	if missing != nil {
 		markBroken(doc, missing)
+	}
+	if web != nil {
+		markWeb(doc, src, *web)
 	}
 	var out bytes.Buffer
 	if err := markdown.Renderer().Render(&out, src, doc); err != nil {
@@ -74,6 +81,57 @@ func markBroken(doc ast.Node, missing func(string) bool) {
 	})
 }
 
+// webMark follows a link to a forge with a link that reads it on the web
+// address.
+type webMark struct {
+	ast.BaseInline
+	href, key string
+}
+
+var kindWebMark = ast.NewNodeKind("WebMark")
+
+func (n *webMark) Kind() ast.NodeKind         { return kindWebMark }
+func (n *webMark) Dump(src []byte, level int) { ast.DumpHelper(n, src, level, nil, nil) }
+
+// markWeb puts a webMark after each link, bare URLs included, that names a
+// repo on a forge or a file in one.
+func markWeb(doc ast.Node, src []byte, base string) {
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		var dest string
+		switch l := n.(type) {
+		case *ast.Link:
+			dest = string(l.Destination)
+		case *ast.AutoLink:
+			dest = string(l.URL(src))
+		default:
+			return ast.WalkContinue, nil
+		}
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		u, err := url.Parse(dest)
+		if err != nil {
+			return ast.WalkSkipChildren, nil
+		}
+		if key, p := webPath(u); p != "" {
+			href := base + (&url.URL{Path: p, Fragment: u.Fragment}).String()
+			// The walk visits the mark next and passes it by.
+			n.Parent().InsertAfter(n.Parent(), n, &webMark{href: href, key: key})
+		}
+		return ast.WalkSkipChildren, nil
+	})
+}
+
+// renderWebMark writes the mark, the program's name, after the link.
+func renderWebMark(w util.BufWriter, src []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if entering {
+		m := node.(*webMark)
+		esc := template.HTMLEscapeString
+		w.WriteString(`<a class="web" href="` + esc(m.href) + `" title="read ` + esc(m.key) + ` in ` + progName + `">` + progName + `</a>`)
+	}
+	return ast.WalkContinue, nil
+}
+
 // relativePath is the path a relative link names, unescaped, or "" for a
 // link with a scheme or host, an absolute path or only a fragment or
 // query.
@@ -92,6 +150,7 @@ type nodeRenderer struct{}
 func (nodeRenderer) RegisterFuncs(r renderer.NodeRendererFuncRegisterer) {
 	r.Register(ast.KindFencedCodeBlock, renderFence)
 	r.Register(east.KindTaskCheckBox, renderCheckBox)
+	r.Register(kindWebMark, renderWebMark)
 }
 
 // renderCheckBox leaves out goldmark's disabled attribute, which greys the

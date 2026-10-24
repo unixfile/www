@@ -362,7 +362,22 @@
 					p.textContent = "recent";
 					results.prepend(p, recent);
 				}
-				const any = recent.children.length + (near ? near.children.length : 0) + far.children.length;
+				// A forge's URL leads, read on the web address; Enter opens it.
+				if (res.web) {
+					const web = list(false);
+					web.classList.add("web");
+					const li = document.createElement("li");
+					const a = document.createElement("a");
+					a.href = res.web.href;
+					a.textContent = res.web.path;
+					li.append(a);
+					web.append(li);
+					const p = document.createElement("p");
+					p.className = "note";
+					p.textContent = "online";
+					results.prepend(p, web);
+				}
+				const any = (res.web ? 1 : 0) + recent.children.length + (near ? near.children.length : 0) + far.children.length;
 				if (near && near.children.length) results.append(near);
 				else if (near && any) line("unfound", "nothing in this directory itself");
 				if (far.children.length) results.append(far);
@@ -515,7 +530,7 @@
 	// other focused control comes back to the box.
 	const openMenu = () => document.querySelector("details.latest[open]");
 	const walkable = () =>
-		openMenu() ? [...openMenu().querySelectorAll("ol.versions a")] : (searching() ? [...matches, ...document.querySelectorAll("div.found a")] : [...document.querySelectorAll("main ul.listing a")])
+		openMenu() ? [...openMenu().querySelectorAll("ol.versions a")] : (searching() ? [...document.querySelectorAll("div.found ul.web a"), ...matches, ...document.querySelectorAll("div.found ul:not(.web) a")] : [...document.querySelectorAll("main ul.listing a")])
 			.filter((el) => el.offsetParent !== null);
 	const up = () => {
 		const crumbs = document.querySelectorAll("header nav a");

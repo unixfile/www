@@ -4,6 +4,16 @@ The server on your default address also listens on the address after it, 127.31.
 
 The index at `/` on the default address links the web address. The web address's own `/` lists the repos in the cache, each with its size and when it was last read, and how much of the disk limit they fill.
 
+## Ways in
+
+The index at `/` names the web address, but a reader seldom sees the index, so two ways in lie where a reader already is.
+
+A link in a doc to a repo on GitHub, GitLab, Codeberg or Bitbucket, or to a file or directory in one, is followed by a small www, raised like a footnote mark. It opens the same repo or file on the web address, and its title names the repo. The forge's own link stays as it was. A link to a forge page that is not a file, eg an issue or an account, gets no mark. A file link names a branch or commit, but the web address serves the commit it fetched, so the mark opens the file as it is there. The copy button leaves the mark out.
+
+A forge URL typed or pasted into the search box, with or without `https://`, adds a result above the others, under "online". Enter opens it, since it comes first. A URL to any other host, eg `https://git.suckless.org/dwm`, gets no result there; type it after the web address instead.
+
+Both appear wherever a server serves the web address: on its default address and on the web address itself. A share offers neither.
+
 ## The first visit
 
 A repo not yet cached opens a page that says "reading". It names each step as www takes it: the git command, the URL and where the files go, with git's progress below and its time. When the repo is ready the page turns into it on its own. For most repos that takes one to three seconds; git's own repo takes about 20.

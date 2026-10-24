@@ -55,6 +55,8 @@ type found struct {
 	Lines []hit `json:"lines"`
 	Files int   `json:"files"` // files searched for content
 	Cut   bool  `json:"cut"`   // stopped at the time budget or the hit limits
+	// Web reads the query on the web address, when it is a forge's URL.
+	Web *hit `json:"web,omitempty"`
 }
 
 // serveSearch answers ?search=q below name: names that hold q first, then
@@ -65,9 +67,33 @@ func (t *tree) serveSearch(w http.ResponseWriter, r *http.Request, name, q strin
 	ctx, cancel := context.WithTimeout(r.Context(), searchBudget)
 	defer cancel()
 	res := t.search(ctx, name, q)
+	res.Web = t.webHit(q)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(res)
+}
+
+// webHit reads the query on the web address when it is a link to a repo
+// on a forge, or a file in one, with or without its scheme, eg
+// github.com/junegunn/fzf.
+func (t *tree) webHit(q string) *hit {
+	base := t.webBase()
+	q = strings.TrimSpace(q)
+	if base == nil || strings.ContainsAny(q, " \t") {
+		return nil
+	}
+	if !strings.Contains(q, "://") {
+		q = "https://" + q
+	}
+	u, err := url.Parse(q)
+	if err != nil {
+		return nil
+	}
+	_, p := webPath(u)
+	if p == "" {
+		return nil
+	}
+	return &hit{Href: *base + (&url.URL{Path: p, Fragment: u.Fragment}).String(), Path: strings.TrimPrefix(p, "/")}
 }
 
 func (t *tree) search(ctx context.Context, dir, q string) found {

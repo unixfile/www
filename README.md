@@ -60,7 +60,7 @@ The package also ships a system template, `www@.service`, which serves a user's 
 
 ## Online repos
 
-The server on your default address also serves 127.31.N.2, where a URL names a repo on a forge, eg `http://127.31.1.2/github.com/junegunn/fzf/`. The first visit fetches it into `~/.cache/www/` while a page shows each step, and www then serves it as it serves a checkout. A path that names no repo, eg `/github.com/junegunn`, lists the repos there. See [online repos](doc/online-repos.md).
+The server on your default address also serves 127.31.N.2, where a URL names a repo on a forge, eg `http://127.31.1.2/github.com/junegunn/fzf/`. The first visit fetches it into `~/.cache/www/` while a page shows each step, and www then serves it as it serves a checkout. A path that names no repo, eg `/github.com/junegunn`, lists the repos there. Two ways lead there from any page: paste a repo's URL into the search box, eg `github.com/junegunn/fzf`, and Enter opens it; and a doc's link to a repo on GitHub, GitLab, Codeberg or Bitbucket, or to a file in one, carries a small www mark that opens it there. See [online repos](doc/online-repos.md).
 
 ## Sharing
 

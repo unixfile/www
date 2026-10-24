@@ -453,6 +453,75 @@ var depths = map[string]int{"github.com": 3, "bitbucket.org": 3, "codeberg.org":
 // groups, host included.
 var minDepths = map[string]int{"gitlab.com": 3}
 
+// forgeViews gives, for each forge a doc's links are read from, the path
+// segments after a repo's key that lead into a file or directory at a
+// ref, eg blob and tree on GitHub. The ref follows them, then the path.
+var forgeViews = map[string][][]string{
+	"github.com":    {{"blob"}, {"tree"}},
+	"codeberg.org":  {{"src", "branch"}, {"src", "tag"}, {"src", "commit"}},
+	"bitbucket.org": {{"src"}},
+	"gitlab.com":    {{"-", "blob"}, {"-", "tree"}},
+}
+
+// forgePages are GitHub's first segments that name a page of the site,
+// not an account, eg github.com/sponsors/junegunn.
+var forgePages = map[string]bool{
+	"about": true, "apps": true, "collections": true, "customer-stories": true, "enterprise": true,
+	"features": true, "login": true, "marketplace": true, "orgs": true, "settings": true,
+	"site": true, "sponsors": true, "topics": true, "trending": true, "users": true,
+}
+
+// webPath is the path on the web address that reads what the forge URL u
+// shows, eg /github.com/junegunn/fzf/README.md for
+// https://github.com/junegunn/fzf/blob/master/README.md, and the repo's
+// key, or "" when u is not a repo or a file in one on a forge in
+// forgeViews. The web address serves the commit it fetched, so the ref in
+// u is dropped.
+func webPath(u *url.URL) (key, p string) {
+	if u.Scheme != "https" && u.Scheme != "http" || u.User != nil || u.Port() != "" {
+		return "", ""
+	}
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	views, ok := forgeViews[host]
+	if !ok {
+		return "", ""
+	}
+	segs := strings.FieldsFunc(u.Path, func(r rune) bool { return r == '/' })
+	if slices.ContainsFunc(segs, func(s string) bool { return s == "." || s == ".." }) {
+		return "", ""
+	}
+	// A repo's key ends where a view begins, or after owner/name.
+	n := len(segs)
+	if host == "gitlab.com" {
+		if i := slices.Index(segs, "-"); i >= 0 {
+			n = i
+		}
+	} else {
+		n = min(n, 2)
+	}
+	if n < 2 || host == "github.com" && forgePages[segs[0]] {
+		return "", ""
+	}
+	k := append([]string{host}, segs[:n]...)
+	k[n] = strings.TrimSuffix(k[n], ".git")
+	key = strings.Join(k, "/")
+	p = "/" + key + "/"
+	rest := segs[n:]
+	if len(rest) == 0 {
+		return key, p
+	}
+	for _, v := range views {
+		if len(rest) > len(v) && slices.Equal(rest[:len(v)], v) {
+			file := strings.Join(rest[len(v)+1:], "/")
+			if file != "" && v[len(v)-1] == "tree" {
+				file += "/"
+			}
+			return key, p + file
+		}
+	}
+	return "", ""
+}
+
 // probe asks every prefix of the path at once whether a repo answers
 // there, each with and without .git, and takes the longest that does. It
 // returns the repo's key and URL, or "" and whether it probed at all.

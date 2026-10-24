@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,5 +93,35 @@ func TestSearchHidden(t *testing.T) {
 	}
 	if strings.Join(paths, " ") != ".gitignore .github/ci.yml" {
 		t.Errorf("lines: %v", paths)
+	}
+}
+
+// A query that is a forge's URL, with or without its scheme, comes back as
+// a link to the web address, and only where a web address is served.
+func TestSearchWeb(t *testing.T) {
+	s, _, _ := serveTree(t)
+	var res found
+	w := get(s.handler(), "/?search="+url.QueryEscape("github.com/junegunn/fzf"))
+	json.Unmarshal(w.Body.Bytes(), &res)
+	if res.Web != nil {
+		t.Errorf("web hit without a web address: %+v", res.Web)
+	}
+	s.webURL = "http://127.31.1.2:8080"
+	for q, want := range map[string]string{
+		"github.com/junegunn/fzf":                               "http://127.31.1.2:8080/github.com/junegunn/fzf/",
+		" https://github.com/junegunn/fzf/blob/master/main.go ": "http://127.31.1.2:8080/github.com/junegunn/fzf/main.go",
+	} {
+		res = found{}
+		w = get(s.handler(), "/?search="+url.QueryEscape(q))
+		json.Unmarshal(w.Body.Bytes(), &res)
+		if res.Web == nil || res.Web.Href != want {
+			t.Errorf("%q: %+v, want %s", q, res.Web, want)
+		}
+	}
+	res = found{}
+	w = get(s.handler(), "/?search=readme")
+	json.Unmarshal(w.Body.Bytes(), &res)
+	if res.Web != nil {
+		t.Errorf("web hit for a word: %+v", res.Web)
 	}
 }

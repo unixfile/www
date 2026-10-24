@@ -54,5 +54,5 @@ func TestNameHasOneSource(t *testing.T) {
 }
 
 // foreign removes the words that hold www without naming the program: web
-// hosts and the form media type.
-var foreign = strings.NewReplacer("://www.", "://", "x-www-form-urlencoded", "")
+// hosts, the host prefix a forge link may carry and the form media type.
+var foreign = strings.NewReplacer("://www.", "://", `"www."`, "", "x-www-form-urlencoded", "")

@@ -205,6 +205,7 @@ type tree struct {
 	shared   bool        // served beyond loopback: only what other users could read
 	secret   bool        // mounted under a token, and left off the index
 	web      *webRepo    // the cached repo this tree is a worktree of, on the web address
+	srv      *server     // the server that serves it, set when it joins
 	linked   linkIndex   // the relative links of each doc, for ?backlinks
 	at       *commit     // for a version, the commit it shows
 	base     *tree       // for a version, the tree it is a version of
@@ -224,6 +225,7 @@ func newTree(root *os.Root, dir, prefix, label string) *tree {
 func (s *server) add(t *tree) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	t.srv = s
 	s.trees = append(s.trees, t)
 	s.live.kick()
 }
@@ -764,13 +766,31 @@ func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body, err := renderMarkdown(b, t.missing(name))
+	body, err := renderMarkdown(b, t.missing(name), t.webBase())
 	if err != nil {
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
 	body = template.HTML(t.logLine(r.Context(), name)) + body
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
+}
+
+// webBase is where t's docs send a link to a forge: the web address, ""
+// on the web address itself, or nil where no server here serves it, eg on
+// a share.
+func (t *tree) webBase() *string {
+	if t.base != nil {
+		return t.base.webBase()
+	}
+	switch s := t.srv; {
+	case s == nil:
+		return nil
+	case s.web != nil:
+		return new(string)
+	case s.webURL != "":
+		return &s.webURL
+	}
+	return nil
 }
 
 // missing reports, for the doc name, whether a relative link names

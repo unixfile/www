@@ -9,7 +9,7 @@ import (
 // A fence in a known language gets pandoc's markup without line numbers;
 // any other fence is plain.
 func TestFences(t *testing.T) {
-	h, err := renderMarkdown([]byte("```go\nx := 1\n```\n\n```nosuch\n<b>\n```\n"), nil)
+	h, err := renderMarkdown([]byte("```go\nx := 1\n```\n\n```nosuch\n<b>\n```\n"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestCodeLexerByName(t *testing.T) {
 
 // Task list boxes are not disabled, so they keep the browser's colour.
 func TestTaskBoxes(t *testing.T) {
-	h, err := renderMarkdown([]byte("- [x] done\n- [ ] open\n"), nil)
+	h, err := renderMarkdown([]byte("- [x] done\n- [ ] open\n"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestGoTokens(t *testing.T) {
 // A relative link to a missing path is marked; others are left alone.
 func TestBrokenLinks(t *testing.T) {
 	missing := func(dest string) bool { return dest == "gone.md" || dest == "a b.md" }
-	h, err := renderMarkdown([]byte("[x](gone.md#top) [y](here.md) [z](https://example.com/gone.md) [w](a%20b.md) [v](#gone.md) [u](/gone.md)\n"), missing)
+	h, err := renderMarkdown([]byte("[x](gone.md#top) [y](here.md) [z](https://example.com/gone.md) [w](a%20b.md) [v](#gone.md) [u](/gone.md)\n"), missing, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestBrokenLinks(t *testing.T) {
 // A dot fence becomes inline SVG when dot is installed, and code with the
 // reason otherwise.
 func TestGraphFence(t *testing.T) {
-	h, err := renderMarkdown([]byte("```dot\ndigraph { a -> b }\n```\n"), nil)
+	h, err := renderMarkdown([]byte("```dot\ndigraph { a -> b }\n```\n"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestGraphFence(t *testing.T) {
 	if !strings.Contains(s, `<div class="graph"><svg`) || strings.Contains(s, "<?xml") {
 		t.Errorf("not inline SVG: %.200s", s)
 	}
-	h, _ = renderMarkdown([]byte("```dot\ndigraph { a -> }\n```\n"), nil)
+	h, _ = renderMarkdown([]byte("```dot\ndigraph { a -> }\n```\n"), nil, nil)
 	if s := string(h); !strings.Contains(s, `class="own warn"`) || !strings.Contains(s, "<pre") {
 		t.Errorf("bad graph not shown as code with a reason: %s", s)
 	}
@@ -134,12 +134,38 @@ func TestWikiLinks(t *testing.T) {
 		"`[[code]]`":               `<code>[[code]]</code>`,
 		"see [[a]] and [[b|B]] ok": `see <a href="a.md">a</a> and <a href="b.md">B</a> ok`,
 	} {
-		h, err := renderMarkdown([]byte(src), missing)
+		h, err := renderMarkdown([]byte(src), missing, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(string(h), want) {
 			t.Errorf("%s: want %s in %s", src, want, h)
 		}
+	}
+}
+
+// A link to a forge's repo, bare or not, is followed by a mark that reads
+// it on the web address; other links are not.
+func TestWebMarks(t *testing.T) {
+	base := "http://127.31.1.2:8080"
+	src := "[fzf](https://github.com/junegunn/fzf/blob/master/README.md#usage), https://github.com/junegunn/fzf and [x](https://example.com/a/b)\n"
+	h, err := renderMarkdown([]byte(src), nil, &base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(h)
+	if n := strings.Count(s, `class="web"`); n != 2 {
+		t.Errorf("%d marks, want 2: %s", n, s)
+	}
+	for _, want := range []string{
+		`fzf</a><a class="web" href="http://127.31.1.2:8080/github.com/junegunn/fzf/README.md#usage" title="read github.com/junegunn/fzf in ` + progName + `">` + progName + `</a>`,
+		`https://github.com/junegunn/fzf</a><a class="web" href="http://127.31.1.2:8080/github.com/junegunn/fzf/"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("no %s in %s", want, s)
+		}
+	}
+	if h, _ := renderMarkdown([]byte(src), nil, nil); strings.Contains(string(h), `class="web"`) {
+		t.Errorf("marks without a web address: %s", h)
 	}
 }

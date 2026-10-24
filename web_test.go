@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/cgi"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -293,5 +294,36 @@ func TestWebEndpoint(t *testing.T) {
 	other, _ := endpointFor("127.31.1.5", 1001)
 	if _, ok := webEndpoint(other, 1001); ok {
 		t.Error("a server on another address serves the web")
+	}
+}
+
+// A link to a repo on a forge, or a file or directory in one, maps to its
+// path on the web address; other pages of a forge, and other hosts, map
+// to nothing.
+func TestWebPath(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://github.com/junegunn/fzf":                             "/github.com/junegunn/fzf/",
+		"https://www.github.com/junegunn/fzf.git":                     "/github.com/junegunn/fzf/",
+		"https://github.com/junegunn/fzf/blob/master/README.md":       "/github.com/junegunn/fzf/README.md",
+		"https://github.com/junegunn/fzf/tree/v0.50/shell":            "/github.com/junegunn/fzf/shell/",
+		"https://github.com/junegunn/fzf/tree/master":                 "/github.com/junegunn/fzf/",
+		"https://codeberg.org/forgejo/forgejo/src/branch/main/go.mod": "/codeberg.org/forgejo/forgejo/go.mod",
+		"https://gitlab.com/a/b/c/-/blob/main/x.md":                   "/gitlab.com/a/b/c/x.md",
+		"https://gitlab.com/a/b":                                      "/gitlab.com/a/b/",
+		"https://bitbucket.org/a/b/src/main/x.md":                     "/bitbucket.org/a/b/x.md",
+		"https://github.com/junegunn/fzf/issues/3":                    "",
+		"https://github.com/junegunn":                                 "",
+		"https://github.com/sponsors/junegunn":                        "",
+		"https://example.com/a/b":                                     "",
+		"ftp://github.com/a/b":                                        "",
+		"https://github.com/a/../b":                                   "",
+	} {
+		u, err := url.Parse(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, got := webPath(u); got != want {
+			t.Errorf("%s: %q, want %q", in, got, want)
+		}
 	}
 }
