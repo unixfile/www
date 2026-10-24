@@ -152,7 +152,7 @@
 				sel = null;
 				if (held) hold();
 				backlinks();
-				floatTools();
+				measureSearch();
 				url = live.dataset.live;
 				seeServer();
 				if (es) es.close();
@@ -389,6 +389,9 @@
 				else if (inPlace) (document.querySelector("p.unfound") || main).after(results);
 				else main.before(results);
 				if (!inPlace) main.hidden = true;
+				// Typed further down a listing, the results begin above the
+				// window; they come into view under the row.
+				if (!inPlace && results.getBoundingClientRect().top < 0) results.scrollIntoView({ block: "start" });
 			})
 			.catch(() => {});
 	};
@@ -975,36 +978,16 @@
 			.catch(() => delete d.dataset.loaded);
 	}, true);
 
-	// The copy and share buttons float at the window's top right once the
-	// search row has scrolled above it, level with the column's right
-	// edge; --tools-w lets a code page's view links make room. A doc's
+	// The search row sticks to the window's top. Its height, in
+	// --search-h, keeps a code page's view links below it and stops a
+	// jump to a line or heading below it rather than under it. A doc's
 	// live update brings a new body, so this runs again after it.
-	let floating = null;
-	const floatTools = () => {
-		if (floating) floating.disconnect();
+	const measureSearch = () => {
 		const row = document.querySelector("div.search");
-		const tools = row && row.querySelector("span.tools");
-		if (!tools || !window.IntersectionObserver) return;
-		const place = () => {
-			if (document.body.classList.contains("afloat")) return;
-			const root = document.documentElement;
-			root.style.setProperty("--tools-right", root.clientWidth - tools.getBoundingClientRect().right + "px");
-			root.style.setProperty("--tools-w", tools.offsetWidth + "px");
-		};
-		place();
-		floating = new IntersectionObserver(([e]) => {
-			const away = !e.isIntersecting && e.boundingClientRect.bottom <= 0;
-			if (!away) document.body.classList.remove("afloat");
-			place();
-			document.body.classList.toggle("afloat", away);
-		});
-		floating.observe(row);
+		document.documentElement.style.setProperty("--search-h", (row ? row.offsetHeight : 0) + "px");
 	};
-	addEventListener("resize", () => {
-		document.body.classList.remove("afloat");
-		floatTools();
-	});
-	document.addEventListener("DOMContentLoaded", floatTools);
+	addEventListener("resize", measureSearch);
+	document.addEventListener("DOMContentLoaded", measureSearch);
 
 	// A link another site sent to a repo not yet read lands on a page
 	// that asks first; its read link keeps the link's fragment, eg the

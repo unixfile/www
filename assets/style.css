@@ -76,7 +76,9 @@
 /* The header holds still from page to page: every page keeps one width,
    and the scrollbar's space is kept on short pages too, so the centred
    column does not shift when a long page brings a scrollbar. */
-html { background: var(--page); scrollbar-gutter: stable; }
+/* A jump to a line or heading stops below the search row, which the
+   script measures into --search-h. */
+html { background: var(--page); scrollbar-gutter: stable; scroll-padding-top: var(--search-h, 0); }
 body {
   max-width: 58ch;
   margin: 2em auto;
@@ -317,8 +319,16 @@ div.search {
   display: flex;
   gap: 1em;
   align-items: stretch;
-  margin: -0.7em 0 1.5em;
+  margin: -1em 0 1.2em;
+  padding: 0.3em 0;
   font-size: 0.8em;
+  /* The row follows the page down: it sticks to the window's top, on
+     the page's colour so text scrolls under it, and the box, copy and
+     share stay at hand. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--page);
 }
 input.search, button.copy, button.share {
   font: inherit;
@@ -334,13 +344,7 @@ input.search {
   padding: 0.15em 0.4em;
 }
 input.search:focus { outline: none; }
-/* The copy and share buttons follow the page down: once the search row
-   scrolls out of the window they float at its top right, over the
-   column's right edge where they sat, and a code page's view links make
-   room for them. The script measures both. */
 span.tools { display: flex; gap: 1em; flex: none; }
-body.afloat span.tools { position: fixed; top: 0.3em; right: var(--tools-right, 1em); z-index: 2; }
-body.afloat div.view { padding-right: calc(var(--tools-w, 0px) + 0.6em); }
 button.copy, button.share {
   flex: none;
   color: var(--muted);
@@ -390,7 +394,7 @@ li > a.sel, ul.listing li > a:focus-visible { outline: none; }
 /* The line that says the server is gone floats over the top of the page,
    so nothing moves, and stays until a server answers. The one that says
    a new server answered fades over three seconds. */
-p.conn { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 1; margin: 0; padding: 0.2em 0.8em;
+p.conn { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 2; margin: 0; padding: 0.2em 0.8em;
   background: var(--target); color: var(--text); font-size: 0.6em; white-space: nowrap; }
 p.conn.fade { animation: conn 3s ease-in forwards; }
 @keyframes conn { from { opacity: 1; } to { opacity: 0; } }
@@ -463,7 +467,7 @@ pre.scopes { isolation: isolate; }
    them. */
 div.code { margin: 0.7em 0; }
 div.code > div.sourceCode { margin: 0; }
-div.view { position: sticky; top: 0; z-index: 1; height: 0; text-align: right;
+div.view { position: sticky; top: var(--search-h, 0); z-index: 1; height: 0; text-align: right;
   font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; }
 div.view a { padding: 0 0.4em; margin-left: 0.4em; background: var(--page); color: var(--muted); text-decoration-color: var(--rule); }
 div.view a:hover { text-decoration-color: currentColor; }
