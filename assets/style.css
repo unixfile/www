@@ -469,7 +469,8 @@ div.code { margin: 0.7em 0; }
 div.code > div.sourceCode { margin: 0; }
 div.view { position: sticky; top: var(--search-h, 0); z-index: 1; height: 0; text-align: right;
   font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; }
-div.view a { padding: 0 0.4em; margin-left: 0.4em; background: var(--page); color: var(--muted); text-decoration-color: var(--rule); }
+div.view a, div.view span { padding: 0 0.4em; margin-left: 0.4em; background: var(--page); color: var(--muted); text-decoration-color: var(--rule); }
+div.view span { color: inherit; }
 div.view a:hover { text-decoration-color: currentColor; }
 /* Browsers round each row's height, so a box over hundreds of rows can
    end a pixel or two past its last line; the scrolling div around the pre

@@ -190,13 +190,17 @@ func excerpt(lines [][]byte, n synNode) string {
 	return text
 }
 
-// codeViews are the links over a code page's top right corner: the views
-// other than the one shown, then the raw file.
+// codeViews are the links over a code page's top right corner: every
+// view, the one shown as plain text, then the raw file.
 func codeViews(shown string) string {
 	var b strings.Builder
 	b.WriteString(`<div class="view">`)
+	// Every view keeps its place, so a click never leaves another link
+	// under the pointer; the one shown is plain text.
 	for _, v := range []struct{ name, href string }{{"flat", "?"}, {"scopes", "?scopes"}, {"tree", "?tree"}} {
-		if v.name != shown {
+		if v.name == shown {
+			b.WriteString(`<span>` + v.name + `</span>`)
+		} else {
 			b.WriteString(`<a href="` + v.href + `">` + v.name + `</a>`)
 		}
 	}
