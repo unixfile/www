@@ -17,20 +17,29 @@ import (
 )
 
 // A version is a tree as it was in one commit, served below the tree's
-// URL at @ and the commit's short hash, eg /scratch/www/@5430ac3/doc/.
-// The version is a path segment rather than a query, so relative links in
-// its docs, listings and breadcrumbs stay in that version.
-var atSegment = regexp.MustCompile(`^@([0-9a-f]{4,40})$`)
+// URL at @ and the commit's stardate, eg /scratch/www/@261024.4/doc/, or
+// its hash when it has none. The version is a path segment rather than a
+// query, so relative links in its docs, listings and breadcrumbs stay in
+// that version. A stardate always holds a dot, which no hash does.
+var atSegment = regexp.MustCompile(`^@([0-9a-f]{4,40}|[0-9]{6}(?:\.[0-9]+)+)$`)
 
-// atVersion is the tree t as it was in the commit seg names, eg @5430ac3,
-// and the segment that names it best. A commit never changes, so each is
-// built once per tree.
+// atVersion is the tree t as it was in the commit seg names, eg @261024.4
+// or @5430ac3, and the segment that names it best: its stardate, else
+// git's short hash. A commit never changes, so each is built once per
+// tree and name.
 func (t *tree) atVersion(ctx context.Context, seg string) (*tree, string, error) {
 	m := atSegment.FindStringSubmatch(seg)
 	if m == nil {
 		return nil, "", fs.ErrNotExist
 	}
-	out, err := git(ctx, t.dir, "log", "-1", "--no-show-signature", "-z", "--format="+commitFormat, m[1]+"^{commit}", "--")
+	stars, rev := stardatesIn(ctx, t.dir), m[1]
+	if strings.Contains(rev, ".") {
+		if stars == nil || stars.byDate[rev] == "" {
+			return nil, "", fmt.Errorf("no commit %s on this repo's main line", rev)
+		}
+		rev = stars.byDate[rev]
+	}
+	out, err := git(ctx, t.dir, "log", "-1", "--no-show-signature", "-z", "--format="+commitFormat, rev+"^{commit}", "--")
 	if err != nil {
 		return nil, "", fmt.Errorf("no commit %s in this repo", m[1])
 	}
@@ -39,18 +48,19 @@ func (t *tree) atVersion(ctx context.Context, seg string) (*tree, string, error)
 		return nil, "", fmt.Errorf("no commit %s in this repo", m[1])
 	}
 	c := cs[0]
-	if v, ok := t.versions.Load(c.hash); ok {
-		return v.(*tree), "@" + c.short, nil
+	best := "@" + stars.label(&c)
+	if v, ok := t.versions.Load(best); ok {
+		return v.(*tree), best, nil
 	}
-	v := &tree{dir: t.dir, realDir: t.realDir, prefix: t.prefix + "@" + c.short + "/", label: t.label, wd: -1, at: &c, base: t}
+	v := &tree{dir: t.dir, realDir: t.realDir, prefix: t.prefix + best + "/", label: t.label, wd: -1, at: &c, base: t}
 	v.fsys = commitFS{dir: t.dir, rev: c.hash, when: c.date}
-	got, _ := t.versions.LoadOrStore(c.hash, v)
-	return got.(*tree), "@" + c.short, nil
+	got, _ := t.versions.LoadOrStore(best, v)
+	return got.(*tree), best, nil
 }
 
 // serveVersion serves a path below a version of t; first is the path's
-// first segment, eg @5430ac3. A longer or shorter hash than git's own
-// redirects to it. A share has no versions, as it shows no history.
+// first segment, eg @261024.4. A hash of a commit with a stardate, or a
+// longer or shorter hash than git's own, redirects to the best name. A share has no versions, as it shows no history.
 func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first string) {
 	name := t.name(r.URL.Path)
 	v, seg, err := t.atVersion(r.Context(), first)
@@ -84,7 +94,8 @@ func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
 	}
 	c := t.base.lastAt(ctx, name, t.at)
 	now := (&url.URL{Path: t.base.prefix + rest}).String()
-	return topLine(c, now, t.base.versionURL(c, rest))
+	stars := stardatesIn(ctx, t.dir)
+	return topLine(c, stars.label(c), now, t.base.versionURL(stars, c, rest))
 }
 
 // lastAt is the newest commit up to at that touched name, a path below
@@ -111,9 +122,10 @@ func (t *tree) lastAt(ctx context.Context, name string, at *commit) *commit {
 	return c
 }
 
-// versionURL is the URL of rest, a path below t, in commit c's version.
-func (t *tree) versionURL(c *commit, rest string) string {
-	return (&url.URL{Path: t.prefix + "@" + c.short + "/" + rest}).String()
+// versionURL is the URL of rest, a path below t, in commit c's version,
+// named by its stardate in s or else its short hash.
+func (t *tree) versionURL(s *stardates, c *commit, rest string) string {
+	return (&url.URL{Path: t.prefix + "@" + s.label(c) + "/" + rest}).String()
 }
 
 // commitFS reads a directory as it was in one commit: listings from git

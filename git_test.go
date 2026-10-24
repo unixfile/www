@@ -145,7 +145,7 @@ func TestPageTopNamesLastCommit(t *testing.T) {
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<details class="own latest" data-timeline="?timeline">`) || !strings.Contains(body, `">`+subject+`</span> · <span class="date">`) ||
+		if !strings.Contains(body, `<details class="own latest" data-timeline="?timeline">`) || !strings.Contains(body, `">`+subject+`</span> · <span class="date" title=`) ||
 			!strings.Contains(body, `<div class="versions"><a href="?log">&lt;(git log)</a></div>`) {
 			t.Errorf("%s: no top line with %q:\n%s", p, subject, body)
 		}
@@ -385,21 +385,5 @@ func TestGitRunsNoFsmonitor(t *testing.T) {
 	git(t.Context(), dir, "status")
 	if _, err := os.Stat(ran); err == nil {
 		t.Error("git ran the repo's fsmonitor")
-	}
-}
-
-// A commit's day goes by the calendar, not by hours passed.
-func TestDay(t *testing.T) {
-	now := time.Date(2026, 10, 24, 0, 30, 0, 0, time.Local)
-	for when, want := range map[time.Time]string{
-		now.Add(-10 * time.Minute):                     "today",
-		now.Add(-time.Hour):                            "yesterday",
-		now.AddDate(0, 0, -3):                          "3 days ago",
-		now.AddDate(0, 0, -7):                          "17 Oct",
-		time.Date(2025, 10, 3, 9, 0, 0, 0, time.Local): "Oct 2025",
-	} {
-		if got := day(when, now); got != want {
-			t.Errorf("day(%v) = %q, want %q", when, got, want)
-		}
 	}
 }
