@@ -630,6 +630,7 @@ func (h *hub) halt(why string) {
 		h.webStop()
 		h.web.srv.live.close()
 	}
+	h.reg.writePages(h.srv.live.pages())
 	h.reg.unmarkServer()
 	// Live reload streams never end on their own, and Shutdown waits for them.
 	h.srv.live.close()

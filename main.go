@@ -81,7 +81,7 @@ type config struct {
 
 var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnph] [-a ip[:port]] [dir]
        @NAME@ [-fnph] --share[=host[:port]] [--secret[=token]] [dir]
-       @NAME@ --restart [-a ip[:port] | --share[=host[:port]]]
+       @NAME@ --restart [-n] [-a ip[:port] | --share[=host[:port]]] [dir]
        @NAME@ -l [-a ip[:port] | --share[=host[:port]]] [dir]
        @NAME@ --kill [-a ip[:port] | --share[=host[:port]]]
 
@@ -113,7 +113,8 @@ var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnph] [-a ip[:port]] [dir]
       --restart         replace every server with one running this binary,
                         serving the same trees, and start one for persistent
                         trees that have none; with -a or --share, only the
-                        server on that address
+                        server on that address; with a directory, serve it
+                        too and open it unless a page of it was open
   -l, --list            print each served tree's URL and directory; with a
                         directory, only the trees at or below it
       --kill            stop every server and print the trees it served; with
@@ -237,8 +238,8 @@ func parseArgs(args []string) (config, error) {
 			dirs = append(dirs, a)
 		}
 	}
-	if c.restart && (len(dirs) > 0 || c.fg) {
-		return c, &errno{syscall.EINVAL, "--restart takes no directory or -f"}
+	if c.restart && c.fg {
+		return c, &errno{syscall.EINVAL, "--restart takes no -f"}
 	}
 	if c.persist && (c.restart || c.list || c.kill) {
 		return c, &errno{syscall.EINVAL, "--persist goes with a start, not with --restart, --list or --kill"}
@@ -257,8 +258,9 @@ func parseArgs(args []string) (config, error) {
 	}
 	switch len(dirs) {
 	case 0:
-		// --list without a directory lists every tree.
-		if !c.list && !c.kill {
+		// --list without a directory lists every tree, and --restart
+		// without one serves no tree beyond those it restarts.
+		if !c.list && !c.kill && !c.restart {
 			c.dir = "."
 		}
 	case 1:

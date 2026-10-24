@@ -12,17 +12,12 @@ build:
 # run serves this directory from build/ with --stamp, on port 8080 beside
 # an installed server on port 80. A server already there is replaced by
 # this build, serving the same trees, so its open pages go on under the
-# new code; only the first run opens the browser. --restart exits with
-# ESRCH, 3, when no server runs there; any other failure stops the run.
+# new code; the browser opens only when no page of this directory was
+# open, and www says which happened.
 RUNADDR := 127.31.$(shell expr $$(id -u) - 1000).1:8080
 
 run: build
-	@out=$$(build/$(NAME) --restart --stamp -a $(RUNADDR) 2>&1 >/dev/null); \
-	case $$? in \
-	0) build/$(NAME) -n --stamp -a $(RUNADDR) ;; \
-	3) build/$(NAME) --stamp -a $(RUNADDR) ;; \
-	*) echo "$$out" >&2; exit 1 ;; \
-	esac
+	@build/$(NAME) --restart --stamp -a $(RUNADDR) .
 
 test:
 	go vet ./...

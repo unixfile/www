@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/netip"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,7 +22,9 @@ import (
 // same trees, as --list and --kill pick their servers. An address with no
 // server but with persistent locks in its registry gets a server again,
 // which is how trees come back after a reboot. With --stamp, the new
-// servers show the build stamp.
+// servers show the build stamp. With a directory, it then serves that
+// directory on c.ep, as a start does, and opens it unless a page of it
+// was open on the old server.
 func restart(c config) int {
 	eps, err := endpoints()
 	if err != nil {
@@ -32,16 +35,23 @@ func restart(c config) int {
 		eps = []netip.AddrPort{c.ep}
 	}
 	code := 0
+	var open []string // pages that were open on c.ep's old server
 	for _, ep := range eps {
 		pid, trees, err := servedTrees(ep)
 		if errors.Is(err, syscall.ESRCH) {
 			if kept := persistedTrees(ep); len(kept) > 0 {
 				err = startTrees(ep, kept, c.stamp)
-			} else if !named {
+			} else if !named || c.dir != "" {
 				continue
 			}
 		} else if err == nil {
-			err = restartServer(ep, pid, trees, c.stamp)
+			var pages []string
+			if pages, err = restartServer(ep, pid, trees, c.stamp); err == nil {
+				say("the server on %s is replaced; %s", ep, reloading(len(pages)))
+			}
+			if ep == c.ep {
+				open = pages
+			}
 		}
 		if err != nil && code == 0 {
 			code = failNow(errnoOf(err), err.Error())
@@ -49,22 +59,126 @@ func restart(c config) int {
 			failNow(errnoOf(err), err.Error())
 		}
 	}
+	if c.dir != "" && code == 0 {
+		code = startDir(c, open)
+	}
 	return code
 }
 
+// reloading says how many open pages a new server takes over.
+func reloading(n int) string {
+	switch n {
+	case 0:
+		return "no page was open"
+	case 1:
+		return "1 open page reloads onto it"
+	}
+	return strconv.Itoa(n) + " open pages reload onto it"
+}
+
+// say tells the user and the log what a restart did.
+func say(format string, args ...any) {
+	logInfo(format, args...)
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+}
+
+// startDir serves c.dir on c.ep once the servers are replaced. A tree the
+// old server served has had its URL printed; it opens in the browser only
+// when none of open, the old server's pages, lies in it, since an open
+// page reloads onto the new server. A hidden tab holds no stream, so it
+// does not count. Any other directory starts as from the command line.
+func startDir(c config, open []string) int {
+	dir, err := filepath.Abs(c.dir)
+	if err != nil {
+		return failNow(errnoOf(err), "bad directory: "+err.Error())
+	}
+	if _, trees, err := servedTrees(c.ep); err == nil {
+		for _, t := range trees {
+			if t.dir != dir {
+				continue
+			}
+			if c.noopen {
+				return 0
+			}
+			n := 0
+			if u, err := neturl.Parse(t.url); err == nil {
+				for _, p := range open {
+					if strings.HasPrefix(p, u.Path) {
+						n++
+					}
+				}
+			}
+			if n > 0 {
+				say("%s has %s, so no browser opens", dir, pagesOf(n))
+				return 0
+			}
+			say("no page of %s was open, so one opens", dir)
+			openBrowser(t.url)
+			return 0
+		}
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return failNow(errnoOf(err), "cannot find own executable: "+err.Error())
+	}
+	args := []string{"-a", c.ep.String()}
+	if shared(c.ep) {
+		args = []string{"--share=" + c.ep.String()}
+	}
+	if c.noopen {
+		args = append(args, "-n")
+	}
+	if c.stamp {
+		args = append(args, "--stamp")
+	}
+	cmd := exec.Command(exe, append(args, "--", dir)...)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			// The child has printed its own error.
+			return ee.ExitCode()
+		}
+		return failNow(errnoOf(err), "cannot serve "+dir+": "+err.Error())
+	}
+	return 0
+}
+
+// pagesOf counts open pages in a sentence.
+func pagesOf(n int) string {
+	if n == 1 {
+		return "1 open page"
+	}
+	return strconv.Itoa(n) + " open pages"
+}
+
 // restartServer reads the trees from the registry, sends the server
-// SIGTERM, waits for its locks to go and starts each tree again. A binary
-// that could not bind the server's port leaves the server alone, since
-// stopping it would drop its trees.
-func restartServer(ep netip.AddrPort, pid int, trees []servedTree, stamp bool) error {
+// SIGTERM, waits for its locks to go and starts each tree again. It
+// returns the pages that held a stream to the old server, from the record
+// the server leaves as it stops. A binary that could not bind the
+// server's port leaves the server alone, since stopping it would drop its
+// trees.
+func restartServer(ep netip.AddrPort, pid int, trees []servedTree, stamp bool) ([]string, error) {
 	if ep.Port() < 1024 && !lowPortOK() {
-		return &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
+		return nil, &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
 			", so the server on " + ep.String() + " keeps its old one. Run the installed package's " + progName + ", which holds cap_net_bind_service"}
 	}
-	if err := stopServer(ep, pid, trees); err != nil {
-		return err
+	var record string
+	if dir, err := registryDir(ep); err == nil {
+		record = filepath.Join(dir, pagesFile)
+		os.WriteFile(record, nil, 0o600)
 	}
-	return startTrees(ep, trees, stamp)
+	if err := stopServer(ep, pid, trees); err != nil {
+		os.Remove(record)
+		return nil, err
+	}
+	var pages []string
+	if b, err := os.ReadFile(record); record != "" && err == nil {
+		// A path may hold spaces, so lines divide them.
+		pages = strings.FieldsFunc(string(b), func(r rune) bool { return r == '\n' })
+		os.Remove(record)
+	}
+	return pages, startTrees(ep, trees, stamp)
 }
 
 // startTrees serves each tree on ep through this binary, as a start from

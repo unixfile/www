@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -271,5 +272,33 @@ func TestLiveCloseEndsStreams(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatal("stream still open after close")
 		}
+	}
+}
+
+// A stopping server records its open pages only when a restart has asked,
+// by creating the record, so other stops leave the registry as it was.
+func TestPagesRecord(t *testing.T) {
+	l := newLive()
+	defer l.close()
+	_, drop := l.subscribe("/t/a.md", nil)
+	l.subscribe("/t/b c.md", nil)
+	l.subscribe("/t/a.md", nil)
+	drop()
+	got := l.pages()
+	slices.Sort(got)
+	if want := []string{"/t/a.md", "/t/b c.md"}; !slices.Equal(got, want) {
+		t.Fatalf("pages %q, want %q", got, want)
+	}
+
+	r := &registry{dir: t.TempDir()}
+	record := filepath.Join(r.dir, pagesFile)
+	r.writePages(got)
+	if _, err := os.Stat(record); err == nil {
+		t.Fatal("record written unasked")
+	}
+	os.WriteFile(record, []byte("stale\n"), 0o600)
+	r.writePages(got)
+	if b, _ := os.ReadFile(record); string(b) != "/t/a.md\n/t/b c.md\n" {
+		t.Errorf("record %q", b)
 	}
 }

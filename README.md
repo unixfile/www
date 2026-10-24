@@ -9,7 +9,7 @@ It is fast. A page from a running server takes one to three milliseconds, a serv
 ```
 www [-fnph] [-a ip[:port]] [dir]
 www [-fnph] --share[=host[:port]] [--secret[=token]] [dir]
-www --restart [-a ip[:port] | --share[=host[:port]]]
+www --restart [-n] [-a ip[:port] | --share[=host[:port]]] [dir]
 www -l [-a ip[:port] | --share[=host[:port]]] [dir]
 www --kill [-a ip[:port] | --share[=host[:port]]]
 ```
@@ -22,7 +22,7 @@ The URL is all it prints, so `url=$(www -n)` works. Running `www` again in a ser
 Trees on one address share one server. The first `www` starts it in the background, and later ones hand their tree to it and return.
 When something other than your www on that address holds the port, `www` fails at once with `E98` and names the listeners there.
 The server exits when its last lock is gone. SIGTERM stops it at once and removes every lock but a persistent `.LOCK`, as does the Kill server button on the index at `/`.
-A running server keeps the binary it started with. `www --restart` moves every server's trees to the current binary, and `make install` and `make install-deb` run it for you; open tabs reload onto the new binary. A binary without the capability for port 80, such as the one from `make install`, leaves a port-80 server on its old binary and says so.
+A running server keeps the binary it started with. `www --restart` moves every server's trees to the current binary, and `make install` and `make install-deb` run it for you; open tabs reload onto the new binary, and it says how many did. A binary without the capability for port 80, such as the one from `make install`, leaves a port-80 server on its old binary and says so.
 
 The index at `/` lists the server's locks: each tree with the time its lock was written and a Delete lock button, and the lock's path on hover. Trees on other addresses follow as plain links, since only their own server may stop them. The header shows when the server started, and a warning appears when the binary on disk has changed since.
 To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`. Type the name with its slash, eg `www/`, or the browser searches for it.
@@ -36,9 +36,9 @@ To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`
 - `--stamp`: show the binary's build time, the seconds since, its commit and the page's render time, small and faint, above each page's header. `make run` sets it; `--restart` passes it to the new servers when given, and leaves it off otherwise
 - `--cache size`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
 - `--disk size`: disk a new server may fill with online repos, eg `4G`; it drops the repos read longest ago. The default is `2G`, and `--restart` goes back to it
-- `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one; with `-a` or `--share`, only the server on that address
+- `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one; with `-a` or `--share`, only the server on that address; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
 - `-l`, `--list`: print each served tree's URL and directory, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it
-- `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
+- `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
 - `--version`: print when the binary was built and the commit it came from, as the stamp says it, eg `www built 2026-10-21 12:49, from 1aa282c+modified`
 - `-h`, `--help`: print the options
 
@@ -81,7 +81,7 @@ www needs git.
 `make deb` builds a Debian package in `build/`, such as `www_0~git20261015223930.20f02fd_amd64.deb`, versioned by the last commit's UTC time and hash. It depends on git. For another architecture, pass `ARCH`, eg `make deb ARCH=arm64`.
 `make install-deb` builds the package while sudo asks for the password, then installs it with `sudo apt install`, which pulls in git. It first removes the `~/.local/bin` link from `make install`, which would otherwise shadow the package's binary. Run it again to replace an installed build, even of the same commit. `make uninstall-deb` removes the package.
 
-To try a change without installing it, `make run` builds `build/www` and serves this directory on port 8080 with `--stamp`, beside an installed server on port 80. A later run replaces the server on 8080 with the new build, serving the same trees, and open pages go on under it, so edit and `make run` again. Only the first run opens the browser. `www --kill -a 127.31.N.1:8080` stops it.
+To try a change without installing it, `make run` builds `build/www` and serves this directory on port 8080 with `--stamp`, beside an installed server on port 80. A later run replaces the server on 8080 with the new build, serving the same trees, and open pages go on under it, so edit and `make run` again. It opens the browser only when no page of this directory was open on the old server, and says which happened. A hidden tab holds no connection, so it does not count and gets a second tab. `www --kill -a 127.31.N.1:8080` stops it.
 
 `make bench` times what a reader waits for: a search across a generated tree of 4,000 files and 24 MB, and a code page's first view per language: lexing alone, the whole page, and the page with scope boxes. `BENCH` picks benchmarks by pattern and `COUNT` repeats them, eg `make bench BENCH=Search COUNT=10` for benchstat. Python, JavaScript and shell are timed on argparse.py, jquery.js and bash_completion from Debian's packages and skipped where those are not installed. Warm pages have no benchmark, since `TestPageBudget` in `make test` holds them under 5 ms.
 

@@ -58,26 +58,26 @@ type live struct {
 	key  []byte // keys versions, which pages show to visitors
 	w    *watcher
 	mu   sync.Mutex
-	subs map[chan struct{}]bool
-	wds  map[int]int // open pages per watch descriptor
+	subs map[chan struct{}]string // each open page's stream, to the page's path
+	wds  map[int]int              // open pages per watch descriptor
 	done chan struct{}
 	once sync.Once
 }
 
 func newLive() *live {
-	l := &live{id: rand.Text()[:12], key: []byte(rand.Text()), w: newWatcher(pageMask), subs: map[chan struct{}]bool{},
+	l := &live{id: rand.Text()[:12], key: []byte(rand.Text()), w: newWatcher(pageMask), subs: map[chan struct{}]string{},
 		wds: map[int]int{}, done: make(chan struct{})}
 	go l.loop()
 	return l
 }
 
-// subscribe watches dirs for one page and returns the channel that wakes
-// it. release undoes both.
-func (l *live) subscribe(dirs []string) (wake chan struct{}, release func()) {
+// subscribe watches dirs for the page at path and returns the channel that
+// wakes it. release undoes both.
+func (l *live) subscribe(path string, dirs []string) (wake chan struct{}, release func()) {
 	wake = make(chan struct{}, 1)
 	var wds []int
 	l.mu.Lock()
-	l.subs[wake] = true
+	l.subs[wake] = path
 	for _, dir := range dirs {
 		// A directory reached twice, through a link, has one descriptor.
 		if wd := l.w.add(dir); wd >= 0 && !slices.Contains(wds, wd) {
@@ -134,6 +134,21 @@ func (l *live) loop() {
 	}
 }
 
+// pages returns the path of each page that holds a stream, one entry per
+// page, so two tabs on one path count twice.
+func (l *live) pages() []string {
+	if l == nil {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	paths := make([]string, 0, len(l.subs))
+	for _, p := range l.subs {
+		paths = append(paths, p)
+	}
+	return paths
+}
+
 // kick wakes every page, as when a tree joins or leaves.
 func (l *live) kick() {
 	if l != nil {
@@ -182,7 +197,7 @@ func (s *server) handleLive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, seen := r.URL.Query().Get("path"), r.URL.Query().Get("v")
-	wake, release := l.subscribe(s.watchDirs(p))
+	wake, release := l.subscribe(p, s.watchDirs(p))
 	defer release()
 	w.Header().Set("Content-Type", "text/event-stream")
 	// A dropped stream comes back after a second, as on --restart. One lost

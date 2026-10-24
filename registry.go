@@ -182,6 +182,26 @@ func readLinks(dir string) (map[string]string, error) {
 // is how to tell whether its tree is served and which process to stop.
 const serverFile = "server"
 
+// pagesFile, in a registry, lists the path of each page that held a live
+// stream when its server stopped, one per line. --restart creates it empty
+// before it stops the server and reads it after, to say which pages
+// reload onto the new server and whether a tree needs a browser opened. A
+// server stopped any other way finds no file and writes none.
+const pagesFile = "pages"
+
+// writePages records the pages open on a stopping server, when a restart
+// has asked for them.
+func (r *registry) writePages(paths []string) {
+	f, err := os.OpenFile(filepath.Join(r.dir, pagesFile), os.O_WRONLY|os.O_TRUNC, 0)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	for _, p := range paths {
+		f.WriteString(p + "\n")
+	}
+}
+
 // markServer records this process as the server of the registry.
 func (r *registry) markServer() error {
 	return os.WriteFile(filepath.Join(r.dir, serverFile),
