@@ -334,6 +334,13 @@ input.search {
   padding: 0.15em 0.4em;
 }
 input.search:focus { outline: none; }
+/* The copy and share buttons follow the page down: once the search row
+   scrolls out of the window they float at its top right, over the
+   column's right edge where they sat, and a code page's view links make
+   room for them. The script measures both. */
+span.tools { display: flex; gap: 1em; flex: none; }
+body.afloat span.tools { position: fixed; top: 0.3em; right: var(--tools-right, 1em); z-index: 2; }
+body.afloat div.view { padding-right: calc(var(--tools-w, 0px) + 0.6em); }
 button.copy, button.share {
   flex: none;
   color: var(--muted);
