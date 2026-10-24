@@ -774,8 +774,8 @@ func (t *tree) missing(name string) func(string) bool {
 }
 
 // serveCode shows a text file as a highlighted code page with numbered,
-// linkable lines, each block of code drawn as a box unless ?flat asks for
-// plain lines. Binary files go raw.
+// linkable lines; ?scopes draws each block of code as a box. Binary files
+// go raw.
 func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
 	b, err := fs.ReadFile(t.fsys, name)
 	if err != nil {
@@ -788,11 +788,11 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 	}
 	var body strings.Builder
 	body.WriteString(t.logLine(r.Context(), name))
-	_, flat := r.URL.Query()["flat"]
-	body.WriteString(highlightPage(codeLexer(name), b, !flat))
-	view := "flat"
-	if flat {
-		view = "scopes"
+	_, scoped := r.URL.Query()["scopes"]
+	body.WriteString(highlightPage(codeLexer(name), b, scoped))
+	view := "scopes"
+	if scoped {
+		view = "flat"
 	}
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String()), Raw: true, View: view})
 }

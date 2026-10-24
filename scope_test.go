@@ -51,7 +51,7 @@ func TestScopesPython(t *testing.T) {
 }
 
 // A code page draws each scope as an empty box in its first line, after
-// the line number; ?flat and fences draw none.
+// the line number; a flat page and fences draw none.
 func TestScopeBoxes(t *testing.T) {
 	src := "func f() {\n\treturn\n}\n"
 	var b strings.Builder
