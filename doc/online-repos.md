@@ -2,7 +2,7 @@
 
 The server on your default address also listens on the address after it, 127.31.N.2, on the same port. There a URL names a repo on a forge by its host and path, eg `http://127.31.1.2/github.com/junegunn/fzf/README.md`. The first visit fetches the repo into a cache, and from then on www serves it as it serves a checkout: docs, code, listings, search and history. Home and the web never collide, since each has an address of its own.
 
-The index at `/` on the default address links the web address. The web address's own `/` lists the repos in the cache, each with its size and when it was last read, and how much of the disk limit they fill.
+The index at `/` on the default address links the web address. The web address's own `/` lists the repos in the cache, each with its size and when it was last read, and how much of the disk limit they fill, and links back to the trees on the default address.
 
 ## Ways in
 

@@ -399,6 +399,7 @@ func (h *hub) startWeb(c config, ep netip.AddrPort) {
 	h.webHTTPD = &http.Server{Handler: w.srv.handler(), ReadHeaderTimeout: 10 * time.Second, ConnState: h.track,
 		ErrorLog: log.New(logWriter{}, "", 0)}
 	h.srv.webURL = origin(ep)
+	w.srv.homeURL = h.origin
 	go h.webHTTPD.Serve(ln)
 	logInfo("serves online repos at %s from %s, within %s", origin(ep), w.root, sizeText(limit))
 }

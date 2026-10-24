@@ -73,6 +73,9 @@ type server struct {
 	live   *live  // nil in tests that do without live reload
 	web    *web   // set on the web address, whose trees are repos in the cache
 	webURL string // the web address's URL, for the index, or ""
+	// homeURL is, on the web address, the default address's URL, which
+	// its index links back to.
+	homeURL string
 }
 
 // about describes the server for its index: where it listens, since when,
@@ -727,6 +730,10 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if hash, ok := r.URL.Query()["commit"]; ok {
+		if q := r.URL.Query(); q.Has("decl") {
+			t.serveDecl(w, r, name, info.IsDir(), hash[0], q.Get("file"), q.Get("decl"))
+			return
+		}
 		t.serveCommit(w, r, name, info.IsDir(), hash[0])
 		return
 	}

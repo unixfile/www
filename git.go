@@ -756,7 +756,7 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 	}
 	switch {
 	case sem != nil:
-		body.WriteString(t.semanticHTML(r.Context(), name, c, sem))
+		body.WriteString(t.semanticHTML(r.URL.Path, c, sem))
 	case len(diffs) > 0:
 		q := r.URL.Query()
 		q.Set("commit", c.hash)
@@ -782,32 +782,40 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 		if _, err := fs.Stat(t.fsys, d.name); err == nil {
 			label = fmt.Sprintf("<a href=\"%s\">%s</a>", esc((&url.URL{Path: t.prefix + d.name}).String()), label)
 		}
-		fmt.Fprintf(&body, "<p class=\"own file\">%s</p>\n<pre class=\"diff\">", label)
 		var marks map[int][][2]int
 		if sem != nil {
 			marks = sem.marks[d.name]
 		}
-		for i, line := range d.lines {
-			class := "meta"
-			switch {
-			case strings.HasPrefix(line, "@@"):
-				class = "hunk"
-			case strings.HasPrefix(line, "+"):
-				class = "add"
-			case strings.HasPrefix(line, "-"):
-				class = "del"
-			case strings.HasPrefix(line, " "):
-				class = "same"
-			}
-			fmt.Fprintf(&body, "<span class=\"%s\">%s</span>", class, markLine(line, marks[i]))
-		}
-		body.WriteString("</pre>\n")
+		fmt.Fprintf(&body, "<p class=\"own file\">%s</p>\n%s", label, diffPre(d.lines, marks))
 	}
 	if cut {
 		fmt.Fprintf(&body, "<p class=\"own\">The diff stops at %d KiB. <code>git show %s</code> shows the rest.</p>\n", maxDiff>>10, esc(c.short))
 	}
 	body.WriteString("</div>\n")
 	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "commit", Body: template.HTML(body.String())})
+}
+
+// diffPre renders a diff's lines, each a block tinted by its kind, with
+// the changed byte ranges marks gives by line index.
+func diffPre(lines []string, marks map[int][][2]int) string {
+	var b strings.Builder
+	b.WriteString("<pre class=\"diff\">")
+	for i, line := range lines {
+		class := "meta"
+		switch {
+		case strings.HasPrefix(line, "@@"):
+			class = "hunk"
+		case strings.HasPrefix(line, "+"):
+			class = "add"
+		case strings.HasPrefix(line, "-"):
+			class = "del"
+		case strings.HasPrefix(line, " "):
+			class = "same"
+		}
+		fmt.Fprintf(&b, "<span class=\"%s\">%s</span>", class, markLine(line, marks[i]))
+	}
+	b.WriteString("</pre>\n")
+	return b.String()
 }
 
 // paragraphs splits a commit body at blank lines and joins the lines of

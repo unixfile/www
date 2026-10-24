@@ -86,17 +86,14 @@ func TestSemanticDiff(t *testing.T) {
 	sem := tr.semanticDiff(context.Background(), ".", hash, diffs)
 	got := map[string]string{}
 	for _, c := range sem.changes {
-		got[c.name] = strings.Join(c.what, ", ")
-		if c.from != "" {
-			got[c.name] += " " + c.from
-		}
+		got[c.name] = strings.Join(c.what, ", ") + c.whence()
 	}
 	want := map[string]string{
 		"Edit":  "changed",
 		"Tidy":  "reformatted",
-		"New":   "renamed Old",
+		"New":   "renamed was Old",
 		"T.M":   "moved",
-		"Away":  "moved x.go",
+		"Away":  "moved from x.go",
 		"Fresh": "added",
 		"Gone":  "removed",
 	}
@@ -126,5 +123,21 @@ func TestSemanticDiff(t *testing.T) {
 	}
 	if !slices.ContainsFunc(sem.changes, func(c declChange) bool { return c.name == "Gone" && c.gone }) {
 		t.Errorf("Gone not marked gone")
+	}
+	// Each row links a page of its declaration alone: a moved and
+	// renamed one diffs against its old self.
+	w = get(s.handler(), "/?commit="+hash+"&file=x.go&decl=Edit")
+	body = w.Body.String()
+	for _, want := range []string{"changed Edit in x.go", `<span class="del">-func Edit() int { return <mark>1</mark> }</span>`, `<span class="add">+func Edit() int { return <mark>10</mark> }</span>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %s in the declaration page:\n%s", want, body)
+		}
+	}
+	w = get(s.handler(), "/?commit="+hash+"&file=x.go&decl=New")
+	if body := w.Body.String(); !strings.Contains(body, `<span class="del">-func <mark>Old</mark>() int { return 3 }</span>`) {
+		t.Errorf("renamed page: %s", body)
+	}
+	if w = get(s.handler(), "/?commit="+hash+"&file=x.go&decl=Kept"); w.Code != 404 {
+		t.Errorf("an unchanged declaration: %d", w.Code)
 	}
 }

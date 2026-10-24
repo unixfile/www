@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,7 +39,8 @@ type decl struct {
 type declChange struct {
 	what []string // eg added, or moved and changed
 	name string
-	from string // the old name of a rename, or the file a move came from
+	was  string // the old name of a rename, or ""
+	came string // the file a move between files came from, or ""
 	file string // the file it lies in, after the commit or, if removed, before
 	sr   int    // rows from 0 in that version, for the link
 	er   int
@@ -334,7 +337,7 @@ func compareDecls(file string, old, cur []decl) (changes []declChange, added, re
 		if j < 0 {
 			continue
 		}
-		changes = append(changes, declChange{what: []string{"renamed"}, name: a.name, from: removed[j].name, file: file, sr: a.sr, er: a.er})
+		changes = append(changes, declChange{what: []string{"renamed"}, name: a.name, was: removed[j].name, file: file, sr: a.sr, er: a.er})
 		removed = slices.Delete(removed, j, j+1)
 		added = slices.Delete(added, i, i+1)
 		i--
@@ -588,11 +591,11 @@ func (t *tree) semanticDiff(ctx context.Context, name, hash string, diffs []file
 		}
 		x := removedDecls[j]
 		c := added[i]
-		c.what, c.from = []string{"moved"}, removed[j].file
+		c.what, c.came = []string{"moved"}, removed[j].file
 		switch {
 		case x.name != a.name:
 			c.what = append(c.what, "renamed")
-			c.from += ", was " + x.name
+			c.was = x.name
 		case x.raw == a.raw:
 		case x.sum == a.sum:
 			c.what = append(c.what, "reformatted")
@@ -622,7 +625,7 @@ func (t *tree) semanticDiff(ctx context.Context, name, hash string, diffs []file
 	if key != "" && ctx.Err() == nil {
 		size := int64(256)
 		for _, c := range sem.changes {
-			size += int64(len(c.name)+len(c.from)+len(c.file)) + 96
+			size += int64(len(c.name)+len(c.was)+len(c.came)+len(c.file)) + 96
 		}
 		for _, m := range sem.marks {
 			size += int64(len(m)) * 48
@@ -633,17 +636,15 @@ func (t *tree) semanticDiff(ctx context.Context, name, hash string, diffs []file
 }
 
 // semanticHTML renders the declarations a commit changed, one row each
-// under its file's name. A row links its lines in the commit's version of
-// the file, where the tree has versions.
-func (t *tree) semanticHTML(ctx context.Context, name string, c *commit, sem *semantic) string {
+// under its file's name. A row links the declaration's own page, below
+// the commit page at page.
+func (t *tree) semanticHTML(page string, c *commit, sem *semantic) string {
 	esc := template.HTMLEscapeString
 	var b strings.Builder
 	b.WriteString("<div class=\"semantic\">\n")
 	if sem.note != "" {
 		b.WriteString("<p class=\"own\">" + esc(sem.note) + "</p>\n")
 	}
-	versions := t.historyInVersions(ctx, name)
-	stars := t.starsFor(ctx, name)
 	file := ""
 	for _, ch := range sem.changes {
 		if ch.file != file {
@@ -653,29 +654,171 @@ func (t *tree) semanticHTML(ctx context.Context, name string, c *commit, sem *se
 			file = ch.file
 			b.WriteString("<p class=\"own file\">" + esc(file) + "</p>\n<ul class=\"decls\">\n")
 		}
-		label := esc(ch.name)
-		if versions && !ch.gone {
-			lines := "L" + strconv.Itoa(ch.sr+1)
-			if ch.er > ch.sr {
-				lines += "-L" + strconv.Itoa(ch.er+1)
-			}
-			label = "<a href=\"" + esc(t.versionURL(stars, c, ch.file)+"#"+lines) + "\">" + label + "</a>"
-		}
-		what := strings.Join(ch.what, ", ")
-		if ch.from != "" {
-			if ch.what[0] == "moved" {
-				label += " from " + esc(ch.from)
-			} else {
-				label += ", was " + esc(ch.from)
-			}
-		}
-		fmt.Fprintf(&b, "<li><span class=\"what\">%s</span> %s</li>\n", esc(what), label)
+		fmt.Fprintf(&b, "<li><span class=\"what\">%s</span> <a href=\"%s\">%s</a>%s</li>\n",
+			esc(strings.Join(ch.what, ", ")), esc(declURL(page, c.hash, ch.file, ch.name)), esc(ch.name), esc(ch.whence()))
 	}
 	if file != "" {
 		b.WriteString("</ul>\n")
 	}
 	b.WriteString("</div>\n")
 	return b.String()
+}
+
+// whence says where a moved or renamed declaration came from, eg
+// " from x.go, was Old", or "".
+func (ch declChange) whence() string {
+	var s string
+	if ch.came != "" {
+		s += " from " + ch.came
+	}
+	if ch.was != "" {
+		s += ", was " + ch.was
+	}
+	if ch.came == "" {
+		s = strings.TrimPrefix(s, ",")
+	}
+	return s
+}
+
+// declURL is the page of the declaration name in file, as the commit
+// hash changed it, below the commit page at page.
+func declURL(page, hash, file, name string) string {
+	q := url.Values{"commit": {hash}, "file": {file}, "decl": {name}}
+	return (&url.URL{Path: page, RawQuery: q.Encode()}).String()
+}
+
+// declText reads the declaration name in file, at git path rel, as of
+// rev: its lines and its rows from 0.
+func declText(ctx context.Context, dir, rev, rel, file, name string) (lines []string, sr, er int, err error) {
+	b, err := git(ctx, dir, "cat-file", "blob", rev+":./"+rel)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	ds, err := declarations(ctx, file, b)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	i := slices.IndexFunc(ds, func(d decl) bool { return d.name == name })
+	if i < 0 {
+		return nil, 0, 0, errors.New("no " + name + " in " + file)
+	}
+	all := strings.Split(string(b), "\n")
+	return all[ds[i].sr : ds[i].er+1], ds[i].sr, ds[i].er, nil
+}
+
+// lineDiff is the diff of two texts as lines with git's leading signs:
+// a space for a kept line, - for a removed one and + for an added one.
+func lineDiff(old, cur []string) []string {
+	var out []string
+	i, j := 0, 0
+	for _, p := range lcs(old, cur) {
+		for ; i < p[0]; i++ {
+			out = append(out, "-"+old[i])
+		}
+		for ; j < p[1]; j++ {
+			out = append(out, "+"+cur[j])
+		}
+		out = append(out, " "+old[i])
+		i, j = i+1, j+1
+	}
+	for ; i < len(old); i++ {
+		out = append(out, "-"+old[i])
+	}
+	for ; j < len(cur); j++ {
+		out = append(out, "+"+cur[j])
+	}
+	return out
+}
+
+// serveDecl shows one declaration as the commit hash changed it: what
+// happened to it, links to its lines before and after where the tree
+// has versions, and a diff of the declaration alone.
+func (t *tree) serveDecl(w http.ResponseWriter, r *http.Request, name string, dir bool, hash, file, declName string) {
+	ctx := r.Context()
+	crumbs := t.pageCrumbs(name, dir)
+	crumbs = append(crumbs, crumb{Label: logLabel, Href: crumbs[len(crumbs)-1].Href + "?log"})
+	title := declName + " in git show " + hash
+	fail := func(status int, err error) {
+		t.render(w, r, status, page{Title: title, Crumbs: append(crumbs, crumb{Label: declName}), Kind: "error",
+			Body: template.HTML("<pre class=\"error\">" + template.HTMLEscapeString(err.Error()) + "</pre>")})
+	}
+	if !hexHash.MatchString(hash) {
+		fail(http.StatusNotFound, errors.New("Not a commit hash: "+hash))
+		return
+	}
+	c, diffs, _, err := t.gitShow(ctx, name, hash)
+	if err != nil {
+		fail(http.StatusNotFound, err)
+		return
+	}
+	commitPage := (&url.URL{Path: r.URL.Path, RawQuery: "commit=" + c.hash}).String()
+	crumbs = append(crumbs, crumb{Label: c.short, Href: commitPage}, crumb{Label: declName})
+	sem := t.semanticDiff(ctx, name, c.hash, diffs)
+	i := slices.IndexFunc(sem.changes, func(ch declChange) bool { return ch.file == file && ch.name == declName })
+	if i < 0 {
+		fail(http.StatusNotFound, fmt.Errorf("%s does not change %s in %s", c.short, declName, file))
+		return
+	}
+	ch := sem.changes[i]
+	rels := map[string]string{}
+	for _, d := range diffs {
+		rels[d.name] = d.rel
+	}
+	gdir, _, err := t.gitPlace(name)
+	if err != nil {
+		fail(http.StatusNotFound, t.gitErr(err))
+		return
+	}
+	oldFile, oldName := file, declName
+	if ch.came != "" {
+		oldFile = ch.came
+	}
+	if ch.was != "" {
+		oldName = ch.was
+	}
+	var old, cur []string
+	var osr, oer, nsr, ner int
+	if ch.what[0] != "added" {
+		if old, osr, oer, err = declText(ctx, gdir, c.hash+"^", rels[oldFile], oldFile, oldName); err != nil {
+			logErr("%s: %v", t.dir, err)
+		}
+	}
+	if !ch.gone {
+		if cur, nsr, ner, err = declText(ctx, gdir, c.hash, rels[file], file, declName); err != nil {
+			logErr("%s: %v", t.dir, err)
+		}
+	}
+	esc := template.HTMLEscapeString
+	rows := func(sr, er int) string {
+		s := "L" + strconv.Itoa(sr+1)
+		if er > sr {
+			s += "-L" + strconv.Itoa(er+1)
+		}
+		return s
+	}
+	var links []string
+	if t.historyInVersions(ctx, name) {
+		if old != nil {
+			if parent, err := git(ctx, gdir, "rev-parse", "--short=12", c.hash+"^"); err == nil {
+				u := (&url.URL{Path: t.prefix + "@" + strings.TrimSpace(string(parent)) + "/" + oldFile, Fragment: rows(osr, oer)}).String()
+				links = append(links, "<a href=\""+esc(u)+"\">before</a>")
+			}
+		}
+		if cur != nil {
+			links = append(links, "<a href=\""+esc(t.versionURL(t.starsFor(ctx, name), c, file)+"#"+rows(nsr, ner))+"\">after</a>")
+		}
+	}
+	var body strings.Builder
+	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"own\">%s</p>\n<p class=\"subject\">%s</p>\n</div>\n", commitLine(t.starsFor(ctx, name), c), esc(c.subject))
+	fmt.Fprintf(&body, "<div class=\"diffs\">\n<p class=\"own file\">%s %s in %s%s", esc(strings.Join(ch.what, ", ")), esc(declName), esc(file), esc(ch.whence()))
+	if len(links) > 0 {
+		body.WriteString(" · " + strings.Join(links, " · "))
+	}
+	body.WriteString("</p>\n")
+	lines := lineDiff(old, cur)
+	body.WriteString(diffPre(lines, diffMarks(file, lines)))
+	body.WriteString("</div>\n")
+	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "commit", Body: template.HTML(body.String())})
 }
 
 // markLine renders one line of a diff with its changed ranges marked.

@@ -1165,6 +1165,9 @@ func (w *web) serveRoot(rw http.ResponseWriter, r *http.Request) {
 		body.WriteString("</table>\n")
 	}
 	fmt.Fprintf(&body, "<p class=\"own\">The cache in %s holds %d repos in %s of its %s.</p>\n", esc(tildePath(w.root)), len(repos), sizeText(total), sizeText(w.limit))
+	if u := w.srv.homeURL; u != "" {
+		fmt.Fprintf(&body, "<p class=\"own\">Trees: <a href=\"%s/\">%s/</a></p>\n", esc(u), esc(strings.TrimPrefix(u, "http://")))
+	}
 	w.render(rw, r, http.StatusOK, "web", []crumb{{Label: "index"}}, "index", body.String())
 }
 
