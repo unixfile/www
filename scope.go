@@ -236,9 +236,7 @@ func writeScopes(w io.Writer, scopes []scope) {
 			class += " shade"
 		}
 		io.WriteString(w, `<i class="`+class+`" style="--c:`+strconv.Itoa(s.left)+`;--w:`+strconv.Itoa(s.right-s.left))
-		if s.leaf > 0 {
-			io.WriteString(w, `;--k:`+strconv.Itoa(s.leaf))
-		} else {
+		if s.leaf == 0 {
 			io.WriteString(w, `;--r:`+strconv.Itoa(s.last-s.first+1))
 		}
 		io.WriteString(w, `;--d:`+strconv.Itoa(s.depth)+`"></i>`)
