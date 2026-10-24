@@ -45,4 +45,10 @@ func TestVersion(t *testing.T) {
 	if body := get(h, "/a/b.go?log").Body.String(); !strings.Contains(body, `<a class="then" href="`+at+`a/b.go">browse</a>`) {
 		t.Errorf("history links no version:\n%s", body)
 	}
+	// A version runs the page's script, for keys, search and line marks,
+	// but holds no stream, since it never changes.
+	s.live = newLive()
+	if body := get(s.handler(), at+"a/b.go").Body.String(); !strings.Contains(body, `<script data-live="">`) {
+		t.Errorf("version page without the script, or with a stream:\n%s", body)
+	}
 }

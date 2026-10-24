@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
 {{if .Stopped}}<style>{{.Style}}</style>{{else}}<link rel="stylesheet" href="{{styleURL}}">{{end}}
-{{with .Live}}<script data-live="{{.}}">{{liveJS}}</script>
+{{with .Live}}<script data-live="{{if not $.Fixed}}{{.}}{{end}}">{{liveJS}}</script>
 {{end}}</head>
 <body class="{{.Kind}}">
 {{with .Built}}<p class="built" data-built="{{.Millis}}">built {{.Clock}}, <span>{{.Ago}}</span> s ago, from {{.Commit}}{{with .Rendered}}, rendered in {{.}}{{end}}</p>

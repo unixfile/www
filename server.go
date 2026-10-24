@@ -950,6 +950,7 @@ type page struct {
 	Shared  bool   // a shared server's page, which has no button
 	NoStop  bool   // a page on the web address, which has no button
 	Live    string // the URL of the page's live reload stream, or ""
+	Fixed   bool   // a version, which never changes: the script runs but holds no stream
 	Built   *stamp // when the binary was built, above the header, with --stamp; none on a share
 }
 
@@ -1034,10 +1035,10 @@ func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page
 		p.NoStop, p.Status = true, t.web.status()
 	}
 	// A version never changes and has no lock or path on disk: no live
-	// reload, no stop button, nothing to copy.
+	// reload, no stop button, nothing to copy. Its page still runs the
+	// script, for the keys, the search box and line marks.
 	if t.at != nil {
-		p.NoStop = true
-		r = r.WithContext(context.WithValue(r.Context(), liveKey{}, ""))
+		p.NoStop, p.Fixed = true, true
 	}
 	if status == http.StatusOK {
 		p.Search = searchURL(r.URL.Path)

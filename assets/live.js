@@ -18,7 +18,7 @@
 			if (es) es.close();
 			es = null;
 			found();
-		} else if (!es) {
+		} else if (!es && url) {
 			es = new EventSource(url);
 			es.onmessage = () => (searching() ? (pending = true) : update());
 			es.onopen = () => {
@@ -52,6 +52,7 @@
 	// another says so, whether a reload or a click brought it here.
 	const serverKey = "server";
 	const seeServer = () => {
+		if (!url) return;
 		const id = (new URL(url, location.href).searchParams.get("v") || "").split(".")[0];
 		let last = null;
 		try {
