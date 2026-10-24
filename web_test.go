@@ -327,3 +327,27 @@ func TestWebPath(t *testing.T) {
 		}
 	}
 }
+
+// A URL pasted whole after the address, or a forge's view of a file,
+// redirects to the path that reads it. The mux has folded the URL's //
+// into / before.
+func TestWebPastedURL(t *testing.T) {
+	w := testWeb(t, defaultDisk)
+	for in, want := range map[string]string{
+		"/https:/git.suckless.org/dwm/":                       "/git.suckless.org/dwm",
+		"/https:/git.suckless.org/dwm":                        "/git.suckless.org/dwm",
+		"/http:/github.com/junegunn/fzf":                      "/github.com/junegunn/fzf/",
+		"/https:/github.com/junegunn/fzf/blob/master/main.go": "/github.com/junegunn/fzf/main.go",
+		"/github.com/junegunn/fzf/tree/master/shell":          "/github.com/junegunn/fzf/shell/",
+	} {
+		rec := webGet(w, in)
+		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != want {
+			t.Errorf("%s: %d %s, want %s", in, rec.Code, rec.Header().Get("Location"), want)
+		}
+	}
+	for _, in := range []string{"/github.com/junegunn", "/github.com/junegunn/fzf/README.md"} {
+		if rec := webGet(w, in); rec.Code == http.StatusMovedPermanently {
+			t.Errorf("%s redirects to %s", in, rec.Header().Get("Location"))
+		}
+	}
+}

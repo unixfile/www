@@ -182,6 +182,26 @@ func (w *web) serve(rw http.ResponseWriter, r *http.Request, t *tree) {
 		return
 	}
 	segs := strings.Split(strings.TrimPrefix(p, "/"), "/")
+	// A URL pasted whole after the address, eg
+	// /https://github.com/junegunn/fzf/blob/master/README.md, goes where
+	// it is read: the scheme drops, and a forge's view of a file becomes
+	// the file. path.Clean has made its // one /.
+	if s := strings.ToLower(segs[0]); (s == "https:" || s == "http:") && len(segs) > 1 || forgeViews[strings.ToLower(segs[0])] != nil {
+		rest := segs
+		if strings.HasSuffix(segs[0], ":") {
+			rest = segs[1:]
+		}
+		to := "/" + strings.Join(rest, "/")
+		if u, err := url.Parse("https:/" + to); err == nil {
+			if _, wp := webPath(u); wp != "" {
+				to = wp
+			}
+		}
+		if strings.TrimSuffix(to, "/") != strings.TrimSuffix(p, "/") {
+			http.Redirect(rw, r, (&url.URL{Path: to}).String(), http.StatusMovedPermanently)
+			return
+		}
+	}
 	host := strings.ToLower(segs[0])
 	if !validHost(host) {
 		w.fail(rw, r, http.StatusNotFound, "Not a forge: "+segs[0]+". Name a host and a path, eg /github.com/junegunn/fzf")

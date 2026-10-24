@@ -10,7 +10,7 @@ The index at `/` names the web address, but a reader seldom sees the index, so t
 
 A link in a doc to a repo on GitHub, GitLab, Codeberg or Bitbucket, or to a file or directory in one, is followed by a small www, raised like a footnote mark. It opens the same repo or file on the web address, and its title names the repo. The forge's own link stays as it was. A link to a forge page that is not a file, eg an issue or an account, gets no mark. A file link names a branch or commit, but the web address serves the commit it fetched, so the mark opens the file as it is there. The copy button leaves the mark out.
 
-A forge URL typed or pasted into the search box, with or without `https://`, adds a result above the others, under "online". Enter opens it, since it comes first. A URL to any other host, eg `https://git.suckless.org/dwm`, gets no result there; type it after the web address instead.
+A forge URL typed or pasted into the search box, with or without `https://`, adds a result above the others, under "online". Enter opens it, since it comes first. A URL to any other host, eg `https://git.suckless.org/dwm`, gets no result there; paste it after the web address instead, scheme and all, eg `http://127.31.1.2/https://git.suckless.org/dwm`. The web address drops the scheme, and turns a forge's view of a file, eg `/blob/master/README.md`, into the file.
 
 Both appear wherever a server serves the web address: on its default address and on the web address itself. A share offers neither.
 
