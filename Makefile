@@ -1,4 +1,4 @@
-.PHONY: all build run test bench clean install uninstall deb install-deb uninstall-deb
+.PHONY: all build syntax run test bench clean install uninstall deb install-deb uninstall-deb
 
 # WORKING_NAME holds the program's name, provisional until a final one is
 # chosen. The binary, the package and the paths below take it.
@@ -9,6 +9,12 @@ all: build
 build:
 	CGO_ENABLED=0 go build -o build/$(NAME) .
 
+# syntax builds the tree-sitter helper beside the binary, which finds it
+# there. It is a module of its own, in syntax/, since tree-sitter needs cgo
+# and a C compiler; the binary runs without it and says so on a tree page.
+syntax:
+	cd syntax && CGO_ENABLED=1 go build -o ../build/$(NAME)-syntax .
+
 # run serves this directory from build/ with --stamp, on port 8080 beside
 # an installed server on port 80. A server already there is replaced by
 # this build, serving the same trees, so its open pages go on under the
@@ -16,7 +22,7 @@ build:
 # open, and www says which happened.
 RUNADDR := 127.31.$(shell expr $$(id -u) - 1000).1:8080
 
-run: build
+run: build syntax
 	@build/$(NAME) --restart --stamp -a $(RUNADDR) .
 
 test:

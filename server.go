@@ -789,8 +789,8 @@ func (t *tree) missing(name string) func(string) bool {
 }
 
 // serveCode shows a text file as a highlighted code page with numbered,
-// linkable lines; ?scopes draws each block of code as a box. Binary files
-// go raw.
+// linkable lines; ?scopes draws each block of code as a box, and ?tree
+// shows the syntax tree. Binary files go raw.
 func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
 	b, err := fs.ReadFile(t.fsys, name)
 	if err != nil {
@@ -803,15 +803,26 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 	}
 	var body strings.Builder
 	body.WriteString(t.logLine(r.Context(), name))
-	// The links to the other view and to the raw file float over the
+	// The links to the other views and to the raw file float over the
 	// code's top right corner; div.code bounds how far they follow the
-	// page down.
-	_, scoped := r.URL.Query()["scopes"]
-	if scoped {
-		body.WriteString(`<div class="code"><div class="view"><a href="?">flat</a><a href="?raw">raw</a></div>`)
-	} else {
-		body.WriteString(`<div class="code"><div class="view"><a href="?scopes">scopes</a><a href="?raw">raw</a></div>`)
+	// page down. A tree that cannot be had says why above the flat code.
+	q := r.URL.Query()
+	_, scoped := q["scopes"]
+	if _, ok := q["tree"]; ok {
+		tree, err := syntaxPage(r.Context(), name, pageHref(r.URL.Path), b)
+		if err == nil {
+			body.WriteString(`<div class="code">` + codeViews("tree") + tree + `</div>`)
+			t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "tree", Body: template.HTML(body.String())})
+			return
+		}
+		logErr("no syntax tree for %s: %v", name, err)
+		body.WriteString(treeNote(name, err))
 	}
+	view := "flat"
+	if scoped {
+		view = "scopes"
+	}
+	body.WriteString(`<div class="code">` + codeViews(view))
 	body.WriteString(highlightPage(codeLexer(name), b, scoped))
 	body.WriteString(`</div>`)
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String())})

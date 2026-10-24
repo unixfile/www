@@ -461,6 +461,18 @@ pre.scopes i.scope.leaf {
   height: 1.35em;
 }
 pre.filtering i.scope { display: none; }
+/* A syntax tree is nested folds, one row per named node: its field in
+   its parent, its kind, its text on one line and a link to its lines.
+   Each level indents by two cells beside a rule, so depth reads as on a
+   code page with scopes, and the text is code's size. */
+div.syntax { font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; padding-top: 1.35em; }
+div.syntax details > :not(summary) { margin-left: 2ch; padding-left: 1ch; border-left: 1px solid var(--rule); }
+div.syntax > div, div.syntax details > div { padding-left: 2ch; }
+div.syntax summary { cursor: pointer; }
+div.syntax .field { color: var(--muted); }
+div.syntax code { color: var(--muted); font-size: 1em; }
+div.syntax a { color: var(--gutter); text-decoration-color: var(--rule); margin-left: 0.5ch; }
+div.syntax a:hover { text-decoration-color: currentColor; }
 /* A box is a link to its lines. The box under the pointer is tinted with
    the target colour and its edges show at full strength, so it shows
    what a click marks; a marked box and the boxes in it fill with the
