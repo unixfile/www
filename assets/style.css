@@ -458,18 +458,17 @@ pre.numberSource { margin-left: 3em; padding-left: 5px; }
    within a line, spans its brackets' cells and its whole row: brackets
    fill nearly the row's height, so a shorter box would cut them. */
 pre.scopes { isolation: isolate; }
-/* A code page's links, to the other view and to the raw file, start over
-   the code's top right corner and, once the page scrolls past it, stay at
-   the top right of the window until the code ends. div.code carries the
-   code's margin, and the links take the code's size and line height, so
-   they start level with the first row. Their row has no height, so it
-   takes no room; the links sit on the page's colour, so code runs under
-   them. */
+/* A code page's views and raw link take a row of their own above the
+   code's top right corner and, once the page scrolls past it, stay just
+   under the search row until the code ends. The row has the code's size
+   and line height and the page's colour across its width, so a long
+   first line never runs under the links, and code scrolling beneath is
+   hidden a row at a time rather than mixed with them. */
 div.code { margin: 0.7em 0; }
 div.code > div.sourceCode { margin: 0; }
-div.view { position: sticky; top: var(--search-h, 0); z-index: 1; height: 0; text-align: right;
+div.view { position: sticky; top: var(--search-h, 0); z-index: 1; text-align: right; background: var(--page);
   font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; }
-div.view a, div.view span { padding: 0 0.4em; margin-left: 0.4em; background: var(--page); color: var(--muted); text-decoration-color: var(--rule); }
+div.view a, div.view span { padding: 0 0.4em; margin-left: 0.4em; color: var(--muted); text-decoration-color: var(--rule); }
 div.view span { color: inherit; }
 div.view a:hover { text-decoration-color: currentColor; }
 /* Browsers round each row's height, so a box over hundreds of rows can
