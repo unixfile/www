@@ -349,8 +349,8 @@ p.conn.fade { animation: conn 3s ease-in forwards; }
    follows the rules above, which set these at 0.8em. */
 details.latest, ol.log summary > .own, div.commit > p.own, div.found p.note { font-size: max(0.5em, 11px); }
 
-/* the line a #L42 link points at */
-pre > code.sourceCode > span:target { background: var(--target); }
+/* the line a #L42 link points at, and the lines a range such as #L10-L20 marks */
+pre > code.sourceCode > span:target, pre > code.sourceCode > span.marked { background: var(--target); }
 
 /* Pandoc's highlighting style, as pandoc 3.9 emits it for standalone HTML.
    render.go emits the same markup and classes from chroma's tokens. */
@@ -442,6 +442,13 @@ pre.scopes i.scope.leaf {
   height: 1.35em;
 }
 pre.filtering i.scope { display: none; }
+/* A box is a link to its lines. The box under the pointer is tinted with
+   the target colour and its edges show at full strength, so it shows
+   what a click marks; a marked box and the boxes in it fill with the
+   target colour, their edges kept, so the block stays one shape. */
+pre.scopes i.scope.hover { --f: 100%; background: color-mix(in srgb, var(--target) 45%, var(--page)); }
+pre.scopes i.scope.shade.hover { background: color-mix(in srgb, var(--target) 45%, var(--shade)); }
+pre.scopes i.scope.marked, pre.scopes i.scope.shade.marked { background: var(--target); }
 div.sourceCode
   {   }
 /* A number links to its line, eg #L42; it shows as a link on hover. */

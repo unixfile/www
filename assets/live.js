@@ -68,6 +68,7 @@
 	// goes back. Entries match by path and query, without ?q=.
 	const selKey = "sel";
 	let sel = null;
+	let pinnedFrom = null; // the current file's path, while a range pins the address
 	const plain = (href) => {
 		const u = new URL(href, location.href);
 		const rest = u.search.slice(1).split("&").filter((s) => s && s !== "q" && !s.startsWith("q="));
@@ -90,7 +91,10 @@
 		try {
 			if (sel && sel.matches("ul.listing a")) sessionStorage.setItem(selKey, plain(sel.href));
 		} catch {}
-		location.reload();
+		// A box's range may have pinned the address to a version; the
+		// change is in the current file, so the reload goes there.
+		if (pinnedFrom) location.replace(pinnedFrom + location.search + location.hash);
+		else location.reload();
 	};
 	document.addEventListener("DOMContentLoaded", () => {
 		let key = null;
@@ -612,6 +616,128 @@
 		hold();
 	});
 
+	// A code page's boxes are links to their lines. A click on a box,
+	// where no inner box lies, marks the box and the boxes in it and puts
+	// its lines in the address, eg #L482-L520; a click on the marked box
+	// clears both. The box under the pointer is tinted, so it shows what a
+	// click marks. Boxes take no pointer events, so the hit test is by
+	// geometry, measured once against the pre, which scrolls sideways.
+	// A file committed and unchanged since gets its address pinned to that
+	// commit's version, eg @261024.4/main.go, so the range names these
+	// lines after the file changes; the timeline marks that version with
+	// data-also only when the file is clean. A range in the address marks
+	// lines on any numbered page, and one box when it matches one.
+	const rangeOf = (hash) => {
+		const m = /^#L(\d+)-L(\d+)$/.exec(hash);
+		return m && +m[1] <= +m[2] ? [+m[1], +m[2]] : null;
+	};
+	const cssNum = (el, v) => +el.style.getPropertyValue(v);
+	let boxes = null;
+	const measure = (pre) => {
+		if (boxes) return boxes;
+		const p = pre.getBoundingClientRect();
+		boxes = [...pre.querySelectorAll("i.scope")].map((el) => {
+			const r = el.getBoundingClientRect();
+			const first = +el.parentElement.id.slice(1);
+			const leaf = el.classList.contains("leaf");
+			return {
+				el, leaf, first, last: leaf ? first : first + cssNum(el, "--r") - 1,
+				c: cssNum(el, "--c"), w: cssNum(el, "--w"), d: cssNum(el, "--d"),
+				left: r.left - p.left, right: r.right - p.left, top: r.top - p.top, bottom: r.bottom - p.top,
+			};
+		});
+		return boxes;
+	};
+	addEventListener("resize", () => (boxes = null));
+	const boxAt = (pre, x, y) => {
+		if (pre.classList.contains("filtering")) return (boxes = null);
+		const p = pre.getBoundingClientRect();
+		x -= p.left;
+		y -= p.top;
+		let best = null;
+		for (const b of measure(pre))
+			if (!b.leaf && (!best || b.d > best.d) && x >= b.left && x < b.right && y >= b.top && y < b.bottom) best = b;
+		return best;
+	};
+	let hovered = null;
+	const hover = (b) => {
+		if (hovered === b) return;
+		if (hovered) hovered.el.classList.remove("hover");
+		hovered = b;
+		if (b) b.el.classList.add("hover");
+	};
+	let moved = null;
+	document.addEventListener("pointermove", (e) => {
+		const pre = e.target.closest && e.target.closest("pre.scopes");
+		if (!pre) return hover(null);
+		if (moved) return (moved = e);
+		moved = e;
+		requestAnimationFrame(() => {
+			hover(boxAt(pre, moved.clientX, moved.clientY));
+			moved = null;
+		});
+	});
+	const showRange = () => {
+		for (const el of document.querySelectorAll(".marked")) el.classList.remove("marked");
+		const r = rangeOf(location.hash);
+		if (!r) return;
+		const pre = document.querySelector("pre.scopes");
+		const box = pre && measure(pre).find((b) => !b.leaf && b.first === r[0] && b.last === r[1]);
+		if (box) {
+			for (const b of boxes)
+				if (b.first >= box.first && b.last <= box.last && b.c >= box.c && b.c + b.w <= box.c + box.w) b.el.classList.add("marked");
+			return;
+		}
+		for (let n = r[0]; n <= r[1]; n++) {
+			const line = document.getElementById("L" + n);
+			if (line && line.matches("pre.numberSource code > span")) line.classList.add("marked");
+		}
+	};
+	const pin = (hash) => {
+		const d = document.querySelector("details.latest");
+		if (!d || d.dataset.here || pinnedFrom) return;
+		versions(d)
+			.then(() => {
+				const li = d.querySelector("ol.versions li[data-also]");
+				if (!li || location.hash !== hash) return;
+				pinnedFrom = location.pathname;
+				history.replaceState(history.state, "", li.dataset.also + location.search + hash);
+			})
+			.catch(() => {});
+	};
+	const markRange = (hash) => {
+		const x = scrollX, y = scrollY;
+		// A line marked by its number is :target, which only a new
+		// fragment clears.
+		if (document.querySelector(":target")) location.hash = "";
+		let path = location.pathname;
+		if (!hash && pinnedFrom) {
+			path = pinnedFrom;
+			pinnedFrom = null;
+		}
+		history.replaceState(history.state, "", path + location.search + hash);
+		scrollTo(x, y);
+		showRange();
+		if (hash) pin(hash);
+	};
+	document.addEventListener("click", (e) => {
+		const pre = e.target.closest && e.target.closest("pre.scopes");
+		if (!pre || e.target.closest("a") || !getSelection().isCollapsed) return;
+		const b = boxAt(pre, e.clientX, e.clientY);
+		if (!b) return;
+		const hash = "#L" + b.first + "-L" + b.last;
+		markRange(location.hash === hash ? "" : hash);
+		hold();
+	});
+	addEventListener("hashchange", showRange);
+	document.addEventListener("DOMContentLoaded", () => {
+		const r = rangeOf(location.hash);
+		if (!r) return;
+		showRange();
+		const line = document.getElementById("L" + r[0]);
+		if (line) line.scrollIntoView({ block: "start" });
+	});
+
 	// The copy button copies the page's path on disk: through the
 	// clipboard API where the origin is secure, else through a selection,
 	// which works on any origin. Its glyph says how it went: a tick or a
@@ -652,19 +778,28 @@
 	// so it is there when it opens, or on opening. The version shown is marked and
 	// highlighted, so Up and Down walk from it and Enter opens one; Escape
 	// or a click outside closes it.
+	// versions loads the menu once and returns the load, which a pin
+	// waits for; a failed load is tried again next time.
+	const loads = new WeakMap();
 	const versions = (d) => {
-		if (d.dataset.loaded) return;
-		d.dataset.loaded = "1";
-		fetch(d.dataset.timeline)
-			.then((r) => (r.ok ? r.text() : Promise.reject()))
-			.then((html) => {
-				const got = new DOMParser().parseFromString(html, "text/html").querySelector("ol.versions");
-				const slot = d.querySelector("div.versions");
-				if (!got || !slot) return Promise.reject();
-				slot.replaceWith(document.adoptNode(got));
-				markHere(d);
-			})
-			.catch(() => delete d.dataset.loaded);
+		if (!loads.has(d))
+			loads.set(
+				d,
+				fetch(d.dataset.timeline)
+					.then((r) => (r.ok ? r.text() : Promise.reject()))
+					.then((html) => {
+						const got = new DOMParser().parseFromString(html, "text/html").querySelector("ol.versions");
+						const slot = d.querySelector("div.versions");
+						if (!got || !slot) return Promise.reject();
+						slot.replaceWith(document.adoptNode(got));
+						markHere(d);
+					})
+					.catch(() => {
+						loads.delete(d);
+						return Promise.reject();
+					}),
+			);
+		return loads.get(d);
 	};
 	const markHere = (d) => {
 		const at = d.dataset.here || location.pathname;
@@ -680,7 +815,7 @@
 	};
 	document.addEventListener("pointerover", (e) => {
 		const d = e.target.closest && e.target.closest("details.latest");
-		if (d) versions(d);
+		if (d) versions(d).catch(() => {});
 	});
 	document.addEventListener("click", (e) => {
 		const d = openMenu();
@@ -694,7 +829,7 @@
 		const d = e.target;
 		if (d.matches && d.matches("details.latest")) {
 			if (!d.open) return select(null);
-			versions(d);
+			versions(d).catch(() => {});
 			return markHere(d);
 		}
 		if (!d.open || !d.dataset || !d.dataset.diff || d.dataset.loaded) return;
