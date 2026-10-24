@@ -489,31 +489,9 @@
 			localStorage.setItem(recentKey, JSON.stringify(list.slice(0, maxRecent)));
 		} catch {}
 	};
-	// The index lists the best 20 below the trees, where the arrows walk
-	// them with the trees.
-	const recentIndex = () => {
-		const main = document.querySelector("main");
-		const paths = recentPaths().slice(0, 20);
-		if (document.body.className !== "index" || !main || !paths.length) return;
-		const h = document.createElement("h2");
-		h.className = "own";
-		h.textContent = "recent";
-		const ul = document.createElement("ul");
-		ul.className = "listing recent";
-		for (const p of paths) {
-			const li = document.createElement("li");
-			const a = document.createElement("a");
-			a.href = p;
-			a.textContent = recentLabel(p);
-			li.append(a);
-			ul.append(li);
-		}
-		main.append(h, ul);
-	};
 	document.addEventListener("DOMContentLoaded", () => {
 		seeServer();
 		visit();
-		recentIndex();
 		backlinks();
 	});
 
@@ -739,11 +717,12 @@
 	});
 
 	// The copy button copies the page's text: what lies under the search
-	// box as the browser lays it out, without the program's own lines, the view
-	// links, line numbers or what a search hides. It copies through the
-	// clipboard API where the origin is secure, else through a selection,
-	// which works on any origin. Its glyph says how it went: a tick or a
-	// cross, then the copy glyph again.
+	// box as the browser lays it out, without the program's own lines, the
+	// view links, line numbers or what a search hides. Lines marked by a
+	// range in the address copy alone, and a doc copies its Markdown, from
+	// ?raw. It copies through the clipboard API where the origin is
+	// secure, else through a selection, which works on any origin. Its
+	// glyph says how it went: a tick or a cross, then the copy glyph again.
 	const pageText = () => {
 		const main = document.querySelector("main");
 		if (!main) return "";
@@ -752,10 +731,43 @@
 		document.body.classList.remove("copying");
 		return text.replace(/\s+$/, "") + "\n";
 	};
+	const rangeText = () => {
+		const r = rangeOf(location.hash);
+		if (!r) return null;
+		const lines = [];
+		for (let n = r[0]; n <= r[1]; n++) {
+			const line = document.getElementById("L" + n);
+			if (!line || !line.matches("pre.numberSource code > span")) return null;
+			lines.push(line.textContent);
+		}
+		return lines.join("\n") + "\n";
+	};
+	// A doc's Markdown is fetched when the pointer or focus reaches the
+	// button, so the click writes at once: a browser lets a click write
+	// the clipboard only for a moment after it. A doc that changes in
+	// place is fetched again on the next approach.
+	let source = null;
+	const docSource = () => {
+		if (!source)
+			source = fetch(location.pathname + "?raw", { cache: "no-store" })
+				.then((r) => (r.ok ? r.text() : Promise.reject()))
+				.catch(() => {
+					source = null;
+					return Promise.reject();
+				});
+		return source;
+	};
+	const approach = (e) => {
+		if (document.body.className === "doc" && e.target.closest && e.target.closest("button.copy")) {
+			source = null;
+			docSource().catch(() => {});
+		}
+	};
+	document.addEventListener("pointerover", approach);
+	document.addEventListener("focusin", approach);
 	document.addEventListener("click", (e) => {
 		const btn = e.target.closest && e.target.closest("button.copy");
 		if (!btn) return;
-		const text = pageText();
 		const done = (ok) => {
 			btn.textContent = ok ? "✓" : "✗";
 			btn.title = ok ? "copied" : "copy failed";
@@ -765,7 +777,7 @@
 			}, 1500);
 			hold();
 		};
-		const bySelection = () => {
+		const bySelection = (text) => {
 			const t = document.createElement("textarea");
 			t.value = text;
 			t.style.position = "fixed";
@@ -779,8 +791,15 @@
 			t.remove();
 			done(ok);
 		};
-		if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(() => done(true), bySelection);
-		else bySelection();
+		const write = (text) => {
+			if (navigator.clipboard && window.isSecureContext)
+				navigator.clipboard.writeText(text).then(() => done(true), () => bySelection(text));
+			else bySelection(text);
+		};
+		const lines = rangeText();
+		if (lines !== null) return write(lines);
+		if (document.body.className === "doc") return docSource().then(write, () => done(false));
+		write(pageText());
 	});
 
 	// The top line opens the timeline, the menu of the page's versions.
