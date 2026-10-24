@@ -467,11 +467,16 @@ func (t *tree) serveTimeline(w http.ResponseWriter, r *http.Request, name string
 	stars := t.starsFor(r.Context(), name)
 	esc := template.HTMLEscapeString
 	var body strings.Builder
-	body.WriteString("<ol class=\"versions\">\n")
+	// Each row leads with its stardate, so they line up down the menu.
+	labels := make([]string, len(log))
+	for i := range log {
+		labels[i] = stars.label(&log[i])
+	}
+	body.WriteString("<ol class=\"versions\"" + leadStyle(labels) + ">\n")
 	current := (&url.URL{Path: t.prefix + rest}).String()
 	clean := versions && !t.changed(r.Context(), name)
 	if versions && !clean {
-		fmt.Fprintf(&body, "<li><a href=\"%s\">current</a> <span class=\"date\">uncommitted changes</span></li>\n", esc(current))
+		fmt.Fprintf(&body, "<li><span class=\"date lead\"></span> <a href=\"%s\">current</a> <span class=\"date\">uncommitted changes</span></li>\n", esc(current))
 	}
 	for i := range log {
 		c := &log[i]
@@ -484,8 +489,11 @@ func (t *tree) serveTimeline(w http.ResponseWriter, r *http.Request, name string
 		if clean && i == 0 {
 			href, also, note = current, fmt.Sprintf(" data-also=\"%s\"", esc(href)), " · current"
 		}
-		fmt.Fprintf(&body, "<li%s><a href=\"%s\" title=\"%s %s\">%s</a> <span class=\"date\">%s%s</span></li>\n",
-			also, esc(href), esc(c.short), exact(c.date), esc(subjectOf(c)), esc(stars.label(c)), note)
+		if note != "" {
+			note = " <span class=\"date\">current</span>"
+		}
+		fmt.Fprintf(&body, "<li%s><span class=\"date lead\">%s</span> <a href=\"%s\" title=\"%s %s\">%s</a>%s</li>\n",
+			also, esc(labels[i]), esc(href), esc(c.short), exact(c.date), esc(subjectOf(c)), note)
 	}
 	fmt.Fprintf(&body, "<li class=\"log\"><a href=\"?log\">%s</a></li>\n</ol>\n", esc(logLabel))
 	t.render(w, r, http.StatusOK, page{Title: title, Crumbs: crumbs, Kind: "timeline", Body: template.HTML(body.String())})
@@ -534,7 +542,12 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	// inside it. A local tree links each commit's version of the page:
 	// the file or directory as it was then.
 	browse := t.historyInVersions(r.Context(), name)
-	body.WriteString("<ol class=\"log\">\n")
+	// Each row leads with its stardate, so they line up down the history.
+	labels := make([]string, len(log))
+	for i := range log {
+		labels[i] = stars.label(&log[i])
+	}
+	body.WriteString("<ol class=\"log\"" + leadStyle(labels) + ">\n")
 	for i := range log {
 		c := &log[i]
 		show := esc("?commit=" + c.hash)
@@ -542,9 +555,9 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 		if browse {
 			then = fmt.Sprintf(" · <a class=\"then\" href=\"%s\">browse</a>", esc(t.versionURL(stars, c, below(name, dir))))
 		}
-		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"subject\">%s</span> <span class=\"own\">%s</span></summary>\n"+
+		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"own lead\">%s</span> <span class=\"subject\">%s</span></summary>\n"+
 			"<p class=\"own links\">commit <a href=\"%s\">%s</a>%s</p>\n",
-			show, esc(c.subject), commitLine(stars, c), show, esc(c.short), then)
+			show, commitLine(stars, c), esc(c.subject), show, esc(c.short), then)
 		for _, para := range paragraphs(c.body) {
 			body.WriteString("<p>" + para + "</p>\n")
 		}

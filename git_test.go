@@ -84,8 +84,8 @@ func TestHistoryPage(t *testing.T) {
 	// fold also links in its place.
 	c := head(t, dir, "HEAD")
 	for _, want := range []string{
-		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"subject\">Rename the package &lt;b&gt;</span> <span class=\"own\"><span class=\"date\" title=\"" + c[:7],
-		`</span></summary>` + "\n" + `<p class="own links">commit <a href="?commit=` + c + `">` + c[:7] + `</a> · <a class="then"`,
+		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"own lead\"><span class=\"date\" title=\"" + c[:7],
+		`</span></span> <span class="subject">Rename the package &lt;b&gt;</span></summary>` + "\n" + `<p class="own links">commit <a href="?commit=` + c + `">` + c[:7] + `</a> · <a class="then"`,
 		`<div class="diffs"><p class="own"><a href="?commit=` + c + `">diff</a></p></div>` + "\n</details></li>",
 	} {
 		if !strings.Contains(body, want) {
@@ -121,9 +121,9 @@ func TestHistoryOddMessages(t *testing.T) {
 	empty, long := head(t, dir, "HEAD~1"), head(t, dir, "HEAD")
 	for _, want := range []string{
 		`<details data-diff="?commit=` + empty + `">`,
-		`<summary><span class="subject"></span> <span class="own">`,
+		`</span></span> <span class="subject"></span></summary>`,
 		`<details data-diff="?commit=` + long + `">`,
-		`<span class="subject">One paragraph that runs on</span> <span class="own">`,
+		`</span></span> <span class="subject">One paragraph that runs on</span></summary>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("no %q:\n%s", want, body)

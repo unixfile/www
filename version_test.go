@@ -56,8 +56,8 @@ func TestVersion(t *testing.T) {
 	// newest leads to the current page while it matches the commit; once
 	// it changes, a row of its own says so.
 	body := get(h, "/a/b.go?timeline").Body.String()
-	if !strings.Contains(body, `<li data-also="/@`+secondStar+`/a/b.go"><a href="/a/b.go" title="`+second) || !strings.Contains(body, "· current</span>") ||
-		!strings.Contains(body, `<li><a href="`+at+`a/b.go" title="`+short) || !strings.Contains(body, `<li class="log"><a href="?log">`) || strings.Contains(body, "uncommitted") {
+	if !strings.Contains(body, `<li data-also="/@`+secondStar+`/a/b.go"><span class="date lead">`+secondStar+`</span> <a href="/a/b.go" title="`+second) || !strings.Contains(body, `</a> <span class="date">current</span>`) ||
+		!strings.Contains(body, `</span> <a href="`+at+`a/b.go" title="`+short) || !strings.Contains(body, `<li class="log"><a href="?log">`) || strings.Contains(body, "uncommitted") {
 		t.Errorf("versions of a/b.go:\n%s", body)
 	}
 	// A version through a commit that left the page alone names the
@@ -67,7 +67,7 @@ func TestVersion(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(dir, "a", "b.go"), []byte("package c\n"), 0o644)
 	body = get(h, "/a/b.go?timeline").Body.String()
-	if !strings.Contains(body, `<li><a href="/a/b.go">current</a> <span class="date">uncommitted changes</span></li>`) || !strings.Contains(body, `<li><a href="/@`+secondStar+`/a/b.go"`) {
+	if !strings.Contains(body, `<li><span class="date lead"></span> <a href="/a/b.go">current</a> <span class="date">uncommitted changes</span></li>`) || !strings.Contains(body, `</span> <a href="/@`+secondStar+`/a/b.go"`) {
 		t.Errorf("versions of a/b.go with changes:\n%s", body)
 	}
 	// A commit off the main line, eg on a branch, keeps its hash.

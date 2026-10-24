@@ -189,6 +189,17 @@ func clock(t time.Time) string {
 	return t.Format("Jan 2 15:04")
 }
 
+// leadStyle sets a list's --lead to the width of its longest label, so
+// the labels that lead its rows line up: in monospace a width in ch fits
+// every label exactly.
+func leadStyle(labels []string) string {
+	n := 0
+	for _, l := range labels {
+		n = max(n, utf8.RuneCountInString(l))
+	}
+	return fmt.Sprintf(" style=\"--lead:%dch\"", n)
+}
+
 func newServer() *server {
 	return &server{stop: func([]*tree, string) {}}
 }
@@ -589,16 +600,22 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 	if len(trees) == 0 {
 		body.WriteString("<p class=\"own\">No tree is served.</p>\n")
 	} else {
-		body.WriteString("<table class=\"locks own\">\n")
-		for _, t := range trees {
-			lockPath, since := "", ""
+		sinces := make([]string, len(trees))
+		for i, t := range trees {
 			if t.lock != nil {
-				lockPath, since = t.lock.path, "since "+clock(t.lock.info.ModTime())
+				sinces[i] = "since " + clock(t.lock.info.ModTime())
 			}
-			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">%s</span></td>"+
+		}
+		body.WriteString("<table class=\"locks own\"" + leadStyle(sinces) + ">\n")
+		for i, t := range trees {
+			lockPath, since := "", sinces[i]
+			if t.lock != nil {
+				lockPath = t.lock.path
+			}
+			fmt.Fprintf(&body, "<tr><td><span class=\"since lead\">%s</span> <a href=\"%s\" title=\"%s\">%s</a></td>"+
 				"<td><form method=\"post\" action=\""+ownPath+"stop\"><input type=\"hidden\" name=\"tree\" value=\"%s\">"+
 				"<input type=\"hidden\" name=\"from\" value=\"index\"><button>Delete lock</button></form></td></tr>\n",
-				esc(t.prefixURL()), esc(lockPath), segments(t.label), since, esc(t.prefix))
+				since, esc(t.prefixURL()), esc(lockPath), segments(t.label), esc(t.prefix))
 		}
 		body.WriteString("</table>\n")
 	}
@@ -606,10 +623,14 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 		fmt.Fprintf(&body, "<p class=\"own\">Online repos: <a href=\"%s/\">%s/</a></p>\n", esc(s.webURL), esc(strings.TrimPrefix(s.webURL, "http://")))
 	}
 	if others := s.otherTrees(); len(others) > 0 {
-		body.WriteString("<h2 class=\"own\">Other addresses</h2>\n<table class=\"locks own\">\n")
+		var sinces []string
 		for _, t := range others {
-			fmt.Fprintf(&body, "<tr><td><a href=\"%s\" title=\"%s\">%s</a> <span class=\"since\">since %s</span></td></tr>\n",
-				esc(t.url), esc(t.lockPath), segments(t.url), clock(t.since))
+			sinces = append(sinces, "since "+clock(t.since))
+		}
+		body.WriteString("<h2 class=\"own\">Other addresses</h2>\n<table class=\"locks own\"" + leadStyle(sinces) + ">\n")
+		for i, t := range others {
+			fmt.Fprintf(&body, "<tr><td><span class=\"since lead\">%s</span> <a href=\"%s\" title=\"%s\">%s</a></td></tr>\n",
+				sinces[i], esc(t.url), esc(t.lockPath), segments(t.url))
 		}
 		body.WriteString("</table>\n")
 	}

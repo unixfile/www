@@ -289,6 +289,13 @@ table.locks td:last-child { padding-right: 0; }
 table.locks td:first-child:last-child { padding-right: 0; }
 table.locks td:first-child { width: 100%; }
 table.locks .since { white-space: nowrap; color: var(--muted); margin-left: 1em; }
+/* In a list, a field of fixed form, a stardate, hash, time or size,
+   leads its row, so it lines up down the list even where the natural
+   order would put it last. The server sets the list's --lead to its
+   longest label; numbers align right. */
+.lead { display: inline-block; min-width: var(--lead, 0); margin-right: 0.6em; font-family: ui-monospace, "Iosevka", monospace; white-space: nowrap; }
+table.locks .lead { margin: 0 1em 0 0; }
+.lead.num { text-align: right; }
 table.locks td + td { text-align: right; }
 table.locks form { display: inline; }
 

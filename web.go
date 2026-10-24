@@ -1213,11 +1213,17 @@ func (w *web) serveRoot(rw http.ResponseWriter, r *http.Request) {
 	var body strings.Builder
 	body.WriteString("<p class=\"own\">Type a forge's host and a path after this address, eg <a href=\"/github.com/junegunn/fzf/\">/github.com/junegunn/fzf</a>, to read that repo, or <a href=\"/git.suckless.org/\">/git.suckless.org</a> to list a host's repos.</p>\n")
 	if len(repos) > 0 {
-		body.WriteString("<table class=\"locks own\">\n")
+		var sizes []string
 		for _, c := range repos {
+			sizes = append(sizes, sizeText(c.size))
+		}
+		// The size leads, aligned right as numbers are; when it was
+		// read follows the name.
+		body.WriteString("<table class=\"locks own\"" + leadStyle(sizes) + ">\n")
+		for i, c := range repos {
 			total += c.size
-			fmt.Fprintf(&body, "<tr><td><a href=\"%s\">%s</a> <span class=\"since\">%s, last read %s</span></td></tr>\n",
-				esc((&url.URL{Path: "/" + c.key + "/"}).String()), segments(c.key), sizeText(c.size), clock(c.used))
+			fmt.Fprintf(&body, "<tr><td><span class=\"since lead num\">%s</span> <a href=\"%s\">%s</a> <span class=\"since\">last read %s</span></td></tr>\n",
+				sizes[i], esc((&url.URL{Path: "/" + c.key + "/"}).String()), segments(c.key), clock(c.used))
 		}
 		body.WriteString("</table>\n")
 	}
