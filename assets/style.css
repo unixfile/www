@@ -333,6 +333,11 @@ p.unfound { color: var(--muted); font-size: 0.8em; }
 /* The entry or match the keys act on shows a quiet ring, as does a link
    Tab reached. */
 .sel, ul.listing a:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
+/* In a list the highlight frames the row a key would open, not the
+   link's words, since the whole row is the target. */
+li:has(> a.sel), ul.listing li:has(> a:focus-visible) { outline: 1px solid var(--muted); outline-offset: 0.15em; }
+ol.versions > li:has(> a.sel) { outline-offset: -1px; }
+li > a.sel, ul.listing li > a:focus-visible { outline: none; }
 /* The line that says the server is gone floats over the top of the page,
    so nothing moves, and stays until a server answers. The one that says
    a new server answered fades over three seconds. */
