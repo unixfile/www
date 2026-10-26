@@ -47,15 +47,20 @@ clean:
 # binary started, so the package keeps its servers. install-deb removes the
 # make install link, so it takes every server with --force. A server on
 # port 80 stays put under the binary from make install, which cannot bind
-# it. install also ships the
-# user unit, disabled, which serves .LOCK trees again at login; it never
-# uses sudo, so the system template comes only with the package.
-USERUNIT := $(HOME)/.config/systemd/user/$(NAME).service
+# it. install also ships a
+# user unit of its own name, disabled, which serves its build's .LOCK trees
+# again at login, beside the package's units; it never uses sudo, so the
+# system template comes only with the package. An older install named its
+# unit as the package's, which hid the package's user unit; install
+# disables and removes it.
+USERUNIT := $(HOME)/.config/systemd/user/$(NAME)-dev.service
+OLDUNIT := $(HOME)/.config/systemd/user/$(NAME).service
 
 install: build
 	ln -sf $(CURDIR)/build/$(NAME) $(HOME)/.local/bin/$(NAME)
 	mkdir -p $(dir $(USERUNIT))
-	sed 's/@NAME@/$(NAME)/g; s|@BIN@|$(HOME)/.local/bin/$(NAME)|' systemd/user.service.in > $(USERUNIT)
+	sed 's/@NAME@/$(NAME)/g; s|@BIN@|$(HOME)/.local/bin/$(NAME)|' systemd/dev.service.in > $(USERUNIT)
+	-grep -qs '^ExecStart=$(HOME)/.local/bin/' $(OLDUNIT) && { systemctl --user disable $(NAME); rm $(OLDUNIT); }
 	-systemctl --user daemon-reload
 	-build/$(NAME) --restart
 

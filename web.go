@@ -799,7 +799,7 @@ func (w *web) lockRepo(key, dir string) (func(), error) {
 	w.mu.Lock()
 	w.busy[key] = true
 	w.mu.Unlock()
-	unlock, err := flockDir(dir)
+	unlock, err := flockDir(dir, syscall.LOCK_EX)
 	if err != nil {
 		unlock = func() {}
 	}
@@ -812,13 +812,14 @@ func (w *web) lockRepo(key, dir string) (func(), error) {
 }
 
 // flockDir takes the repo directory's lock, which keeps two servers from
-// fetching one repo at once.
-func flockDir(dir string) (func(), error) {
+// fetching one repo at once, and one from deleting a repo another fetches.
+// how is LOCK_EX, or LOCK_EX|LOCK_NB to fail with EWOULDBLOCK when held.
+func flockDir(dir string, how int) (func(), error) {
 	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	if err := flock(f, how); err != nil {
 		f.Close()
 		return nil, err
 	}
@@ -881,8 +882,9 @@ func diskUse(dir string) int64 {
 }
 
 // trim drops the repos requested longest ago until the cache fits its
-// limit. keep, just fetched, goes last; alone over the limit it goes too,
-// and trim says so.
+// limit. A repo in use, fetched here or locked by another server, stays.
+// keep, just fetched, goes last, and only when it alone is over the limit;
+// trim then says so.
 func (w *web) trim(keep string) error {
 	repos := w.onDisk()
 	var total int64
@@ -908,21 +910,48 @@ func (w *web) trim(keep string) error {
 		if busy {
 			continue
 		}
+		if c.key == keep && c.size <= w.limit {
+			// Repos in use kept the cache over its limit; a later trim
+			// drops them.
+			logInfo("the cache stays over %s while repos in use fill it", sizeText(w.limit))
+			return nil
+		}
 		if c.key == keep {
-			w.drop(c.key)
+			// The caller holds keep's lock.
+			w.remove(c.key)
 			return &errno{syscall.EFBIG, fmt.Sprintf("%s takes %s, over the cache's limit of %s, so it was dropped; --disk sets the limit",
 				c.key, sizeText(c.size), sizeText(w.limit))}
-		} else {
-			logInfo("drops %s, %s, last requested %s, since the cache is over %s", c.key, sizeText(c.size), c.used.Format(time.DateTime), sizeText(w.limit))
 		}
-		w.drop(c.key)
+		if !w.drop(c.key) {
+			logInfo("keeps %s, %s, though the cache is over %s, since another server is fetching it", c.key, sizeText(c.size), sizeText(w.limit))
+			continue
+		}
+		logInfo("dropped %s, %s, last requested %s, since the cache is over %s", c.key, sizeText(c.size), c.used.Format(time.DateTime), sizeText(w.limit))
 		total -= c.size
 	}
 	return nil
 }
 
-// drop stops serving the repo key and deletes it from the cache.
-func (w *web) drop(key string) {
+// drop stops serving the repo key and deletes it from the cache, unless
+// another server holds its lock, and reports whether it did. The servers
+// on every address share the cache, and each knows only its own busy
+// repos.
+func (w *web) drop(key string) bool {
+	dir := filepath.Join(w.root, filepath.FromSlash(key))
+	unlock, err := flockDir(dir, syscall.LOCK_EX|syscall.LOCK_NB)
+	if errors.Is(err, syscall.EWOULDBLOCK) {
+		return false
+	}
+	if err == nil {
+		defer unlock()
+	}
+	w.remove(key)
+	return true
+}
+
+// remove stops serving the repo key and deletes it from the cache. The
+// caller holds its lock.
+func (w *web) remove(key string) {
 	w.mu.Lock()
 	r := w.repos[key]
 	w.mu.Unlock()
