@@ -256,8 +256,9 @@ ul.decls span.what { color: var(--muted); display: inline-block; min-width: 9ch;
    of its versions, which drops over the page and scrolls on its own. The
    version shown is marked. */
 details.latest { position: relative; margin-bottom: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 0.6em; color: var(--muted); }
-details.latest > summary { list-style: none; cursor: pointer; }
-details.latest > summary::-webkit-details-marker { display: none; }
+/* The top line keeps the browser's disclosure marker, ▸ closed and ▾
+   open, so a line that says only current still shows that it opens. */
+details.latest > summary { cursor: pointer; }
 details.latest a, details.latest span.subject, details.latest span.state { color: var(--text); }
 details.latest > summary:hover span.state { text-decoration: underline; text-decoration-color: var(--rule); }
 /* On a version, the link to the page as it is sits at the top line's
