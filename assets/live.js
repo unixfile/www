@@ -762,6 +762,13 @@
 			.then(() => {
 				const li = d.querySelector("ol.versions li[data-also]");
 				if (!li || location.hash !== hash) return;
+				// The pin names the lines; it does not move the reader.
+				// Relative links, eg the views' ?raw, would resolve
+				// against the version, so they are made absolute first.
+				for (const a of document.querySelectorAll("a[href]")) {
+					const h = a.getAttribute("href");
+					if (!/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(h)) a.setAttribute("href", a.href);
+				}
 				pinnedFrom = location.pathname;
 				history.replaceState(history.state, "", li.dataset.also + location.search + hash);
 			})
@@ -833,7 +840,7 @@
 	let source = null;
 	const docSource = () => {
 		if (!source)
-			source = fetch(location.pathname + "?raw", { cache: "no-store" })
+			source = fetch((pinnedFrom || location.pathname) + "?raw", { cache: "no-store" })
 				.then((r) => (r.ok ? r.text() : Promise.reject()))
 				.catch(() => {
 					source = null;
