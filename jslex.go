@@ -13,7 +13,7 @@ import (
 // an opening bracket starts a regular expression, and one that does not
 // close marks the rest of its line as an error.
 func jsTokens(code string) []chroma.Token {
-	j := &jsLex{lex: lex{src: code}}
+	j := &jsLex{lex: newLex(code)}
 	i := 0
 	if strings.HasPrefix(code, "#!") {
 		if k := strings.IndexByte(code, '\n'); k >= 0 && (strings.HasPrefix(code, "#!/") || strings.HasPrefix(code, "#! /")) {

@@ -4,12 +4,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/alecthomas/chroma/v2"
 )
 
 func scopesOf(name, code string) []scope {
-	return findScopes(chroma.SplitTokensIntoLines(tokenise(codeLexer(name), code)), langName(codeLexer(name)) == "python")
+	return findScopes(splitLines(tokenise(codeLexer(name), code)), langName(codeLexer(name)) == "python")
 }
 
 // A block that spans lines is a scope, and brackets or a string on one

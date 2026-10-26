@@ -12,7 +12,7 @@ import (
 // quirks included: a keyword stays one after a dot, 1j is a number and a
 // name, and a docstring is an ordinary string.
 func pyTokens(code string) []chroma.Token {
-	p := &pyLex{lex{src: code}}
+	p := &pyLex{newLex(code)}
 	for i := 0; i < len(code); {
 		i = p.step(i, false)
 	}

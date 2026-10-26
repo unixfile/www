@@ -11,7 +11,7 @@ import (
 // included: a keyword needs a word boundary on both sides, a builtin only
 // a space, ) or ` after it, and a number only a space or the line's end.
 func shTokens(code string) []chroma.Token {
-	l := &shLex{lex: lex{src: code}}
+	l := &shLex{lex: newLex(code)}
 	i := 0
 	if strings.HasPrefix(code, "#!") {
 		if k := strings.IndexByte(code, '\n'); k > 2 {

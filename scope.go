@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -262,19 +261,26 @@ func endsWithColon(line []chroma.Token) bool {
 // positioned on its own, so it adds no text and moves none; the
 // stylesheet turns the cells and rows into lengths. Boxes at odd depths
 // are shaded, so shade and page alternate inward.
-func writeScopes(w io.Writer, scopes []scope) {
+func writeScopes(b *strings.Builder, scopes []scope) {
+	var num [20]byte
+	cell := func(name string, n int) {
+		b.WriteString(name)
+		b.Write(strconv.AppendInt(num[:0], int64(n), 10))
+	}
 	for _, s := range scopes {
-		class := "scope"
+		b.WriteString(`<i class="scope`)
 		if s.leaf > 0 {
-			class += " leaf"
+			b.WriteString(" leaf")
 		}
 		if s.depth%2 == 1 {
-			class += " shade"
+			b.WriteString(" shade")
 		}
-		io.WriteString(w, `<i class="`+class+`" style="--c:`+strconv.Itoa(s.left)+`;--w:`+strconv.Itoa(s.right-s.left))
+		cell(`" style="--c:`, s.left)
+		cell(`;--w:`, s.right-s.left)
 		if s.leaf == 0 {
-			io.WriteString(w, `;--r:`+strconv.Itoa(s.last-s.first+1))
+			cell(`;--r:`, s.last-s.first+1)
 		}
-		io.WriteString(w, `;--d:`+strconv.Itoa(s.depth)+`"></i>`)
+		cell(`;--d:`, s.depth)
+		b.WriteString(`"></i>`)
 	}
 }

@@ -257,10 +257,17 @@ func warmLexers() {
 // Escaping keeps file content from forging an id. Scoped lines, which
 // must be numbered, draw each block of code as a box behind it.
 func highlight(w io.Writer, lexer chroma.Lexer, code string, numbered, scoped bool) {
+	// Every write goes to one builder: a builder of its own, or w when w is
+	// one, as for a code page, so the page is never copied whole.
+	b, ok := w.(*strings.Builder)
+	if !ok {
+		b = new(strings.Builder)
+		defer func() { io.WriteString(w, b.String()) }()
+	}
 	lang := langName(lexer)
-	lines := chroma.SplitTokensIntoLines(tokenise(lexer, code))
+	lines := splitLines(tokenise(lexer, code))
 	// A final newline ends the last line; it does not start another.
-	if len(lines) > 0 && lineText(lines[len(lines)-1]) == "" {
+	if len(lines) > 0 && blank(lines[len(lines)-1]) {
 		lines = lines[:len(lines)-1]
 	}
 	var scopes []scope
@@ -274,27 +281,97 @@ func highlight(w io.Writer, lexer chroma.Lexer, code string, numbered, scoped bo
 	if len(scopes) > 0 {
 		pre += " scopes"
 	}
-	io.WriteString(w, `<div class="sourceCode"><pre class="`+strings.Join(strings.Fields(pre), " ")+`"><code class="`+strings.TrimSpace("sourceCode "+lang)+`">`)
+	b.Grow(pageSize(code, lines, len(scopes), numbered))
+	b.WriteString(`<div class="sourceCode"><pre class="` + strings.Join(strings.Fields(pre), " ") + `"><code class="` + strings.TrimSpace("sourceCode "+lang) + `">`)
+	var num [20]byte
 	for i, line := range lines {
 		if i > 0 {
-			io.WriteString(w, "\n")
+			b.WriteByte('\n')
 		}
 		if numbered {
-			id := "L" + strconv.Itoa(i+1)
-			io.WriteString(w, `<span id="`+id+`"><a href="#`+id+`"></a>`)
+			id := strconv.AppendInt(num[:0], int64(i+1), 10)
+			b.WriteString(`<span id="L`)
+			b.Write(id)
+			b.WriteString(`"><a href="#L`)
+			b.Write(id)
+			b.WriteString(`"></a>`)
 			n := 0
 			for n < len(scopes) && scopes[n].first == i {
 				n++
 			}
-			writeScopes(w, scopes[:n])
+			writeScopes(b, scopes[:n])
 			scopes = scopes[n:]
 		} else {
-			io.WriteString(w, "<span>")
+			b.WriteString("<span>")
 		}
-		writeLine(w, line)
-		io.WriteString(w, "</span>")
+		writeLine(b, line)
+		b.WriteString("</span>")
 	}
-	io.WriteString(w, "</code></pre></div>")
+	b.WriteString("</code></pre></div>")
+}
+
+// pageSize guesses the length of highlight's output, so the builder grows
+// once. Each token is weighed at 16 bytes, as if about half carried a
+// span of their own; on this repo's code and Debian's jquery.js,
+// bash_completion, argparse.py and stdio.h the guess is 7 to 41% over.
+// Slack stays in a cached page unseen, and a builder that doubles leaves
+// up to 100%.
+func pageSize(code string, lines [][]chroma.Token, scopes int, numbered bool) int {
+	tokens := 0
+	for _, line := range lines {
+		tokens += len(line)
+	}
+	perLine := len("\n<span></span>")
+	if numbered {
+		perLine = len(`\n<span id="L1234"><a href="#L1234"></a></span>`)
+	}
+	box := len(`<i class="scope leaf shade" style="--c:12;--w:34;--d:3"></i>`)
+	return len(code) + len(code)/8 + tokens*16 + len(lines)*perLine + scopes*box
+}
+
+// splitLines splits tokens into lines as chroma.SplitTokensIntoLines
+// does: a token that spans lines becomes one per line, each ending in its
+// newline. Chroma allocates each line on its own, which took a third of
+// the page writer; here one array backs every line.
+func splitLines(tokens []chroma.Token) [][]chroma.Token {
+	n, rows := len(tokens), 1
+	for _, tok := range tokens {
+		c := strings.Count(tok.Value, "\n")
+		n += c
+		rows += c
+	}
+	all := make([]chroma.Token, 0, n)
+	lines := make([][]chroma.Token, 0, rows)
+	start := 0
+tokens:
+	for _, tok := range tokens {
+		for {
+			i := strings.IndexByte(tok.Value, '\n')
+			if i < 0 {
+				break
+			}
+			head := tok
+			head.Value = tok.Value[:i+1]
+			all = append(all, head)
+			lines = append(lines, all[start:len(all):len(all)])
+			start = len(all)
+			// An empty tail starts nothing.
+			if tok.Value = tok.Value[i+1:]; tok.Value == "" {
+				continue tokens
+			}
+		}
+		all = append(all, tok)
+	}
+	if start < len(all) {
+		lines = append(lines, all[start:len(all):len(all)])
+	}
+	// Chroma drops a last line that holds only an empty token.
+	if len(lines) > 0 {
+		if last := lines[len(lines)-1]; len(last) == 1 && last[0].Value == "" {
+			lines = lines[:len(lines)-1]
+		}
+	}
+	return lines
 }
 
 // codeCache keeps highlighted code pages by lexer and content hash. Chroma
@@ -318,41 +395,66 @@ func highlightPage(lexer chroma.Lexer, b []byte, scoped bool) string {
 }
 
 // writeLine writes one line's tokens, merging neighbours of one class.
-func writeLine(w io.Writer, line []chroma.Token) {
-	var run strings.Builder
+func writeLine(b *strings.Builder, line []chroma.Token) {
 	class := ""
-	flush := func() {
-		if run.Len() == 0 {
-			return
-		}
-		text := template.HTMLEscapeString(run.String())
-		if class == "" {
-			io.WriteString(w, text)
-		} else {
-			io.WriteString(w, `<span class="`+class+`">`+text+`</span>`)
-		}
-		run.Reset()
-	}
 	for _, tok := range line {
 		v := strings.TrimSuffix(tok.Value, "\n")
 		if v == "" {
 			continue
 		}
 		if c := pandocClass(tok.Type); c != class {
-			flush()
+			if class != "" {
+				b.WriteString("</span>")
+			}
+			if c != "" {
+				b.WriteString(`<span class="` + c + `">`)
+			}
 			class = c
 		}
-		run.WriteString(v)
+		escapeHTML(b, v)
 	}
-	flush()
+	if class != "" {
+		b.WriteString("</span>")
+	}
 }
 
-func lineText(line []chroma.Token) string {
-	var s strings.Builder
-	for _, tok := range line {
-		s.WriteString(tok.Value)
+// escapeHTML writes s escaped as template.HTMLEscapeString escapes it,
+// without making a string of its own.
+func escapeHTML(b *strings.Builder, s string) {
+	last := 0
+	for i := 0; i < len(s); i++ {
+		var esc string
+		switch s[i] {
+		case '"':
+			esc = "&#34;"
+		case '\'':
+			esc = "&#39;"
+		case '&':
+			esc = "&amp;"
+		case '<':
+			esc = "&lt;"
+		case '>':
+			esc = "&gt;"
+		case 0:
+			esc = "\uFFFD"
+		default:
+			continue
+		}
+		b.WriteString(s[last:i])
+		b.WriteString(esc)
+		last = i + 1
 	}
-	return s.String()
+	b.WriteString(s[last:])
+}
+
+// blank reports whether a line holds no text.
+func blank(line []chroma.Token) bool {
+	for _, tok := range line {
+		if tok.Value != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // langName is the lexer's class on the code element: its first alias, eg

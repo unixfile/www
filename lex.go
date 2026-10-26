@@ -39,6 +39,12 @@ type span struct {
 	from, to int
 }
 
+// newLex makes room for the spans up front: JavaScript runs about one
+// span to four bytes, Python and shell one to six or seven.
+func newLex(code string) lex {
+	return lex{src: code, spans: make([]span, 0, len(code)/4+16)}
+}
+
 func (l *lex) emit(t chroma.TokenType, from, to int) {
 	if to <= from {
 		return

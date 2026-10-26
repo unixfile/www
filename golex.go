@@ -22,46 +22,49 @@ func goTokens(code string) []chroma.Token {
 		tok        token.Token
 		lit        string
 	}
-	var lexemes []lexeme
-	for {
-		pos, tok, lit := s.Scan()
-		if tok == token.EOF {
-			break
+	// scan returns the next lexeme. A name's type depends on the lexeme
+	// after it, so the loop below looks one ahead.
+	scan := func() (lexeme, bool) {
+		for {
+			pos, tok, lit := s.Scan()
+			if tok == token.EOF {
+				return lexeme{}, false
+			}
+			// The scanner inserts a semicolon at a line's end; it has no text.
+			if tok == token.SEMICOLON && lit != ";" {
+				continue
+			}
+			start := file.Offset(pos)
+			text := lit
+			if text == "" {
+				text = tok.String()
+			}
+			// Comments and raw strings come without carriage returns, so
+			// their end is found in the source, not from the literal's
+			// length.
+			end := min(start+len(text), len(src))
+			if tok == token.COMMENT || tok == token.STRING && strings.HasPrefix(lit, "`") {
+				end = rawEnd(code, start, tok)
+			}
+			return lexeme{start, end, tok, code[start:end]}, true
 		}
-		// The scanner inserts a semicolon at a line's end; it has no text.
-		if tok == token.SEMICOLON && lit != ";" {
-			continue
-		}
-		start := file.Offset(pos)
-		text := lit
-		if text == "" {
-			text = tok.String()
-		}
-		// Comments and raw strings come without carriage returns, so their
-		// end is found in the source, not from the literal's length.
-		end := min(start+len(text), len(src))
-		if tok == token.COMMENT || tok == token.STRING && strings.HasPrefix(lit, "`") {
-			end = rawEnd(code, start, tok)
-		}
-		lexemes = append(lexemes, lexeme{start, end, tok, code[start:end]})
 	}
 
-	var out []chroma.Token
+	// Go source runs about one token to three bytes, spaces included.
+	out := make([]chroma.Token, 0, len(code)/3+16)
 	last := 0
-	for i, l := range lexemes {
-		if l.start < last {
-			continue
+	for l, ok := scan(); ok; {
+		next, more := scan()
+		if l.start >= last {
+			if l.start > last {
+				out = append(out, chroma.Token{Type: chroma.Text, Value: code[last:l.start]})
+			}
+			paren := more && next.tok == token.LPAREN
+			tight := paren && next.start == l.end
+			out = append(out, chroma.Token{Type: goType(l.tok, l.lit, paren, tight), Value: l.lit})
+			last = l.end
 		}
-		if l.start > last {
-			out = append(out, chroma.Token{Type: chroma.Text, Value: code[last:l.start]})
-		}
-		paren, tight := false, false
-		if i+1 < len(lexemes) && lexemes[i+1].tok == token.LPAREN {
-			paren = true
-			tight = lexemes[i+1].start == l.end
-		}
-		out = append(out, chroma.Token{Type: goType(l.tok, l.lit, paren, tight), Value: l.lit})
-		last = l.end
+		l, ok = next, more
 	}
 	if last < len(code) {
 		out = append(out, chroma.Token{Type: chroma.Text, Value: code[last:]})
