@@ -120,9 +120,19 @@ func clip(s string) string {
 	return s
 }
 
-// bugDir is where bug reports go, $XDG_STATE_HOME/www/bugs, made on first
-// use.
+// sourceDir is the checkout the binary was built from, set by make build.
+var sourceDir string
+
+// bugDir is where bug reports go, made on first use: csi/bugs in the
+// checkout the binary was built from, when that checkout has csi, so the
+// bugs sit with the project they are about; else $XDG_STATE_HOME/www/bugs.
 func bugDir() (string, error) {
+	if sourceDir != "" {
+		if info, err := os.Stat(filepath.Join(sourceDir, "csi")); err == nil && info.IsDir() {
+			dir := filepath.Join(sourceDir, "csi", "bugs")
+			return dir, os.MkdirAll(dir, 0o700)
+		}
+	}
 	base, err := stateDir()
 	if err != nil {
 		return "", err

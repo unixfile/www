@@ -6,8 +6,10 @@ NAME := $(shell cat WORKING_NAME)
 
 all: build
 
+# build names this checkout in the binary, so its bug button files into
+# csi/bugs here; the package is built without it.
 build:
-	CGO_ENABLED=0 go build -o build/$(NAME) .
+	CGO_ENABLED=0 go build -ldflags='-X main.sourceDir=$(CURDIR)' -o build/$(NAME) .
 
 # syntax builds the tree-sitter helper beside the binary, which finds it
 # there. It is a module of its own, in syntax/, since tree-sitter needs cgo

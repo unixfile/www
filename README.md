@@ -80,7 +80,7 @@ The package also ships a system template, `www@.service`, which serves a user's 
 
 ## Debugging
 
-A faint `www bug` button at the foot of every page files a numbered bug in www itself, not in the tree you are reading. The report holds a snapshot of what you saw, the server's state and an optional comment, in `~/.local/state/www/bugs/` and the log. `--debug` adds a build stamp above each page. See [doc/debugging.md](doc/debugging.md).
+A faint `www bug` button at the foot of every page files a numbered bug in www itself, not in the tree you are reading. The report holds a snapshot of what you saw, the server's state and an optional comment, in `csi/bugs/` of the checkout a `make build` binary came from, else in `~/.local/state/www/bugs/`, and in the log. `--debug` adds a build stamp above each page. See [doc/debugging.md](doc/debugging.md).
 
 ## Online repos
 

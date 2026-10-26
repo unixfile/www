@@ -110,3 +110,29 @@ func TestNoBug(t *testing.T) {
 		t.Errorf("report taken on a share")
 	}
 }
+
+// A binary built from a checkout with csi files its bugs in csi/bugs
+// there; without csi, or built elsewhere, in the state directory.
+func TestBugDir(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	defer func(d string) { sourceDir = d }(sourceDir)
+	src := t.TempDir()
+	for _, c := range []struct {
+		source string
+		csi    bool
+		want   string
+	}{
+		{"", false, filepath.Join(state, progName, "bugs")},
+		{src, false, filepath.Join(state, progName, "bugs")},
+		{src, true, filepath.Join(src, "csi", "bugs")},
+	} {
+		if c.csi {
+			os.Mkdir(filepath.Join(src, "csi"), 0o700)
+		}
+		sourceDir = c.source
+		if got, err := bugDir(); err != nil || got != c.want {
+			t.Errorf("source %q, csi %v: bugDir() = %q, %v, want %q", c.source, c.csi, got, err, c.want)
+		}
+	}
+}
