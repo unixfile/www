@@ -403,7 +403,7 @@ func (t *tree) logLine(ctx context.Context, name string, b []byte) string {
 	if t.pageChanged(ctx, name, b) {
 		state = "changed"
 	}
-	return topLine(c, t.starsFor(ctx, name).label(c), state, "", "", "")
+	return topLine(c, t.starsFor(ctx, name).label(c), state, "", "", "", "")
 }
 
 // topLine is the line at the top of a page in a repo, and the whole line
@@ -411,11 +411,12 @@ func (t *tree) logLine(ctx context.Context, name string, b []byte) string {
 // base?timeline. On the page as it is, the line says only state, current
 // or changed, since where the reader is matters more than which commit;
 // the commit, by star, its stardate or hash, and subject, is on hover.
-// On a version, the line names the commit by star and subject, and now,
-// a link outside the line, leads to the page as it is. here, when not
-// "", is the URL of the version shown, which the menu marks. Without the
-// script the menu holds a link to the history.
-func topLine(c *commit, star, state, base, here, now string) string {
+// On a version, the line names the commit by star and subject, and now
+// and show, links outside the line, lead to the page as it is and to the
+// commit's page, which names its full hash. here, when not "", is the URL
+// of the version shown, which the menu marks. Without the script the
+// menu holds a link to the history.
+func topLine(c *commit, star, state, base, here, now, show string) string {
 	esc := template.HTMLEscapeString
 	what := star + " · " + subjectOf(c)
 	// The stardate leads, as it does in histories and the version menu.
@@ -427,11 +428,14 @@ func topLine(c *commit, star, state, base, here, now string) string {
 	if here != "" {
 		here = " data-here=\"" + esc(here) + "\""
 	}
-	// The link to the page as it is floats right, before the line, so
-	// it stays out of the line's one target.
+	// The links to the page as it is and to the commit float right,
+	// before the line, so they stay out of the line's one target.
 	out := ""
 	if now != "" {
 		out = fmt.Sprintf("<a class=\"own now\" href=\"%s\">current</a>\n", esc(now))
+	}
+	if show != "" {
+		out += fmt.Sprintf("<a class=\"own now\" href=\"%s\">commit</a>\n", esc(show))
 	}
 	// The whole line opens the timeline, so no word labels it; the name
 	// shows on hover and is read out first.
@@ -631,7 +635,7 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 		}
 		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"own lead\">%s</span> <span class=\"subject\">%s</span></summary>\n"+
 			"<p class=\"own links\">commit <a href=\"%s\">%s</a>%s</p>\n",
-			show, commitLine(stars, c), esc(c.subject), show, esc(c.short), then)
+			show, commitLine(stars, c), esc(c.subject), show, esc(c.hash), then)
 		for _, para := range paragraphs(c.body) {
 			body.WriteString("<p>" + para + "</p>\n")
 		}
@@ -823,7 +827,9 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 	crumbs[len(crumbs)-1].Label = c.short
 	esc := template.HTMLEscapeString
 	var body strings.Builder
-	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"own\">%s</p>\n<p class=\"subject\">%s</p>\n", commitLine(t.starsFor(r.Context(), name), c), esc(c.subject))
+	// The commit's full hash follows its stardate as plain text, so it
+	// can be selected and given to git.
+	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"own\">%s · <span class=\"hash\">%s</span></p>\n<p class=\"subject\">%s</p>\n", commitLine(t.starsFor(r.Context(), name), c), esc(c.hash), esc(c.subject))
 	for _, para := range paragraphs(c.body) {
 		body.WriteString("<p>" + para + "</p>\n")
 	}

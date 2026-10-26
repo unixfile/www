@@ -25,7 +25,7 @@ func TestVersion(t *testing.T) {
 	}
 	at := "/@" + star + "/"
 
-	if body := get(h, at+"a/b.go").Body.String(); strings.Contains(body, "package b") || !strings.Contains(body, "<a class=\"own now\" href=\"/a/b.go\">current</a>\n<details class=\"own latest\" data-timeline=\"/a/b.go?timeline\" data-here=\""+at+"a/b.go\">") ||
+	if body := get(h, at+"a/b.go").Body.String(); strings.Contains(body, "package b") || !strings.Contains(body, "<a class=\"own now\" href=\"/a/b.go\">current</a>\n<a class=\"own now\" href=\"/a/b.go?commit="+first+"\">commit</a>\n<details class=\"own latest\" data-timeline=\"/a/b.go?timeline\" data-here=\""+at+"a/b.go\">") ||
 		!strings.Contains(body, ">"+star+"</span> · <span class=\"subject\"") {
 		t.Errorf("a/b.go as first committed:\n%s", body)
 	}

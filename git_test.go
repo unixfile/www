@@ -85,7 +85,7 @@ func TestHistoryPage(t *testing.T) {
 	c := head(t, dir, "HEAD")
 	for _, want := range []string{
 		`<li><details data-diff="?commit=` + c + `">` + "\n<summary><span class=\"own lead\"><span class=\"date\" title=\"" + c[:7],
-		`</span></span> <span class="subject">Rename the package &lt;b&gt;</span></summary>` + "\n" + `<p class="own links">commit <a href="?commit=` + c + `">` + c[:7] + `</a> · <a class="then"`,
+		`</span></span> <span class="subject">Rename the package &lt;b&gt;</span></summary>` + "\n" + `<p class="own links">commit <a href="?commit=` + c + `">` + c + `</a> · <a class="then"`,
 		`<div class="diffs"><p class="own"><a href="?commit=` + c + `">diff</a></p></div>` + "\n</details></li>",
 	} {
 		if !strings.Contains(body, want) {
@@ -269,6 +269,7 @@ func TestCommitPage(t *testing.T) {
 	body := get(h, "/a/b.go?commit="+c).Body.String()
 	for _, want := range []string{
 		"Rename the package &lt;b&gt;",
+		`</span> · <span class="hash">` + c + `</span></p>`,
 		`<span class="del">-func F() {}</span><span class="add">+package b</span>`,
 		`<a href="/?commit=` + c + `">All files</a>`,
 		`<p class="own file"><a href="/a/b.go">a/b.go</a></p>`,
