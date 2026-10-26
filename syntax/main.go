@@ -14,6 +14,13 @@
 // Usage: <name>-syntax FILE < source
 package main
 
+/*
+#include <stddef.h>
+
+void ts_set_allocator(void *(*)(size_t), void *(*)(size_t, size_t), void *(*)(void *, size_t), void (*)(void *));
+*/
+import "C"
+
 import (
 	"bufio"
 	"fmt"
@@ -76,6 +83,15 @@ var grammars = map[string]func() unsafe.Pointer{
 	".rb":   ruby.Language,
 }
 
+// The Go binding hands tree-sitter allocators that call back into Go,
+// only to call C's malloc, so each allocation crosses cgo twice; that
+// took a quarter of a parse. Null puts back tree-sitter's own, which call
+// malloc directly. The binding's init has run by now, and memory from
+// either is freed by the same free.
+func init() {
+	C.ts_set_allocator(nil, nil, nil, nil)
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		os.Exit(fail(syscall.EINVAL, "usage: "+filepath.Base(os.Args[0])+" FILE < source"))
@@ -107,22 +123,40 @@ func main() {
 
 // write prints the named nodes in preorder. Anonymous nodes, eg
 // punctuation and keywords, are left out, but their named descendants
-// keep their place under the nearest named ancestor.
+// keep their place under the nearest named ancestor. Each call into
+// tree-sitter crosses cgo, so a node costs as few as the line needs, and
+// kinds and field names are looked up once per id.
 func write(w *bufio.Writer, tree *sitter.Tree) {
+	lang := tree.Language()
+	kinds := map[uint16]string{}
+	fields := map[uint16]string{}
 	cur := tree.Walk()
 	defer cur.Close()
 	depth := 0
 	named := []int{} // the depths of the named nodes above the cursor
 	for {
 		n := cur.Node()
-		if n.IsNamed() || n.IsMissing() {
-			kind := n.Kind()
-			if n.IsMissing() {
+		missing := n.IsMissing()
+		shown := missing || n.IsNamed()
+		if shown {
+			id := n.KindId()
+			kind, ok := kinds[id]
+			if !ok {
+				kind = lang.NodeKindForId(id)
+				kinds[id] = kind
+			}
+			if missing {
 				kind = "MISSING " + kind
+			}
+			fid := cur.FieldId()
+			field, ok := fields[fid]
+			if !ok {
+				field = lang.FieldNameForId(fid)
+				fields[fid] = field
 			}
 			s, e := n.StartPosition(), n.EndPosition()
 			w.WriteString(strconv.Itoa(len(named)))
-			for _, f := range []string{kind, cur.FieldName()} {
+			for _, f := range []string{kind, field} {
 				w.WriteByte('\t')
 				w.WriteString(f)
 			}
@@ -133,7 +167,7 @@ func write(w *bufio.Writer, tree *sitter.Tree) {
 			w.WriteByte('\n')
 		}
 		if cur.GotoFirstChild() {
-			if n.IsNamed() || n.IsMissing() {
+			if shown {
 				named = append(named, depth)
 			}
 			depth++
