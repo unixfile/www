@@ -64,7 +64,7 @@ type config struct {
 	sharing bool
 	share   string // the address --share names; "" takes the default route's
 	secret  bool
-	token   string // the secret path's token; "" draws one at random
+	token   string // the secret path's token, from WWW_SECRET or drawn at random
 	ep      netip.AddrPort
 	fg      bool
 	noopen  bool
@@ -79,49 +79,56 @@ type config struct {
 	kill    bool
 }
 
-var usageText = strings.ReplaceAll(`usage: @NAME@ [-fnph] [-a ip[:port]] [dir]
-       @NAME@ [-fnph] --share[=host[:port]] [--secret[=token]] [dir]
-       @NAME@ --restart [-n] [-a ip[:port] | --share[=host[:port]]] [dir]
-       @NAME@ -l [-a ip[:port] | --share[=host[:port]]] [dir]
-       @NAME@ --kill [-a ip[:port] | --share[=host[:port]]]
+// usageText is written in docopt notation, except that --share takes its
+// HOST optionally, as GNU optional arguments do, which docopt cannot say.
+var usageText = strings.NewReplacer("@NAME@", progName, "@ENV@", envPrefix).Replace(`Usage:
+  @NAME@ [-p] [--foreground] [--no-open] [-a ADDR] [DIR]
+  @NAME@ [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [DIR]
+  @NAME@ --restart [--no-open] [-a ADDR | --share[=HOST]] [DIR]
+  @NAME@ -l [-a ADDR | --share[=HOST]] [DIR]
+  @NAME@ --kill [-a ADDR | --share[=HOST]]
+  @NAME@ -h | --help
+  @NAME@ -V | --version
 
-  -a, --addr ip[:port]  serve on this loopback address; the port defaults to 80
-                        when @NAME@ may bind it, else 8080
-                        (default 127.31.N.1, N = uid - 1000)
-      --share[=host[:port]]
-                        share the tree on the address of the default route,
-                        or on this address or name beyond loopback, eg
-                        192.168.1.5, 0.0.0.0 or mate.peer.home; anyone who
-                        reaches it reads every file in the tree that other
-                        users could read
-      --secret[=token]  serve a shared tree under a random token, or this one,
-                        so only those holding the link reach it
-  -f, --foreground      when no server runs on the address yet, serve in the
+Options:
+  -a ADDR, --addr=ADDR  serve on this loopback address, IP or IP:PORT; the
+                        port defaults to 80 when @NAME@ may bind it, else
+                        8080, and the IP to 127.31.N.1, N = uid - 1000
+  --share[=HOST]        share the tree on the address of the default route,
+                        or on HOST, an address or name beyond loopback with
+                        an optional :PORT, eg 192.168.1.5, 0.0.0.0 or
+                        mate.peer.home; anyone who reaches it reads every
+                        file in the tree that other users could read
+  --secret              serve a shared tree under the token in @ENV@SECRET,
+                        or a random one, so only those holding the link
+                        reach it
+  --foreground          when no server runs on the address yet, serve in the
                         foreground until Ctrl-C
-  -n, --no-open         print the URL without opening a browser
+  --no-open             print the URL without opening a browser
   -p, --persist         write a .LOCK instead of a .lock: the tree is served
                         again after a reboot or a stopped server, by the
                         next server on its address or by --restart
-      --stamp           show the binary's build time, the seconds since, its
+  --stamp               show the binary's build time, the seconds since, its
                         commit and the page's render time, small and faint,
                         above each page's header; with --restart, on the
                         new servers
-      --cache size      memory a new server may spend on cached git answers,
-                        eg 64M; 0 caches nothing (default 32M)
-      --disk size       disk a new server may fill with online repos, eg 4G;
-                        it drops the repos read longest ago (default 2G)
-      --restart         replace every server with one running this binary,
+  --cache=SIZE          memory a new server may spend on cached git answers,
+                        eg 64M; 0 caches nothing [default: 32M]
+  --disk=SIZE           disk a new server may fill with online repos, eg 4G;
+                        it drops the repos read longest ago [default: 2G]
+  --restart             replace every server with one running this binary,
                         serving the same trees, and start one for persistent
                         trees that have none; with -a or --share, only the
-                        server on that address; with a directory, serve it
-                        too and open it unless a page of it was open
-  -l, --list            print each served tree's URL and directory; with a
-                        directory, only the trees at or below it
-      --kill            stop every server and print the trees it served; with
-                        -a or --share, only the server on that address
-      --version         print when the binary was built and its commit
+                        server on that address; with DIR, serve it too and
+                        open it unless a page of it was open
+  -l, --list            print each served tree's directory and URL as
+                        keyval; with DIR, only the trees at or below it
+  --kill                stop every server and print the trees it served as
+                        --list does; with -a or --share, only the server on
+                        that address
+  -V, --version         print when the binary was built and its commit
   -h, --help            print this help
-`, "@NAME@", progName)
+`)
 
 // switches maps each long boolean option to its field; shorts names the
 // ones with a short form.
@@ -139,9 +146,11 @@ func (c *config) switches() map[string]*bool {
 	}
 }
 
-var shorts = map[byte]string{'f': "foreground", 'n': "no-open", 'p': "persist", 'h': "help", 'l': "list"}
+// -f and -n are reserved for --force and --dry-run in every tool of the
+// user's, so --foreground and --no-open have no short form.
+var shorts = map[byte]string{'p': "persist", 'h': "help", 'V': "version", 'l': "list"}
 
-// parseArgs reads options the GNU way. Short ones combine, as in -fn, and
+// parseArgs reads options the GNU way. Short ones combine, as in -pl, and
 // take a value joined or apart: -aIP or -a IP. Long ones take --addr IP or
 // --addr=IP. Options may follow the directory, and "--" ends them.
 func parseArgs(args []string) (config, error) {
@@ -186,13 +195,13 @@ func parseArgs(args []string) (config, error) {
 				c.sharing, c.share = true, val
 				continue
 			}
-			// --secret takes its token only joined, as GNU optional
-			// arguments do; without one the token is drawn at random.
+			// --secret takes no token: one on the command line shows in
+			// ps to every local user and stays in shell history.
 			if name == "secret" {
-				c.secret, c.token = true, val
-				if hasVal && !validToken(val) {
-					return c, &errno{syscall.EINVAL, "bad token " + val + ": want letters, digits, - and _"}
+				if hasVal {
+					return c, &errno{syscall.EINVAL, "--secret takes no token, since ps shows it; set " + secretEnv}
 				}
+				c.secret = true
 				continue
 			}
 			if name == "cache" || name == "disk" {
@@ -306,8 +315,10 @@ func main() {
 		setLogEndpoint(endpointName(ep))
 	}
 	noteRun()
-	if c.secret && c.token == "" {
-		c.token = newToken()
+	if c.secret {
+		if c.token, err = secretToken(); err != nil {
+			os.Exit(failNow(errnoOf(err), err.Error()))
+		}
 	}
 
 	fd := os.Getenv(readyEnv)
@@ -336,13 +347,28 @@ func noteRun() {
 	}
 }
 
-// Environment variables that set the default addresses, and the command
-// that opens a loopback URL.
+// Environment variables that set the default addresses, the command that
+// opens a loopback URL, and a share's chosen token.
 var (
-	addrEnv  = envPrefix + "ADDR"
-	shareEnv = envPrefix + "SHARE"
-	openEnv  = envPrefix + "OPEN"
+	addrEnv   = envPrefix + "ADDR"
+	shareEnv  = envPrefix + "SHARE"
+	openEnv   = envPrefix + "OPEN"
+	secretEnv = envPrefix + "SECRET"
 )
+
+// secretToken returns the token in WWW_SECRET, or a random one when it is
+// unset. A bad token's error names the variable but not its value, which
+// is a secret.
+func secretToken() (string, error) {
+	v := os.Getenv(secretEnv)
+	switch {
+	case v == "":
+		return newToken(), nil
+	case !validToken(v):
+		return "", &errno{syscall.EINVAL, secretEnv + " holds a bad token: want letters, digits, - and _"}
+	}
+	return v, nil
+}
 
 // endpointOf returns where c serves. A bare --share takes WWW_SHARE,
 // and a start without -a takes WWW_ADDR; --list, --kill and --restart
@@ -391,11 +417,16 @@ func environment(uid int) string {
 	if v := os.Getenv(openEnv); v != "" {
 		open = v + ", from " + openEnv
 	}
+	secret := "unset, so a random token"
+	if os.Getenv(secretEnv) != "" {
+		secret = "set"
+	}
 	return "\nenvironment:\n" +
 		"  " + addrEnv + "    default for a start without -a; now " + addr + "\n" +
 		"  " + shareEnv + "   default for a bare --share; now " + share + "\n" +
 		"  " + openEnv + "    command that opens a loopback URL, %s for the URL or\n" +
-		"              appended, eg 'brave-browser --app=%s'; now " + open + "\n"
+		"              appended, eg 'brave-browser --app=%s'; now " + open + "\n" +
+		"  " + secretEnv + "  the token for --secret; now " + secret + "\n"
 }
 
 // endpointFor returns where to serve: addr when given, else the user's own

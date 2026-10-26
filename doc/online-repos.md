@@ -28,7 +28,7 @@ When another website links to a repo not yet cached, the browser marks the reque
 
 The cache lives in `~/.cache/www/`, or `$XDG_CACHE_HOME/www/`, one directory per repo named by its host and path. Each holds a bare clone without file contents, in `.git`, and one worktree of the commit served, such as `.wt-b412a450538e`, which the link `.tree` names. The worktree's checkout fetches every file of that commit in one request. Older file versions arrive when a page needs them: a commit's diff fetches the blobs it shows, which takes about half a second on GitHub.
 
-`--disk size` sets the cache's limit, 2G by default. When a fetch takes it over, www deletes the repos read longest ago until it fits. A repo larger than the limit on its own goes too, and its page says so.
+`--disk=SIZE` sets the cache's limit, 2G by default. When a fetch takes it over, www deletes the repos read longest ago until it fits. A repo larger than the limit on its own goes too, and its page says so.
 
 Delete the directory any time; www fetches what it needs again.
 

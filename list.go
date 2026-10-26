@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/netip"
 	"os"
@@ -10,7 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"text/tabwriter"
+	"syscall"
 	"time"
 )
 
@@ -102,6 +103,13 @@ func list(c config) int {
 		if under, err = filepath.Abs(c.dir); err != nil {
 			return failNow(errnoOf(err), "bad directory: "+err.Error())
 		}
+		// A directory that is not there names nothing to list; one that
+		// is there and holds no served tree lists nothing and succeeds.
+		if fi, err := os.Stat(under); err != nil {
+			return failNow(errnoOf(err), "no directory "+c.dir)
+		} else if !fi.IsDir() {
+			return failNow(syscall.ENOTDIR, "not a directory: "+c.dir)
+		}
 	}
 	var trees []servedTree
 	for _, ep := range eps {
@@ -116,12 +124,30 @@ func list(c config) int {
 		}
 	}
 	slices.SortFunc(trees, func(a, b servedTree) int { return strings.Compare(a.url, b.url) })
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	for _, t := range trees {
-		fmt.Fprintf(w, "%s\t%s\n", t.url, t.dir)
-	}
-	w.Flush()
+	writeTrees(os.Stdout, trees)
 	return 0
+}
+
+// writeTrees prints trees as keyval: a tree.N.dir and a tree.N.url line
+// for each, every index the same width, so the lines sort in key order.
+// No trees print nothing, which is an empty keyval file.
+func writeTrees(w io.Writer, trees []servedTree) {
+	width := len(strconv.Itoa(max(len(trees)-1, 0)))
+	for i, t := range trees {
+		fmt.Fprintf(w, "tree.%0*d.dir %s\n", width, i, kvValue(t.dir))
+		fmt.Fprintf(w, "tree.%0*d.url %s\n", width, i, kvValue(t.url))
+	}
+}
+
+// kvValue escapes s as a keyval value: backslash, newline, tab and
+// carriage return as escapes, and \0 after a value that would otherwise
+// end the line in a space or be empty.
+func kvValue(s string) string {
+	s = strings.NewReplacer(`\`, `\\`, "\n", `\n`, "\t", `\t`, "\r", `\r`).Replace(s)
+	if s == "" || strings.HasSuffix(s, " ") {
+		s += `\0`
+	}
+	return s
 }
 
 func within(dir, root string) bool {

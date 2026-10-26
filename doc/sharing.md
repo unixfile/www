@@ -1,10 +1,10 @@
 # Sharing
 
-`www --share [dir]` serves a tree on the address of the default route, so other machines on the LAN can read it. www asks the kernel which source address it would use to leave the machine, and the printed URL shows it. Over a full-tunnel VPN that is the tunnel's address.
+`www --share [DIR]` serves a tree on the address of the default route, so other machines on the LAN can read it. www asks the kernel which source address it would use to leave the machine, and the printed URL shows it. Over a full-tunnel VPN that is the tunnel's address.
 
 `WWW_SHARE`, eg `WWW_SHARE=mate.peer.home`, gives a bare `--share` another address, for `--kill --share` and `--restart --share` as well.
 
-`--share=ip[:port]` names the address instead, joined with `=`: `--share 192.168.1.5` would read the address as the directory. Any IPv4 address the machine lets www bind will do, `0.0.0.0` included. A name will do too, such as `--share=mate.peer.home`: www binds the address it resolves to, which an interface here must hold.
+`--share=HOST` names the address instead, an IP or IP:PORT, joined with `=`: `--share 192.168.1.5` would read the address as the directory. Any IPv4 address the machine lets www bind will do, `0.0.0.0` included. A name will do too, such as `--share=mate.peer.home`: www binds the address it resolves to, which an interface here must hold.
 
 The printed URL carries the address's name when its reverse lookup resolves back to it, so a share on a WireGuard address with its own DNS prints `http://mate.peer.home/notes/`. Otherwise it carries the address. The port defaults to 80 where www may bind it, else 8080, as on loopback. `-a` takes only loopback addresses, so a typo there cannot share a tree.
 
@@ -49,7 +49,7 @@ sudo nft insert rule inet <table> input ip saddr 192.168.1.0/24 tcp dport 80 acc
 
 ## Secret paths
 
-`--secret` mounts the tree under a random 128-bit token instead of its name, eg `http://192.168.1.5/lz7sjx3g2cvx54ev7ndbzf7i7q/`, and leaves it off the index. Only those holding the link reach it. `--secret=token` uses the given token, of letters, digits, `-` and `_`.
+`--secret` mounts the tree under a random 128-bit token instead of its name, eg `http://192.168.1.5/lz7sjx3g2cvx54ev7ndbzf7i7q/`, and leaves it off the index. Only those holding the link reach it. `WWW_SECRET` sets a token of your own, of letters, digits, `-` and `_`. The command line takes none, since `ps` would show it to every local user.
 
 The token also guards against DNS rebinding. Without it, a hostile web page could read a share through the browser of a visitor on the same network.
 

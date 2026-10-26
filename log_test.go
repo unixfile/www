@@ -122,8 +122,8 @@ func TestLogFileRotates(t *testing.T) {
 }
 
 func TestCommandLine(t *testing.T) {
-	got := commandLine([]string{"-n", "--share", "--secret=abc", "my docs", "it's"})
-	want := progName + ` -n --share --secret=<token> 'my docs' 'it'\''s'`
+	got := commandLine([]string{"--no-open", "--share", "--secret=abc", "my docs", "it's"})
+	want := progName + ` --no-open --share --secret=<token> 'my docs' 'it'\''s'`
 	if got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}

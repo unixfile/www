@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"text/tabwriter"
 	"time"
 )
 
@@ -199,10 +198,12 @@ func startTrees(ep netip.AddrPort, trees []servedTree, stamp bool) error {
 		if shared(ep) {
 			args = []string{"--no-open", "--share=" + ep.String()}
 		}
-		// The token goes on the command line, where ps shows it; the lock
-		// in the tree already holds it for anyone who can read the tree.
+		// The token goes in the environment, since ps shows the command
+		// line.
+		var env []string
 		if t.token != "" {
-			args = append(args, "--secret="+t.token)
+			args = append(args, "--secret")
+			env = append(os.Environ(), secretEnv+"="+t.token)
 		}
 		if t.persist {
 			args = append(args, "--persist")
@@ -211,6 +212,7 @@ func startTrees(ep netip.AddrPort, trees []servedTree, stamp bool) error {
 			args = append(args, "--stamp")
 		}
 		cmd := exec.Command(exe, append(args, "--", t.dir)...)
+		cmd.Env = env
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil && failed == nil {
 			code := syscall.EIO
@@ -236,8 +238,9 @@ func kill(c config) int {
 	if named {
 		eps = []netip.AddrPort{c.ep}
 	}
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	// The stopped trees print once at the end, since keyval numbers them
+	// across every server.
+	var stopped []servedTree
 	code := 0
 	for _, ep := range eps {
 		pid, trees, err := servedTrees(ep)
@@ -248,14 +251,12 @@ func kill(c config) int {
 			err = stopServer(ep, pid, trees)
 		}
 		if err != nil {
-			w.Flush()
 			code = failNow(errnoOf(err), err.Error())
 			continue
 		}
-		for _, t := range trees {
-			fmt.Fprintf(w, "%s\t%s\n", t.url, t.dir)
-		}
+		stopped = append(stopped, trees...)
 	}
+	writeTrees(os.Stdout, stopped)
 	return code
 }
 

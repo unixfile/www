@@ -4,6 +4,7 @@ import (
 	"net/netip"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -15,21 +16,20 @@ func TestParseArgs(t *testing.T) {
 		want config
 	}{
 		{nil, config{dir: "."}},
-		{[]string{"-fn"}, config{dir: ".", fg: true, noopen: true}},
-		{[]string{"-f", "--stamp"}, config{dir: ".", fg: true, stamp: true}},
+		{[]string{"--foreground", "--stamp"}, config{dir: ".", fg: true, stamp: true}},
 		{[]string{"--cache=64M"}, config{dir: ".", cache: "64M"}},
 		{[]string{"--cache", "0"}, config{dir: ".", cache: "0"}},
-		{[]string{"-f", "-n", "docs"}, config{dir: "docs", fg: true, noopen: true}},
 		{[]string{"docs", "--foreground", "--no-open"}, config{dir: "docs", fg: true, noopen: true}},
 		{[]string{"-a", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
 		{[]string{"-a127.31.1.2:9000"}, config{dir: ".", addr: "127.31.1.2:9000"}},
-		{[]string{"-fa", "127.31.1.2"}, config{dir: ".", fg: true, addr: "127.31.1.2"}},
+		{[]string{"-pa", "127.31.1.2"}, config{dir: ".", persist: true, addr: "127.31.1.2"}},
 		{[]string{"--addr", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
 		{[]string{"--addr=127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
 		{[]string{"--", "-f"}, config{dir: "-f"}},
 		{[]string{"-h"}, config{dir: ".", help: true}},
 		{[]string{"--help"}, config{dir: ".", help: true}},
 		{[]string{"--version"}, config{dir: ".", version: true}},
+		{[]string{"-V"}, config{dir: ".", version: true}},
 		{[]string{"--restart", "-a", "127.31.1.2"}, config{addr: "127.31.1.2", restart: true}},
 		{[]string{"--restart", "-a", "127.31.1.2", "."}, config{dir: ".", addr: "127.31.1.2", restart: true}},
 		{[]string{"-l"}, config{list: true}},
@@ -38,7 +38,6 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"--share"}, config{dir: ".", sharing: true}},
 		{[]string{"--share", "docs"}, config{dir: "docs", sharing: true}},
 		{[]string{"--share=10.0.0.1:9000", "--secret", "docs"}, config{dir: "docs", sharing: true, share: "10.0.0.1:9000", secret: true}},
-		{[]string{"--share=10.0.0.1", "--secret=k3x9"}, config{dir: ".", sharing: true, share: "10.0.0.1", secret: true, token: "k3x9"}},
 		{[]string{"--restart", "--share=10.0.0.1"}, config{sharing: true, share: "10.0.0.1", restart: true}},
 		{[]string{"--kill"}, config{kill: true}},
 		{[]string{"--kill", "--share"}, config{sharing: true, kill: true}},
@@ -51,6 +50,9 @@ func TestParseArgs(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"-x"},
+		{"-f"},
+		{"-n"},
+		{"-fn"},
 		{"-fg"},
 		{"-nolock"},
 		{"--no-lock"},
@@ -61,13 +63,13 @@ func TestParseArgs(t *testing.T) {
 		{"--addr"},
 		{"--addr="},
 		{"one", "two"},
-		{"--restart", "-f"},
+		{"--restart", "--foreground"},
 		{"-l", "--restart"},
 		{"--share="},
 		{"--share", "a", "b"},
 		{"-a", "127.31.1.2", "--share"},
 		{"--secret"},
-		{"--share", "--secret=a/b"},
+		{"--share", "--secret=k3x9"},
 		{"--share", "--secret="},
 		{"--restart", "--share", "--secret"},
 		{"--kill", "docs"},
@@ -154,5 +156,24 @@ func TestOpenArgs(t *testing.T) {
 		if got := openArgs(c.url, c.open); !slices.Equal(got, c.want) {
 			t.Errorf("openArgs(%q, %q) = %q, want %q", c.url, c.open, got, c.want)
 		}
+	}
+}
+
+// A chosen token comes from WWW_SECRET, never the command line, and a bad
+// one's error names the variable without echoing the secret.
+func TestSecretToken(t *testing.T) {
+	t.Setenv(secretEnv, "k3x9")
+	if got, err := secretToken(); err != nil || got != "k3x9" {
+		t.Errorf("set: %q, %v; want k3x9", got, err)
+	}
+	t.Setenv(secretEnv, "a/b")
+	if _, err := secretToken(); err == nil || !strings.Contains(err.Error(), secretEnv) || strings.Contains(err.Error(), "a/b") {
+		t.Errorf("bad token: %v; want an error naming %s without the token", err, secretEnv)
+	}
+	t.Setenv(secretEnv, "")
+	a, errA := secretToken()
+	b, errB := secretToken()
+	if errA != nil || errB != nil || a == "" || a == b {
+		t.Errorf("unset: %q, %q, %v, %v; want two different random tokens", a, b, errA, errB)
 	}
 }

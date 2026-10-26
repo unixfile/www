@@ -226,7 +226,8 @@ func buildRev() string {
 }
 
 // commandLine quotes args for the log as a shell would need them, with a
-// secret token hidden.
+// secret token hidden. --secret refuses a token, but the refused run is
+// logged too.
 func commandLine(args []string) string {
 	out := []string{progName}
 	for _, a := range args {

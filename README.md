@@ -7,17 +7,19 @@ It is fast. A page from a running server takes one to three milliseconds, a serv
 ## Usage
 
 ```
-www [-fnph] [-a ip[:port]] [dir]
-www [-fnph] --share[=host[:port]] [--secret[=token]] [dir]
-www --restart [-n] [-a ip[:port] | --share[=host[:port]]] [dir]
-www -l [-a ip[:port] | --share[=host[:port]]] [dir]
-www --kill [-a ip[:port] | --share[=host[:port]]]
+www [-p] [--foreground] [--no-open] [-a ADDR] [DIR]
+www [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [DIR]
+www --restart [--no-open] [-a ADDR | --share[=HOST]] [DIR]
+www -l [-a ADDR | --share[=HOST]] [DIR]
+www --kill [-a ADDR | --share[=HOST]]
+www -h | --help
+www -V | --version
 ```
 
 Run `www` in a directory. It prints the tree's URL, opens the browser and writes a lockfile named after the endpoint, such as `127.31.1.1-8080.lock`.
 `cat` the lockfile to see the URL, root, PID and start time.
 Delete the lockfile to stop serving the tree. The Delete lock button on the tree's pages does the same.
-The URL is all it prints, so `url=$(www -n)` works. Running `www` again in a served directory prints the same URL and starts nothing.
+The URL is all it prints, so `url=$(www --no-open)` works. Running `www` again in a served directory prints the same URL and starts nothing.
 
 Trees on one address share one server. The first `www` starts it in the background, and later ones hand their tree to it and return.
 When something other than your www on that address holds the port, `www` fails at once with `E98` and names the listeners there.
@@ -27,22 +29,31 @@ A running server keeps the binary it started with. `www --restart` moves every s
 The index at `/` lists the server's locks: each tree with the time its lock was written and a Delete lock button, and the lock's path on hover. Trees on other addresses follow as plain links, since only their own server may stop them. The header shows when the server started, and a warning appears when the binary on disk has changed since.
 To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`. Type the name with its slash, eg `www/`, or the browser searches for it.
 
-- `-a`, `--addr ip[:port]`: serve on another loopback address; the port defaults to 80 where www may bind it, else 8080
-- `--share[=host[:port]]`: share the tree on the default route's address, or on the address or name given beyond loopback, such as `192.168.1.5`, `0.0.0.0` or `mate.peer.home`; see [sharing](doc/sharing.md)
-- `--secret[=token]`: serve a shared tree under a random token, or the one given, so only those holding the link reach it
-- `-f`, `--foreground`: when no server runs on the address yet, serve in the foreground until Ctrl-C
-- `-n`, `--no-open`: print the URL without opening a browser
+- `-a ADDR`, `--addr=ADDR`: serve on another loopback address, an IP or IP:PORT; the port defaults to 80 where www may bind it, else 8080
+- `--share[=HOST]`: share the tree on the default route's address, or on the address or name given beyond loopback, with an optional port, such as `192.168.1.5`, `0.0.0.0` or `mate.peer.home`; see [sharing](doc/sharing.md)
+- `--secret`: serve a shared tree under the token in `WWW_SECRET`, or a random one, so only those holding the link reach it
+- `--foreground`: when no server runs on the address yet, serve in the foreground until Ctrl-C
+- `--no-open`: print the URL without opening a browser
 - `-p`, `--persist`: write a persistent lock, such as `127.31.1.1-8080.LOCK`, so the tree is served again after a reboot; see [Serving after reboot](#serving-after-reboot)
 - `--stamp`: show the binary's build time, the seconds since, its commit and the page's render time, small and faint, above each page's header. `make run` sets it; `--restart` passes it to the new servers when given, and leaves it off otherwise
-- `--cache size`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
-- `--disk size`: disk a new server may fill with online repos, eg `4G`; it drops the repos read longest ago. The default is `2G`, and `--restart` goes back to it
+- `--cache=SIZE`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
+- `--disk=SIZE`: disk a new server may fill with online repos, eg `4G`; it drops the repos read longest ago. The default is `2G`, and `--restart` goes back to it
 - `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one; with `-a` or `--share`, only the server on that address; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
-- `-l`, `--list`: print each served tree's URL and directory, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it
-- `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
-- `--version`: print when the binary was built and the commit it came from, as the stamp says it, eg `www built 2026-10-21 12:49, from 1aa282c+modified`
+- `-l`, `--list`: print each served tree's directory and URL as keyval, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it. A directory that holds no served tree prints nothing; one that does not exist fails with `E2`
+- `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
+- `-V`, `--version`: print when the binary was built and the commit it came from, as the stamp says it, eg `www built 2026-10-21 12:49, from 1aa282c+modified`
 - `-h`, `--help`: print the options
 
-Options follow GNU style. Short ones combine, as in `-fn`, and options may follow the directory. Optional values go joined, as in `--share=192.168.1.5`; with a space the address would be read as the directory, and www says so.
+Options follow GNU style. Short ones combine, as in `-pa 127.31.1.2`, and options may follow the directory. Optional values go joined, as in `--share=192.168.1.5`; with a space the address would be read as the directory, and www says so. `-f` and `-n` mean force and dry run in every tool of the author's, so `--foreground` and `--no-open` have no short form. The help text is written in docopt notation, except that docopt has no way to write the optional `=HOST`.
+
+`--list` and `--kill` print [keyval](https://unixfile.github.io/keyval/): two lines per tree, sorted, with every index the same width.
+
+```
+tree.0.dir /home/t/keep/notes
+tree.0.url http://127.31.1.1/keep/notes/
+tree.1.dir /home/t/scratch/github.com/unixfile/www
+tree.1.url http://127.31.1.1/scratch/github.com/unixfile/www/
+```
 
 Two variables set the default addresses. `--help` shows each value and where it comes from, and an error from a bad value names its variable.
 
@@ -50,6 +61,8 @@ Two variables set the default addresses. `--help` shows each value and where it 
 - `WWW_ADDR`: the loopback address for a start without `-a`. `--list`, `--kill` and `--restart` without an address still cover every server
 
 A third sets how a start opens its URL. `WWW_OPEN` holds the command, split at spaces, with `%s` where the URL goes, or the URL appended when no `%s` is given. `WWW_OPEN='brave-browser --app=%s'` opens a tree in an app window and `WWW_OPEN=firefox` in Firefox. It applies to loopback starts only; a share opens through `xdg-open`, as every start does without the variable.
+
+A fourth holds a share's token. `WWW_SECRET` gives `--secret` a token of letters, digits, `-` and `_` instead of a random one. The token never goes on the command line, where `ps` shows it to every local user and the shell keeps it in its history, so `--secret=token` fails with `E22`. `--help` says whether the variable is set but never shows its value.
 
 ## Serving after reboot
 
