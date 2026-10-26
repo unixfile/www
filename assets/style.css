@@ -466,6 +466,8 @@ div.view { position: sticky; top: var(--search-h, 0); z-index: 1; text-align: ri
 div.view a, div.view span { padding: 0 0.4em; margin-left: 0.4em; color: var(--muted); text-decoration-color: var(--rule); }
 div.view span { color: inherit; }
 div.view a:hover { text-decoration-color: currentColor; }
+/* A JSON file's gron view starts at the row's left edge. */
+div.view .left { float: left; margin-left: 0; padding-left: 0; }
 /* Browsers round each row's height, so a box over hundreds of rows can
    end a pixel or two past its last line; the scrolling div around the pre
    clips that rather than grow a scroll bar. */
