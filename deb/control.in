@@ -4,7 +4,7 @@ Architecture: @ARCH@
 Maintainer: unixfile <unixfile@users.noreply.github.com>
 Installed-Size: @SIZE@
 Depends: git, libcap2-bin
-Recommends: xdg-utils
+Recommends: xdg-utils, @NAME@-syntax (= @VERSION@)
 Suggests: graphviz
 Section: text
 Priority: optional

@@ -1,0 +1,14 @@
+Package: @NAME@-syntax
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: unixfile <unixfile@users.noreply.github.com>
+Installed-Size: @SIZE@
+Depends: libc6 (>= @LIBC@), @NAME@ (= @VERSION@)
+Section: text
+Priority: optional
+Homepage: https://github.com/unixfile/@NAME@
+Description: syntax trees for the code pages of @NAME@
+ @NAME@-syntax parses source with tree-sitter and prints its syntax
+ tree, which @NAME@ shows as a code page's tree view. It knows Go,
+ Python, JavaScript, TypeScript, Rust, C, C++, Bash, Java, C#, JSON,
+ HTML, CSS and Ruby.

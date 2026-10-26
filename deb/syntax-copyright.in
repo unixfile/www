@@ -1,0 +1,34 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: @NAME@
+Source: https://github.com/unixfile/@NAME@
+
+Files: *
+Copyright: 2026 unixfile
+License: Expat
+
+Files: github.com/tree-sitter/go-tree-sitter/*
+Copyright: 2018-2024 Max Brunsfeld
+ 2024 Amaan Qureshi
+License: Expat
+Comment: tree-sitter, the parser, and its Go binding, which carries
+ tree-sitter's C source, statically linked into the binary.
+
+Files: github.com/mattn/go-pointer/*
+Copyright: 2019 Yasuhiro Matsumoto
+License: Expat
+Comment: go-pointer, which the binding uses to pass Go values through C.
+
+Files: github.com/tree-sitter/tree-sitter-*/*
+Copyright: 2014-2023 Max Brunsfeld, Damien Guard, Amaan Qureshi and contributors
+ 2017 Ayman Nadeem
+ 2016 Rob Rix
+ 2017 Maxim Sokolov
+License: Expat
+Comment: the grammars for Go, Python, JavaScript, TypeScript, Rust, C,
+ C++, Bash, Java, C#, JSON, HTML, CSS and Ruby, statically linked into
+ the binary. Java is by Ayman Nadeem, Ruby by Rob Rix and Rust by Maxim
+ Sokolov; the rest are by Max Brunsfeld, C# with Damien Guard and Amaan
+ Qureshi.
+
+License: Expat
+@EXPAT@

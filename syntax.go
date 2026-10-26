@@ -249,7 +249,8 @@ func treeNote(name string, err error) string {
 	esc := template.HTMLEscapeString
 	switch {
 	case errors.Is(err, errNoHelper):
-		return "<p class=\"own warn\">The syntax tree needs " + esc(progName) + "-syntax, which is not installed. <code>make syntax</code> builds it beside " + esc(progName) + ".</p>\n"
+		helper := esc(progName) + "-syntax"
+		return "<p class=\"own warn\">The syntax tree needs " + helper + ", which is not installed. The package " + helper + " installs it, and <code>make syntax</code> builds it beside a build of " + esc(progName) + ".</p>\n"
 	case errors.Is(err, errNoGrammar):
 		return "<p class=\"own\">No grammar for " + esc(filepath.Base(name)) + ", so no syntax tree.</p>\n"
 	}

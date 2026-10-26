@@ -36,7 +36,7 @@ Add `?log` to any page's URL for its history. Open `http://127.31.1.2/github.com
 
 ## Install
 
-www needs git. `make install` links `build/www` into `~/.local/bin`, and serves on port 8080. `make install-deb` builds and installs a Debian package, whose binary may bind port 80, so URLs carry no port.
+www needs git. `make install` links `build/www` into `~/.local/bin`, and serves on port 8080. `make install-deb` builds and installs the Debian packages, www and its syntax tree helper. The package's binary may bind port 80, so URLs carry no port.
 
 ## Documentation
 

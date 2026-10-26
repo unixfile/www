@@ -1,4 +1,4 @@
-.PHONY: all build syntax run test bench clean install uninstall deb install-deb uninstall-deb
+.PHONY: all build syntax run test bench clean install uninstall deb deb-syntax install-deb uninstall-deb
 
 # WORKING_NAME holds the program's name, provisional until a final one is
 # chosen. The binary, the package and the paths below take it.
@@ -102,7 +102,32 @@ deb:
 	chmod 0755 $(STAGE)/DEBIAN/postinst
 	dpkg-deb --root-owner-group --build $(STAGE) $(DEB)
 
-# install-deb installs the package through apt, which pulls in git.
+# deb-syntax packages the tree-sitter helper as NAME-syntax. It is a
+# package of its own because it needs cgo and libc, while the main binary
+# is static. The main package recommends it and it depends on the main
+# package, each at the same version, since the main binary reads the
+# helper's output. Its libc dependency is the newest glibc symbol version
+# the helper uses. A build for another ARCH needs a C cross compiler, eg
+# CC=aarch64-linux-gnu-gcc.
+SYNSTAGE := build/deb-syntax
+SYNDEB := build/$(NAME)-syntax_$(VERSION)_$(ARCH).deb
+SYNDOC := $(SYNSTAGE)/usr/share/doc/$(NAME)-syntax
+
+deb-syntax:
+	rm -rf $(SYNSTAGE)
+	cd syntax && CGO_ENABLED=1 GOARCH=$(ARCH) go build -trimpath -buildmode=pie -ldflags='-s -w' -o ../$(SYNSTAGE)/usr/bin/$(NAME)-syntax .
+	mkdir -p $(SYNDOC) $(SYNSTAGE)/DEBIAN
+	{ sed '/^@EXPAT@$$/,$$d; s/@NAME@/$(NAME)/g' deb/syntax-copyright.in; sed '1,4d; s/^$$/./; s/^/ /' LICENSE; } > $(SYNDOC)/copyright
+	printf '$(NAME)-syntax (%s) unstable; urgency=low\n\n  * Build of commit %s.\n\n -- %s  %s\n' \
+		'$(VERSION)' "$$(git rev-parse --short HEAD)" "$$(sed -n 's/^Maintainer: //p' deb/control.in)" \
+		"$$(git log -1 --format=%cD)" | gzip -9n > $(SYNDOC)/changelog.gz
+	sed -e 's/@NAME@/$(NAME)/g' -e 's/@VERSION@/$(VERSION)/g' -e 's/@ARCH@/$(ARCH)/' \
+		-e "s/@LIBC@/$$(objdump -T $(SYNSTAGE)/usr/bin/$(NAME)-syntax | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)/" \
+		-e "s/@SIZE@/$$(du -sk $(SYNSTAGE)/usr | cut -f1)/" deb/syntax-control.in > $(SYNSTAGE)/DEBIAN/control
+	chmod -R u=rwX,go=rX $(SYNSTAGE)
+	dpkg-deb --root-owner-group --build $(SYNSTAGE) $(SYNDEB)
+
+# install-deb installs both packages through apt, which pulls in git.
 # --reinstall replaces a build of the same commit, which apt would skip as
 # already installed. The link from make install goes first: ~/.local/bin
 # usually leads PATH, and its binary lacks the capability for port 80.
@@ -113,11 +138,11 @@ deb:
 # and its output is hidden so it does not break into the prompt. Plain make,
 # not $(MAKE), so make -n prints the line instead of running sudo.
 install-deb: uninstall
-	@make -s deb >/dev/null & build=$$!; \
+	@make -s deb deb-syntax >/dev/null & build=$$!; \
 	sudo -v; auth=$$?; \
 	wait $$build && [ $$auth -eq 0 ]
-	sudo env NEEDRESTART_MODE=l apt install --reinstall ./$(DEB)
+	sudo env NEEDRESTART_MODE=l apt install --reinstall ./$(DEB) ./$(SYNDEB)
 	-/usr/bin/$(NAME) --restart --force
 
 uninstall-deb:
-	sudo apt remove $(NAME)
+	sudo apt remove $(NAME) $(NAME)-syntax
