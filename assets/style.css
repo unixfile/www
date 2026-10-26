@@ -170,6 +170,10 @@ p.bug input { font: inherit; color: var(--text); background: var(--page); border
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
 pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone { font-family: ui-monospace, "Iosevka", monospace; }
+/* Mono shows each character as typed: Iosevka's ligatures, eg <= drawn
+   as one sign, are off wherever mono is set. Serif text keeps its own. */
+pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone,
+p.bug, main a.web, ul.decls, p.coin, .lead, div.view, div.syntax { font-variant-ligatures: none; }
 /* Code is half the body size, so about 115 columns fit the doc's measure
    and no page needs to be wider. It never drops below 11px, where small
    screens set the body at 16px. */
