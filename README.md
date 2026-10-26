@@ -24,6 +24,7 @@ The URL is all it prints, so `url=$(www --no-open)` works. Running `www` again i
 
 Trees on one address share one server. The first `www` starts it in the background, and later ones hand their tree to it and return.
 When something other than your www on that address holds the port, `www` fails at once with `E98` and names the listeners there.
+Delete lock and Kill server answer 410 Gone, with a page that names each tree stopped, its lock removed or kept, and whether the server serves on.
 The server exits when its last lock is gone. SIGTERM stops it at once and removes every lock but a persistent `.LOCK`, as does the Kill server button on the index at `/`.
 A running server keeps the binary it started with. `www --restart` moves every server's trees to the current binary, and `make install` and `make install-deb` run it for you; open tabs reload onto the new binary, and it says how many did. It moves only the servers its own binary started, so the package and a build from `make install` leave each other's servers alone; it names each server it leaves, and `-f` takes them too. `make install-deb` passes `-f`, since it removes the `make install` link. A binary without the capability for port 80, such as the one from `make install`, leaves a port-80 server on its old binary and says so.
 

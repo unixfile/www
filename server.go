@@ -522,14 +522,14 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "stop must come from an "+progName+" page", http.StatusForbidden)
 		return
 	}
-	trees, crumbs, what, why := s.list(), []crumb{{Label: progName}}, "Stopped "+progName, "Kill server button"
+	trees, crumbs, why, kill := s.list(), []crumb{{Label: progName}}, "Kill server button", true
 	if prefix := r.PostFormValue("tree"); prefix != "" {
 		t := s.byPrefix(prefix)
 		if t == nil {
 			s.serveIndex(w, r, http.StatusNotFound, errorLine("Not served: "+prefix))
 			return
 		}
-		trees, crumbs, what, why = []*tree{t}, []crumb{t.rootCrumb()}, "Stopped serving "+t.label, "Delete lock button"
+		trees, crumbs, why, kill = []*tree{t}, []crumb{t.rootCrumb()}, "Delete lock button", false
 		// While other trees remain the server lives on: a button on the
 		// index returns there, and a tree's page links it.
 		if len(s.list()) > 1 {
@@ -541,23 +541,53 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 			crumbs = []crumb{indexCrumb, t.rootCrumb()}
 		}
 	}
-	what += " and removed its lockfile"
-	if len(trees) > 1 {
-		what += "s"
-	}
-	render(w, r, http.StatusOK, page{
+	render(w, r, http.StatusGone, page{
 		Title:  progName + " stopped",
 		Crumbs: crumbs,
 		Kind:   "stopped",
 		// The server may close its listener before the browser asks for
 		// the stylesheet, so the page carries it.
 		Style:   template.CSS(styleCSS),
-		Body:    template.HTML("<p class=\"own\">" + template.HTMLEscapeString(what) + ". Close this tab.</p>"),
+		Body:    template.HTML(coin("410") + `<table class="gone">` + "\n" + stoppedRows(trees, kill, len(s.list())-len(trees)) + "</table>\n"),
 		Stopped: true,
 	})
 	// stop only withdraws; the hub shuts down on its own goroutine, since
 	// Shutdown waits for this response to finish.
 	s.stop(trees, why)
+}
+
+// stoppedRows say what a stop ended, in a table as a 404's: each tree,
+// its lock, removed, or kept when Kill server leaves a persistent .LOCK
+// for the next server, and then the server: stopped, or how many trees
+// it still serves.
+func stoppedRows(trees []*tree, kill bool, left int) string {
+	var b strings.Builder
+	for _, t := range trees {
+		b.WriteString(goneRow("stopped", segments(t.label)))
+		if t.lock == nil {
+			continue
+		}
+		state := "removed"
+		if kill && isPersist(t.lock.path) {
+			state = "kept"
+		}
+		// A lock in its tree's directory goes by its name, since the row
+		// above names the directory.
+		where := tildePath(t.lock.path)
+		if filepath.Dir(t.lock.path) == t.dir {
+			where = filepath.Base(t.lock.path)
+		}
+		b.WriteString(goneRow(state, segments(where)))
+	}
+	switch left {
+	case 0:
+		b.WriteString(goneRow("server", "stopped; close this tab"))
+	case 1:
+		b.WriteString(goneRow("server", `<a href="/">serves 1 more tree</a>`))
+	default:
+		b.WriteString(goneRow("server", fmt.Sprintf(`<a href="/">serves %d more trees</a>`, left)))
+	}
+	return b.String()
 }
 
 // errorLine is a failure's message as a page shows it.
@@ -1308,8 +1338,11 @@ func (t *tree) why(ref *refusal) string {
 	return ref.Error()
 }
 
-// coin is the 404 that turns like a coin above a missing path's table.
-const coin = `<p class="coin" aria-hidden="true"><span><span>404</span><span>404</span></span></p>`
+// coin is a status code that turns like a coin above a 404's table, or a
+// stop's 410.
+func coin(code string) string {
+	return `<p class="coin" aria-hidden="true"><span><span>` + code + `</span><span>` + code + `</span></span></p>`
+}
 
 // fullURL is the URL r asked for, without its query, so "not found"
 // names it whole when copied away from the address bar.
@@ -1326,7 +1359,7 @@ func (t *tree) notFound(w http.ResponseWriter, r *http.Request, name string) {
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),
 		Kind:   "error",
-		Body: template.HTML(coin + `<table class="gone">` + "\n" + notFoundRow(r) + t.goneRows(r.Context(), name) + "</table>\n"),
+		Body: template.HTML(coin("404") + `<table class="gone">` + "\n" + notFoundRow(r) + t.goneRows(r.Context(), name) + "</table>\n"),
 	})
 }
 
