@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -31,17 +32,46 @@ type stardates struct {
 }
 
 // mainRefs are the refs the main line follows, in order of preference.
-var mainRefs = []string{"refs/remotes/origin/main", "refs/remotes/origin/master", "refs/heads/main", "refs/heads/master"}
+// "" stands for the branch origin's HEAD names, for a repo whose main
+// branch has another name, eg origin/trunk. It comes after main and
+// master, so naming origin's HEAD renumbers no repo that has them.
+var mainRefs = []string{"refs/remotes/origin/main", "refs/remotes/origin/master", "", "refs/heads/main", "refs/heads/master"}
 
 // mainTip is the commit at the head of r's main line, and the ref it
 // came from.
 func (r repo) mainTip(ctx context.Context) (string, string, bool) {
 	for _, ref := range mainRefs {
+		if ref == "" {
+			var ok bool
+			if ref, ok = r.originHead(ctx); !ok {
+				continue
+			}
+		}
 		if h, ok := r.refTip(ctx, ref); ok {
 			return h, ref, true
 		}
 	}
 	return "", "", false
+}
+
+// originHead is the branch origin's HEAD points at, eg
+// refs/remotes/origin/trunk, as git clone set it.
+func (r repo) originHead(ctx context.Context) (string, bool) {
+	var ref string
+	if exists(filepath.Join(r.common, "reftable")) {
+		out, err := git(ctx, r.gitDir, "symbolic-ref", "-q", "refs/remotes/origin/HEAD")
+		if err != nil {
+			return "", false
+		}
+		ref = strings.TrimSpace(string(out))
+	} else {
+		b, err := os.ReadFile(filepath.Join(r.common, "refs", "remotes", "origin", "HEAD"))
+		if err != nil {
+			return "", false
+		}
+		ref, _ = strings.CutPrefix(strings.TrimSpace(string(b)), "ref: ")
+	}
+	return ref, strings.HasPrefix(ref, "refs/remotes/origin/") && ref != "refs/remotes/origin/HEAD"
 }
 
 // refTip is the commit ref points at.
@@ -239,6 +269,16 @@ func (s *stardates) number(tip string, nodes map[string]starNode) {
 		name(h, d+"."+strconv.Itoa(s.perDay[d]))
 		mergedIn(h)
 	}
+}
+
+// rowLabel is label for a row in a list of commits. A day and x, which
+// several pending commits share, adds the short hash, eg 261026.x 8392cf3,
+// so each row names its own commit.
+func (s *stardates) rowLabel(c *commit) string {
+	if s != nil && s.pending[c.hash] != "" {
+		return s.pending[c.hash] + " " + c.short
+	}
+	return s.label(c)
 }
 
 // label is what a reader sees for c: its stardate in s, its day and x

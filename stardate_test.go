@@ -65,6 +65,14 @@ func TestPendingCommits(t *testing.T) {
 		if h != "a" && p.addr(c) != c.short {
 			t.Errorf("%s addresses as %q, want its hash", h, p.addr(c))
 		}
+		// A list's rows tell pending commits apart by their hash.
+		row := want
+		if h != "a" {
+			row += " " + c.short
+		}
+		if got := p.rowLabel(c); got != row {
+			t.Errorf("%s: row %q, want %q", h, got, row)
+		}
 	}
 	if s.pending != nil || len(p.byDate) != 1 || p.perDay["261026"] != 0 {
 		t.Errorf("pending commits were numbered: %v %v", p.byDate, p.perDay)
@@ -91,9 +99,38 @@ func TestPendingVersion(t *testing.T) {
 	if body := get(h, "/a/b.go").Body.String(); !strings.Contains(body, `title="`+star+` · `) {
 		t.Errorf("top line names no %s:\n%s", star, body)
 	}
+	if body := get(h, "/a/b.go?log").Body.String(); !strings.Contains(body, ">"+star+" "+short+"</span>") {
+		t.Errorf("history names no %s %s:\n%s", star, short, body)
+	}
 	rec := get(h, "/@"+short+"/a/")
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), " @ "+star+"</a>") {
 		t.Errorf("version @%s: %d\n%s", short, rec.Code, rec.Body.String())
+	}
+}
+
+// A repo whose main branch is neither main nor master follows the branch
+// origin's HEAD names.
+func TestOriginHeadIsTheMainLine(t *testing.T) {
+	_, dir := repoTree(t)
+	full := head(t, dir, "HEAD")
+	c := &commit{hash: full, short: full[:7]}
+	if star := stardatesIn(context.Background(), dir).label(c); star == c.short {
+		t.Fatalf("on the local line HEAD has no stardate")
+	}
+	for _, args := range [][]string{
+		{"update-ref", "refs/remotes/origin/trunk", "HEAD~1"},
+		{"symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	s := stardatesIn(context.Background(), dir)
+	if got := s.label(c); got != c.short {
+		t.Errorf("HEAD, past origin/trunk, is %q, want its hash", got)
+	}
+	if s.byHash[head(t, dir, "HEAD~1")] == "" {
+		t.Error("origin/trunk's tip has no stardate")
 	}
 }
 

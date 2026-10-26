@@ -809,7 +809,7 @@ func (t *tree) serveDecl(w http.ResponseWriter, r *http.Request, name string, di
 		}
 	}
 	var body strings.Builder
-	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"own\">%s</p>\n<p class=\"subject\">%s</p>\n</div>\n", commitLine(t.starsFor(ctx, name), c), esc(c.subject))
+	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"own\">%s · <span class=\"hash\">%s</span></p>\n<p class=\"subject\">%s</p>\n</div>\n", commitLine(t.starsFor(ctx, name).label(c), c), esc(c.hash), esc(c.subject))
 	fmt.Fprintf(&body, "<div class=\"diffs\">\n<p class=\"own file\">%s %s in %s%s", esc(strings.Join(ch.what, ", ")), esc(declName), esc(file), esc(ch.whence()))
 	if len(links) > 0 {
 		body.WriteString(" · " + strings.Join(links, " · "))

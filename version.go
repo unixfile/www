@@ -29,6 +29,12 @@ var atSegment = regexp.MustCompile(`^@([0-9a-f]{4,40}|[0-9]{6}(?:\.[0-9]+)+)$`)
 // x, eg 261026.x, as the name of a commit.
 var stardateRev = regexp.MustCompile(`^[0-9]{6}\.(?:[0-9]+|x)(?:\.[0-9]+)*$`)
 
+// isDay reports whether s is a date as a stardate writes it, eg 261024.
+func isDay(s string) bool {
+	_, err := time.Parse("060102", s)
+	return len(s) == 6 && err == nil
+}
+
 // findCommit is the commit rev names in the repo dir lies in, and that
 // repo's stardates. rev is a stardate, a day and x that one commit alone
 // holds while it waits for a push, or anything git rev-parse takes.
@@ -36,6 +42,10 @@ func findCommit(ctx context.Context, dir, rev string) (commit, *stardates, error
 	stars, spec := stardatesIn(ctx, dir), rev
 	missing := &errno{syscall.ENOENT, "no commit " + rev + " in this repo"}
 	switch {
+	case isDay(rev):
+		// Six digits are hex too, but a reader who types a date means
+		// the day, which holds many commits.
+		return commit{}, stars, &errno{syscall.EINVAL, rev + " is a day, not a commit; add its place, eg " + rev + ".1"}
 	case strings.HasPrefix(rev, "-"):
 		// git would read it as an option.
 		return commit{}, stars, missing

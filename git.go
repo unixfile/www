@@ -379,10 +379,10 @@ func (t *tree) gitHead(name string) (gitDir, state string) {
 	return r.gitDir, r.gitDir + "\n" + r.head(ctx)
 }
 
-// commitLine is a commit's stardate, as a history and a commit page show
-// it, with its hash and exact time on hover.
-func commitLine(s *stardates, c *commit) string {
-	return fmt.Sprintf("<span class=\"date\" title=\"%s %s\">%s</span>", template.HTMLEscapeString(c.short), exact(c.date), template.HTMLEscapeString(s.label(c)))
+// commitLine is label, a commit's stardate as a history or a commit page
+// shows it, with its hash and exact time on hover.
+func commitLine(label string, c *commit) string {
+	return fmt.Sprintf("<span class=\"date\" title=\"%s %s\">%s</span>", template.HTMLEscapeString(c.short), exact(c.date), template.HTMLEscapeString(label))
 }
 
 // starsFor are the stardates of the repo name lies in. A version reads
@@ -557,7 +557,7 @@ func (t *tree) serveTimeline(w http.ResponseWriter, r *http.Request, name string
 	// Each row leads with its stardate, so they line up down the menu.
 	labels := make([]string, len(log))
 	for i := range log {
-		labels[i] = stars.label(&log[i])
+		labels[i] = stars.rowLabel(&log[i])
 	}
 	body.WriteString("<ol class=\"versions\"" + leadStyle(labels) + ">\n")
 	current := (&url.URL{Path: t.prefix + rest}).String()
@@ -632,7 +632,7 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	// Each row leads with its stardate, so they line up down the history.
 	labels := make([]string, len(log))
 	for i := range log {
-		labels[i] = stars.label(&log[i])
+		labels[i] = stars.rowLabel(&log[i])
 	}
 	body.WriteString("<ol class=\"log\"" + leadStyle(labels) + ">\n")
 	for i := range log {
@@ -644,7 +644,7 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 		}
 		fmt.Fprintf(&body, "<li><details data-diff=\"%s\">\n<summary><span class=\"own lead\">%s</span> <span class=\"subject\">%s</span></summary>\n"+
 			"<p class=\"own links\">commit <a href=\"%s\">%s</a>%s</p>\n",
-			show, commitLine(stars, c), esc(c.subject), show, esc(c.hash), then)
+			show, commitLine(labels[i], c), esc(c.subject), show, esc(c.hash), then)
 		for _, para := range paragraphs(c.body) {
 			body.WriteString("<p>" + para + "</p>\n")
 		}
@@ -838,7 +838,7 @@ func (t *tree) serveCommit(w http.ResponseWriter, r *http.Request, name string, 
 	var body strings.Builder
 	// The commit's full hash follows its stardate as plain text, so it
 	// can be selected and given to git.
-	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"own\">%s · <span class=\"hash\">%s</span></p>\n<p class=\"subject\">%s</p>\n", commitLine(t.starsFor(r.Context(), name), c), esc(c.hash), esc(c.subject))
+	fmt.Fprintf(&body, "<div class=\"commit\">\n<p class=\"own\">%s · <span class=\"hash\">%s</span></p>\n<p class=\"subject\">%s</p>\n", commitLine(t.starsFor(r.Context(), name).label(c), c), esc(c.hash), esc(c.subject))
 	for _, para := range paragraphs(c.body) {
 		body.WriteString("<p>" + para + "</p>\n")
 	}

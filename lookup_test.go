@@ -35,4 +35,9 @@ func TestLookupCommit(t *testing.T) {
 			t.Errorf("%s in %s: exit %d, printed %q; want E2 and nothing", c.commit, c.dir, code, b.String())
 		}
 	}
+	// A day alone names many commits, though six digits are hex too.
+	var b strings.Builder
+	if code := lookupCommit(&b, config{dir: dir, commit: star[:6]}); code != int(syscall.EINVAL) {
+		t.Errorf("%s: exit %d, want E22", star[:6], code)
+	}
 }
