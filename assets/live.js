@@ -457,8 +457,15 @@
 		if (needed()) document.documentElement.classList.remove("calm");
 		else if (!calmTimer) calm();
 	};
+	// After a scroll the browser sends a move to the mouse that rests, as
+	// the page moved under it. Only a move on the screen counts, or a mouse
+	// resting beside the column would hide what the scroll up showed.
+	let mx = null;
+	let my = null;
 	document.addEventListener("pointermove", (e) => {
-		if (e.pointerType === "touch") return;
+		if (e.pointerType === "touch" || (e.screenX === mx && e.screenY === my)) return;
+		mx = e.screenX;
+		my = e.screenY;
 		const r = document.body.getBoundingClientRect();
 		if (e.clientX >= r.left && e.clientX <= r.right) wake();
 		else calm();
