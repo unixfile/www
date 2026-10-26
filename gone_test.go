@@ -27,11 +27,11 @@ func TestNotFoundSaysWhereItWent(t *testing.T) {
 	os.Remove(filepath.Join(dir, "lib", "page.html"))
 	h := s.handler()
 	for p, want := range map[string][]string{
-		"/index.md":       {"Deleted in <a href=\"/?commit=", "Tidy the top", "Last version: <a href=\"/@", "/index.md\">", "Add the docs"},
-		"/bin.dat":        {`Moved to <a href="/data.bin">data.bin</a> in`, "Tidy the top", "/bin.dat\">"},
-		"/a/b.go":         {`Moved to <a href="/lib/b.go">lib/b.go</a> in`, "Move a to lib", "/a/b.go\">", "Rename the package"},
-		"/a/":             {`Moved to <a href="/lib">lib</a> in`, "/a/\">"},
-		"/lib/page.html":  {"Deleted since the last commit", "Last version: <a href=\"/@", "/lib/page.html\">", "Move a to lib"},
+		"/index.md":       {"<th>deleted</th><td><a href=\"/?commit=", "Tidy the top", "<th>last version</th><td><a href=\"/@", "/index.md\">", "Add the docs"},
+		"/bin.dat":        {"<th>moved</th>", "Tidy the top", `<th>to</th><td><a href="/data.bin"><span class="seg">data.bin</span></a>`, "/bin.dat\">"},
+		"/a/b.go":         {"<th>moved</th>", "Move a to lib", `<th>to</th><td><a href="/lib/b.go"><span class="seg">lib/</span><wbr><span class="seg">b.go</span></a>`, "/a/b.go\">", "Rename the package"},
+		"/a/":             {`<th>to</th><td><a href="/lib"><span class="seg">lib</span></a>`, "/a/\">"},
+		"/lib/page.html":  {"<th>deleted</th><td>since the last commit", "<th>last version</th><td><a href=\"/@", "/lib/page.html\">", "Move a to lib"},
 		"/untracked/y.md": {},
 	} {
 		rec := get(h, p)
@@ -44,13 +44,13 @@ func TestNotFoundSaysWhereItWent(t *testing.T) {
 				t.Errorf("%s: lacks %q:\n%s", p, w, body)
 			}
 		}
-		if len(want) == 0 && strings.Contains(body, "Last version") {
+		if len(want) == 0 && strings.Contains(body, "last version") {
 			t.Errorf("%s: a path git never held has a last version:\n%s", p, body)
 		}
 	}
 	// Each link leads somewhere.
 	body := get(h, "/index.md").Body.String()
-	i := strings.Index(body, "Last version: <a href=\"") + len("Last version: <a href=\"")
+	i := strings.Index(body, "<th>last version</th><td><a href=\"") + len("<th>last version</th><td><a href=\"")
 	if u := body[i : i+strings.Index(body[i:], `"`)]; get(h, u).Code != http.StatusOK {
 		t.Errorf("last version %s: status %d", u, get(h, u).Code)
 	}
@@ -62,18 +62,18 @@ func TestNotFoundCloseNames(t *testing.T) {
 	s, _, _ := serveTree(t)
 	h := s.handler()
 	for p, want := range map[string]string{
-		"/indx.md":      `<li><a href="/index.md">index.md</a></li>`,
-		"/index.txt":    `<li><a href="/index.md">index.md</a></li>`,
-		"/a/b.og":       `<li><a href="/a/b.go">a/b.go</a></li>`,
-		"/A/README.md":  `<li><a href="/a/README.md">a/README.md</a></li>`,
-		"/a/READ":       `<li><a href="/a/README.md">a/README.md</a></li>`,
-		"/b/README.md":  `<li><a href="/a/README.md">a/README.md</a></li>`,
-		"/a/REAMDE.txt": `<li><a href="/a/README.md">a/README.md</a></li>`,
+		"/indx.md":      `<a href="/index.md"><span class="seg">index.md</span></a>`,
+		"/index.txt":    `<a href="/index.md"><span class="seg">index.md</span></a>`,
+		"/a/b.og":       `<a href="/a/b.go"><span class="seg">a/</span><wbr><span class="seg">b.go</span></a>`,
+		"/A/README.md":  `<a href="/a/README.md"><span class="seg">a/</span><wbr><span class="seg">README.md</span></a>`,
+		"/a/READ":       `<a href="/a/README.md"><span class="seg">a/</span><wbr><span class="seg">README.md</span></a>`,
+		"/b/README.md":  `<a href="/a/README.md"><span class="seg">a/</span><wbr><span class="seg">README.md</span></a>`,
+		"/a/REAMDE.txt": `<a href="/a/README.md"><span class="seg">a/</span><wbr><span class="seg">README.md</span></a>`,
 		"/a/nothing.md": "",
 	} {
 		body := get(h, p).Body.String()
 		if want == "" {
-			if strings.Contains(body, "Close names") {
+			if strings.Contains(body, "<th>close</th>") {
 				t.Errorf("%s: lists far names:\n%s", p, body)
 			}
 			continue

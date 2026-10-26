@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"net/http"
 	"net/url"
 	"path"
 	"slices"
@@ -220,12 +221,23 @@ func editDistance(a, b string) int {
 	return row[len(y)]
 }
 
-// goneBody is what the 404 page says beyond "Not found": where git says
-// name went, and the names close to it.
-func (t *tree) goneBody(ctx context.Context, name string) string {
+// notFoundRow is the first row of a 404's table: the whole URL r asked
+// for, broken only after a slash.
+func notFoundRow(r *http.Request) string {
+	return goneRow("not found", segments(fullURL(r)))
+}
+
+// goneRow is one row of a 404's table: a label, then its value as HTML.
+func goneRow(label, value string) string {
+	return "<tr><th>" + template.HTMLEscapeString(label) + "</th><td>" + value + "</td></tr>\n"
+}
+
+// goneRows are the rows of the 404's table below "not found": where git
+// says name went, and the names close to it.
+func (t *tree) goneRows(ctx context.Context, name string) string {
 	esc := template.HTMLEscapeString
-	link := func(p, label string) string {
-		return fmt.Sprintf("<a href=\"%s\">%s</a>", esc((&url.URL{Path: t.prefix + p}).String()), esc(label))
+	link := func(p string) string {
+		return fmt.Sprintf("<a href=\"%s\">%s</a>", esc((&url.URL{Path: t.prefix + p}).String()), segments(p))
 	}
 	var b strings.Builder
 	if g := t.whereGone(ctx, name); g != nil {
@@ -233,28 +245,28 @@ func (t *tree) goneBody(ctx context.Context, name string) string {
 		dir, _ := t.existing(name)
 		if g.removed != nil {
 			show := (&url.URL{Path: t.prefix + below(dir, true), RawQuery: "commit=" + g.removed.hash}).String()
-			verb := "Deleted"
+			label := "deleted"
 			if g.to != "" {
-				verb = "Moved to " + link(g.to, g.to)
+				label = "moved"
 			}
-			fmt.Fprintf(&b, "<p>%s in <a href=\"%s\">%s</a> · %s</p>\n", verb, esc(show), esc(stars.label(g.removed)), esc(subjectOf(g.removed)))
+			b.WriteString(goneRow(label, fmt.Sprintf("<a href=\"%s\">%s</a> · %s", esc(show), esc(stars.label(g.removed)), esc(subjectOf(g.removed)))))
+			if g.to != "" {
+				b.WriteString(goneRow("to", link(g.to)))
+			}
 		} else {
-			b.WriteString("<p>Deleted since the last commit</p>\n")
+			b.WriteString(goneRow("deleted", "since the last commit"))
 		}
 		if g.last != nil {
-			fmt.Fprintf(&b, "<p>Last version: <a href=\"%s\">%s</a> · %s</p>\n",
-				esc(t.versionURL(stars, g.last, below(name, g.dir))), esc(stars.label(g.last)), esc(subjectOf(g.last)))
+			b.WriteString(goneRow("last version", fmt.Sprintf("<a href=\"%s\">%s</a> · %s",
+				esc(t.versionURL(stars, g.last, below(name, g.dir))), esc(stars.label(g.last)), esc(subjectOf(g.last)))))
 		}
 	}
-	if names := t.closeNames(name); len(names) > 0 {
-		b.WriteString("<p>Close names:</p>\n<ul class=\"listing\">\n")
-		for _, n := range names {
-			fmt.Fprintf(&b, "<li>%s</li>\n", link(n, n))
+	for i, n := range t.closeNames(name) {
+		label := ""
+		if i == 0 {
+			label = "close"
 		}
-		b.WriteString("</ul>\n")
+		b.WriteString(goneRow(label, link(n)))
 	}
-	if b.Len() == 0 {
-		return ""
-	}
-	return "<div class=\"gone\">\n" + b.String() + "</div>\n"
+	return b.String()
 }

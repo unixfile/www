@@ -166,7 +166,7 @@ header button, table.locks button, p.built button.bug {
 p.built button.bug { color: inherit; border-color: currentColor; padding: 0 0.4em; margin-left: 0.4em; }
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
-pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, div.gone { font-family: ui-monospace, "Iosevka", monospace; }
+pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone { font-family: ui-monospace, "Iosevka", monospace; }
 /* Code is half the body size, so about 115 columns fit the doc's measure
    and no page needs to be wider. It never drops below 11px, where small
    screens set the body at 16px. */
@@ -220,9 +220,9 @@ main a.broken { text-decoration-style: dotted; text-decoration-color: var(--dang
 /* The mark after a forge link reads that repo on the web address. */
 main a.web { font-family: ui-monospace, "Iosevka", monospace; font-size: 0.6em; vertical-align: super; line-height: 0; margin-left: 0.2em; color: var(--muted); text-decoration: none; }
 main a.web:hover { color: inherit; }
-header a, ul.listing a, div.gone a, table.locks a, .latest a, .own a { color: inherit; text-decoration-color: var(--rule); }
-header a:visited, ul.listing a:visited, div.gone a:visited, table.locks a:visited, .latest a:visited, .own a:visited { color: var(--muted); }
-header a:hover, ul.listing a:hover, div.gone a:hover, table.locks a:hover, .latest a:hover, .own a:hover { text-decoration-color: currentColor; }
+header a, ul.listing a, table.gone a, table.locks a, .latest a, .own a { color: inherit; text-decoration-color: var(--rule); }
+header a:visited, ul.listing a:visited, table.gone a:visited, table.locks a:visited, .latest a:visited, .own a:visited { color: var(--muted); }
+header a:hover, ul.listing a:hover, table.gone a:hover, table.locks a:hover, .latest a:hover, .own a:hover { text-decoration-color: currentColor; }
 ul.listing li.refused span { color: var(--muted); font-size: 0.8em; }
 /* A history: hash and date are the program's and mono, subject and body the
    author's and serif. A page's top line leads to its history. */
@@ -275,12 +275,16 @@ details.latest > div.versions { padding: 0.4em 0.8em; }
 ol.versions > li { padding: 0.15em 0.8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 ol.versions > li.here { background: var(--target); }
 ol.versions > li.log { border-top: 1px solid var(--rule); margin-top: 0.3em; padding-top: 0.3em; }
-/* An error reads at a listing's size, not code's. Below a 404, where the
-   path went and the names close to it read the same way. */
-pre.error { white-space: pre-wrap; overflow-wrap: anywhere; font-size: inherit; line-height: inherit; }
-div.gone { text-align: left; }
-div.gone p { margin: 0.6em 0 0; }
-div.gone ul.listing { margin: 0.2em 0 0; }
+/* An error reads at a listing's size, not code's. It wraps, so it needs
+   no scroll box, which a pre has by default. */
+pre.error { white-space: pre-wrap; font-size: inherit; line-height: inherit; overflow: visible; }
+/* A 404's table: a lead column of labels, then values that wrap beside
+   it, so a long URL or subject keeps its column. Rows are spaced as a
+   listing's. */
+table.gone { margin: 0; text-align: left; }
+table.gone th, table.gone td { border: 0; padding: 0.075em 0; vertical-align: top; text-align: left; font-weight: normal; }
+table.gone th { padding-right: 1em; white-space: nowrap; }
+body.index table.gone { font-size: 0.8em; margin-bottom: 1em; }
 /* A missing path's 404 turns like a coin: the digits go edge-on and back,
    slow down, rock once and stop facing the reader. Each face is text. */
 p.coin { margin: 0.2em 0 0.1em; line-height: 1; text-align: center; perspective: 18em; font-family: ui-monospace, "Iosevka", monospace; font-size: 6em; color: var(--text); }

@@ -470,7 +470,7 @@ func TestNotFoundCoin(t *testing.T) {
 	s, _, _ := serveTree(t)
 	rec := get(s.handler(), "/nowhere.md")
 	body := rec.Body.String()
-	if rec.Code != http.StatusNotFound || !strings.Contains(body, `<p class="coin" aria-hidden="true">`) || !strings.Contains(body, "Not found:\nhttp://127.31.1.1:8080/nowhere.md</pre>") {
+	if rec.Code != http.StatusNotFound || !strings.Contains(body, `<p class="coin" aria-hidden="true">`) || !strings.Contains(body, `<th>not found</th><td><span class="seg">http://</span><wbr><span class="seg">127.31.1.1:8080/</span><wbr><span class="seg">nowhere.md</span></td>`) {
 		t.Errorf("status %d, want 404 with the coin and the message: %s", rec.Code, body)
 	}
 }

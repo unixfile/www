@@ -526,7 +526,7 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 	if prefix := r.PostFormValue("tree"); prefix != "" {
 		t := s.byPrefix(prefix)
 		if t == nil {
-			s.serveIndex(w, r, http.StatusNotFound, "Not served: "+prefix)
+			s.serveIndex(w, r, http.StatusNotFound, errorLine("Not served: "+prefix))
 			return
 		}
 		trees, crumbs, what, why = []*tree{t}, []crumb{t.rootCrumb()}, "Stopped serving "+t.label, "Delete lock button"
@@ -558,6 +558,11 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 	// stop only withdraws; the hub shuts down on its own goroutine, since
 	// Shutdown waits for this response to finish.
 	s.stop(trees, why)
+}
+
+// errorLine is a failure's message as a page shows it.
+func errorLine(msg string) string {
+	return "<pre class=\"error\">" + template.HTMLEscapeString(msg) + "</pre>\n"
 }
 
 // sameOrigin trusts Sec-Fetch-Site when present: browsers set it and pages
@@ -594,7 +599,7 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/":
 		s.serveIndex(w, r, http.StatusOK, "")
 	default:
-		s.serveIndex(w, r, http.StatusNotFound, "Not found:\n"+fullURL(r))
+		s.serveIndex(w, r, http.StatusNotFound, coin+`<table class="gone">`+"\n"+notFoundRow(r)+"</table>\n")
 	}
 }
 
@@ -607,15 +612,14 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 // and a make install build both show. It answers at / and for paths
 // outside every tree.
 func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, msg string) {
+	// msg is HTML: an errorLine, or a 404's table.
 	if s.shared {
 		s.serveSharedIndex(w, r, status, msg)
 		return
 	}
 	esc := template.HTMLEscapeString
 	var body strings.Builder
-	if msg != "" {
-		body.WriteString("<pre class=\"error\">" + esc(msg) + "</pre>\n")
-	}
+	body.WriteString(msg)
 	servers := s.servers()
 	trees := s.list()
 	// One lead width for every table, so the times line up down the page.
@@ -829,9 +833,7 @@ func segments(p string) string {
 func (s *server) serveSharedIndex(w http.ResponseWriter, r *http.Request, status int, msg string) {
 	esc := template.HTMLEscapeString
 	var body strings.Builder
-	if msg != "" {
-		body.WriteString("<pre class=\"error\">" + esc(msg) + "</pre>\n")
-	}
+	body.WriteString(msg)
 	trees := slices.DeleteFunc(s.list(), func(t *tree) bool { return t.secret })
 	if len(trees) == 0 {
 		body.WriteString("<p class=\"own\">No tree is listed here.</p>\n")
@@ -1306,23 +1308,25 @@ func (t *tree) why(ref *refusal) string {
 	return ref.Error()
 }
 
-// fullURL is the URL r asked for, without its query, so "Not found"
-// names it whole when copied away from the address bar. It goes on a line
-// of its own, since a URL often runs past the column.
+// coin is the 404 that turns like a coin above a missing path's table.
+const coin = `<p class="coin" aria-hidden="true"><span><span>404</span><span>404</span></span></p>`
+
+// fullURL is the URL r asked for, without its query, so "not found"
+// names it whole when copied away from the address bar.
 func fullURL(r *http.Request) string {
 	return (&url.URL{Scheme: "http", Host: r.Host, Path: r.URL.Path}).String()
 }
 
 // notFound is the page for a path the tree lacks: 404 turns like a coin
-// above the message, and below it, where git says the path went and the
-// names close to it. Other failures say why in the plain line alone.
+// above a table of labelled rows, the URL first, then where git says the
+// path went and the names close to it. Other failures say why in the
+// plain line alone.
 func (t *tree) notFound(w http.ResponseWriter, r *http.Request, name string) {
 	t.render(w, r, http.StatusNotFound, page{
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),
 		Kind:   "error",
-		Body: template.HTML(`<p class="coin" aria-hidden="true"><span><span>404</span><span>404</span></span></p>` +
-			`<pre class="error">Not found:` + "\n" + template.HTMLEscapeString(fullURL(r)) + "</pre>\n" + t.goneBody(r.Context(), name)),
+		Body: template.HTML(coin + `<table class="gone">` + "\n" + notFoundRow(r) + t.goneRows(r.Context(), name) + "</table>\n"),
 	})
 }
 
