@@ -1286,14 +1286,15 @@ func (t *tree) why(ref *refusal) string {
 }
 
 // notFound is the page for a path the tree lacks: 404 turns like a coin
-// above the message. Other failures say why in the plain line alone.
+// above the message, and below it, where git says the path went and the
+// names close to it. Other failures say why in the plain line alone.
 func (t *tree) notFound(w http.ResponseWriter, r *http.Request, name string) {
 	t.render(w, r, http.StatusNotFound, page{
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),
 		Kind:   "error",
 		Body: template.HTML(`<p class="coin" aria-hidden="true"><span><span>404</span><span>404</span></span></p>` +
-			`<pre class="error">Not found: ` + template.HTMLEscapeString(name) + "</pre>"),
+			`<pre class="error">Not found: ` + template.HTMLEscapeString(name) + "</pre>\n" + t.goneBody(r.Context(), name)),
 	})
 }
 
