@@ -168,7 +168,8 @@
 	// searches its directory, names first, then lines, and the results
 	// stand in for the page: its own entries first, then what lies deeper,
 	// dimmed. Any other page filters itself in place: lines
-	// of code, blocks of a doc, commits of a history, each match marked.
+	// of code, blocks of a doc, commits of a history, rows of a syntax
+	// tree, each match marked.
 	// The directory's results follow, dimmed, without this file. Escape or
 	// an empty box brings the page back, with any update that arrived
 	// meanwhile. The query rides in the URL as ?q=, so Back from a result
@@ -177,16 +178,19 @@
 	let timer = null;
 	let ctl = null;
 	let hidden = [];
+	let opened = [];
 	let matches = [];
 	const box = () => document.querySelector("input.search");
 	const searching = () => {
 		const b = box();
 		return !!b && b.value.trim() !== "";
 	};
-	const filters = () => ["code", "doc", "log", "commit"].includes(document.body.className);
+	const filters = () => ["code", "doc", "log", "commit", "tree"].includes(document.body.className);
 	const unfilter = () => {
 		for (const el of hidden) el.hidden = false;
 		hidden = [];
+		for (const d of opened) d.open = false;
+		opened = [];
 		matches = [];
 		select(null);
 		for (const el of document.querySelectorAll(".filtering, p.unfound")) {
@@ -207,9 +211,12 @@
 		}
 	};
 	// mark adds a range for each match of q in el's text, across the
-	// spans that colour it.
-	const mark = (el, q, ranges) => {
-		const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+	// spans that colour it. Text inside an element that matches skip
+	// counts for nothing.
+	const mark = (el, q, ranges, skip) => {
+		const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+			acceptNode: (n) => (skip && n.parentElement.closest(skip) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+		});
 		const nodes = [];
 		let text = "";
 		for (let n; (n = walk.nextNode()); ) {
@@ -241,12 +248,63 @@
 		mark(el, q, ranges);
 		return true;
 	};
+	// rowText is a syntax tree row's field, kind and text, without the
+	// link to its lines, whose numbers would match a query of digits. It
+	// is kept per row, since a large tree has tens of thousands.
+	const rowTexts = new WeakMap();
+	const rowText = (row) => {
+		let t = rowTexts.get(row);
+		if (t === undefined) {
+			t = "";
+			for (const n of row.childNodes) if (n.nodeName !== "A") t += n.textContent;
+			rowTexts.set(row, (t = t.toLowerCase()));
+		}
+		return t;
+	};
+	// filterTree keeps each row of a syntax tree that holds q and the folds
+	// above it, opened so the row shows; unfilter closes them again. A kept
+	// fold with no match below it keeps all its rows, so opening it shows
+	// its subtree whole. What goes is collected in hide, only the outermost
+	// of it, so a query that drops most of a large tree hides a few folds.
+	// It reports whether anything in el is kept.
+	const filterTree = (el, q, ranges, hide) => {
+		let any = false;
+		for (const c of el.children) {
+			if (c.matches("summary")) continue;
+			const fold = c.matches("details");
+			const row = fold ? c.firstElementChild : c;
+			const own = rowText(row).includes(q);
+			if (own) {
+				matches.push(row);
+				mark(row, q, ranges, "a");
+			}
+			const from = hide.length;
+			const below = fold && filterTree(c, q, ranges, hide);
+			if (!below) hide.length = from;
+			if (below && !c.open) {
+				c.open = true;
+				opened.push(c);
+			}
+			if (own || below) any = true;
+			else hide.push(c);
+		}
+		return any;
+	};
 	// filter hides what in el does not hold q and reports whether anything
 	// is left. Lines of code and of diffs, list items, table rows and a
 	// container's children are weighed one by one; any other block stays
 	// or goes whole. A file's name in a diff stays while its lines do.
 	const filter = (el, q, ranges) => {
 		let parts = null;
+		if (el.matches("div.syntax")) {
+			const hide = [];
+			const any = filterTree(el, q, ranges, hide);
+			for (const h of any ? hide : [el]) {
+				h.hidden = true;
+				hidden.push(h);
+			}
+			return any;
+		}
 		if (el.matches("div.sourceCode")) {
 			const pre = el.querySelector("pre");
 			pre.classList.add("filtering");
@@ -402,8 +460,11 @@
 	};
 	// jump leaves the search for a match in the whole page: a line of code
 	// by its anchor, anything else scrolled to the middle.
+	// jump shows el in the full page; a match in a syntax tree, or in a
+	// doc's details, has its folds opened, since clearing closes them.
 	const jump = (el) => {
 		clearSearch();
+		for (let d = el.parentElement; d; d = d.parentElement) if (d.matches("details") && d.firstElementChild !== el) d.open = true;
 		if (el.id) location.hash = el.id;
 		else el.scrollIntoView({ block: "center" });
 		hold();

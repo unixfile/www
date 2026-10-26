@@ -26,14 +26,14 @@ func fakeSyntax(t *testing.T) {
 func TestSyntaxPage(t *testing.T) {
 	fakeSyntax(t)
 	src := []byte("func f() {\n\treturn\n}\n")
-	h, err := syntaxPage(context.Background(), "a.go", "/t/a.go", src)
+	h, err := syntaxPage(context.Background(), "a.go", pageHref("/t/a.go"), src)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`<details open><summary><span class="kind">source_file</span> <code>func f() { …</code> <a href="/t/a.go#L1-L3">1–3</a></summary>`,
-		`<details><summary><span class="kind">function_declaration</span> <code>func f() { …</code> <a href="/t/a.go#L1-L3">1–3</a></summary>`,
-		`<div><span class="field">name:</span> <span class="kind">identifier</span> <code>f</code> <a href="/t/a.go#L1">1</a></div>`,
+		`<details open><summary><b>source_file</b> <code>func f() { …</code> <a href="a.go#L1-L3">1–3</a></summary>`,
+		`<details><summary><b>function_declaration</b> <code>func f() { …</code> <a href="a.go#L1-L3">1–3</a></summary>`,
+		`<div><i>name:</i> <b>identifier</b> <code>f</code> <a href="a.go#L1">1</a></div>`,
 	} {
 		if !strings.Contains(h, want) {
 			t.Errorf("missing %s in\n%s", want, h)

@@ -543,7 +543,8 @@ div.syntax { font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5
 div.syntax details > :not(summary) { margin-left: 2ch; padding-left: 1ch; border-left: 1px solid var(--rule); }
 div.syntax > div, div.syntax details > div { padding-left: 2ch; }
 div.syntax summary { cursor: pointer; }
-div.syntax .field { color: var(--muted); }
+div.syntax i { font-style: normal; color: var(--muted); }
+div.syntax b { font-weight: normal; }
 div.syntax code { color: var(--muted); font-size: 1em; }
 div.syntax a { color: var(--gutter); text-decoration-color: var(--rule); margin-left: 0.5ch; }
 div.syntax a:hover { text-decoration-color: currentColor; }

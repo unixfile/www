@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -116,42 +117,70 @@ func syntaxPage(ctx context.Context, name, href string, src []byte) (string, err
 		return "", err
 	}
 	lines := bytes.Split(src, []byte("\n"))
-	esc := template.HTMLEscapeString
 	var b strings.Builder
+	// About 120 bytes a row, so the builder grows about once.
+	b.Grow(len(nodes) * 128)
 	b.WriteString("<div class=\"syntax\">\n")
+	var num, num2 [20]byte
 	open := 0 // folds left open
 	for i, n := range nodes {
 		for ; open > n.depth; open-- {
 			b.WriteString("</details>\n")
+		}
+		folds := i+1 < len(nodes) && nodes[i+1].depth > n.depth
+		switch {
+		case folds && n.depth == 0:
+			b.WriteString("<details open><summary>")
+		case folds:
+			b.WriteString("<details><summary>")
+		default:
+			b.WriteString("<div>")
+		}
+		// The row: its field in its parent, its kind, its text, and its
+		// lines as a link. Each row repeats these tags, so they are short.
+		if n.field != "" {
+			b.WriteString("<i>")
+			escapeHTML(&b, n.field)
+			b.WriteString(":</i> ")
+		}
+		b.WriteString("<b>")
+		escapeHTML(&b, n.kind)
+		b.WriteString("</b>")
+		if text := excerpt(lines, n); text != "" {
+			b.WriteString(" <code>")
+			escapeHTML(&b, text)
+			b.WriteString("</code>")
 		}
 		er := n.er
 		// A node that ends at the start of a row ends on the row before.
 		if n.ec == 0 && er > n.sr {
 			er--
 		}
-		span := "L" + strconv.Itoa(n.sr+1)
+		first := strconv.AppendInt(num[:0], int64(n.sr+1), 10)
+		var last []byte
 		if er > n.sr {
-			span += "-L" + strconv.Itoa(er+1)
+			last = strconv.AppendInt(num2[:0], int64(er+1), 10)
 		}
-		var row strings.Builder
-		if n.field != "" {
-			row.WriteString("<span class=\"field\">" + esc(n.field) + ":</span> ")
+		b.WriteString(` <a href="`)
+		escapeHTML(&b, href)
+		b.WriteString("#L")
+		b.Write(first)
+		if last != nil {
+			b.WriteString("-L")
+			b.Write(last)
 		}
-		row.WriteString("<span class=\"kind\">" + esc(n.kind) + "</span>")
-		if text := excerpt(lines, n); text != "" {
-			row.WriteString(" <code>" + esc(text) + "</code>")
+		b.WriteString(`">`)
+		b.Write(first)
+		if last != nil {
+			b.WriteString("–")
+			b.Write(last)
 		}
-		row.WriteString(" <a href=\"" + esc(href+"#"+span) + "\">" + esc(strings.ReplaceAll(span[1:], "-L", "–")) + "</a>")
-		if i+1 < len(nodes) && nodes[i+1].depth > n.depth {
-			if n.depth == 0 {
-				b.WriteString("<details open>")
-			} else {
-				b.WriteString("<details>")
-			}
-			b.WriteString("<summary>" + row.String() + "</summary>\n")
+		b.WriteString("</a>")
+		if folds {
+			b.WriteString("</summary>\n")
 			open++
 		} else {
-			b.WriteString("<div>" + row.String() + "</div>\n")
+			b.WriteString("</div>\n")
 		}
 	}
 	for ; open > 0; open-- {
@@ -227,8 +256,10 @@ func treeNote(name string, err error) string {
 	return "<p class=\"own warn\">No syntax tree: " + esc(err.Error()) + "</p>\n"
 }
 
-// pageHref is the code page of urlPath, with no query, for a tree's line
-// links.
+// pageHref is the code page of urlPath for a tree's line links: its base
+// name, which from the tree page, the same path with ?tree, leads to the
+// flat page. Every row holds the link, so a full path would add its
+// length to each.
 func pageHref(urlPath string) string {
-	return (&url.URL{Path: urlPath}).String()
+	return (&url.URL{Path: path.Base(urlPath)}).String()
 }
