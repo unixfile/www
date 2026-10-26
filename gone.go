@@ -296,7 +296,7 @@ func (s *server) serveStray(w http.ResponseWriter, r *http.Request) {
 		label = "served"
 	}
 	var b strings.Builder
-	b.WriteString(coin + `<table class="gone">` + "\n" + notFoundRow(r))
+	b.WriteString(coin("404") + `<table class="gone">` + "\n" + notFoundRow(r))
 	for i, t := range trees {
 		if i == 5 {
 			break
