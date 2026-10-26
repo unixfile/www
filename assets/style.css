@@ -149,20 +149,18 @@ header nav > *, .seg { display: inline-block; max-width: 100%; overflow-wrap: an
 }
 header > span { display: inline-flex; gap: 1em; align-items: baseline; flex: none; margin-left: auto; }
 header form { display: inline; }
-/* Buttons are raised, as the copy button is: light above and left,
-   shadow below and right, sunk while pressed, square corners. */
+/* Buttons are flat, as on printed paper: one border in the text's
+   colour, square corners, no bevel. */
 header button, table.locks button {
   font: inherit;
   color: inherit;
   background: var(--page);
-  border: 1px solid;
-  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
+  border: 1px solid var(--text);
   border-radius: 0;
   padding: 0.15em 0.7em;
   cursor: pointer;
   white-space: nowrap;
 }
-header button:active, table.locks button:active { border-color: var(--shadow) var(--light) var(--light) var(--shadow); }
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
 pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound { font-family: ui-monospace, "Iosevka", monospace; }
@@ -264,7 +262,7 @@ details.latest a, details.latest span.subject { color: var(--text); }
 details.latest > summary:hover span.subject { text-decoration: underline; text-decoration-color: var(--rule); }
 details.latest > div.versions, details.latest > ol.versions { position: absolute; z-index: 1; top: 100%; left: 0; margin: 0;
   max-height: 60vh; overflow-y: auto; min-width: 20em; max-width: 100%; padding: 0.4em 0; list-style: none;
-  background: var(--page); border: 1px solid var(--rule); box-shadow: 0 2px 6px var(--shadow); }
+  background: var(--page); border: 1px solid var(--text); }
 details.latest > div.versions { padding: 0.4em 0.8em; }
 ol.versions > li { padding: 0.15em 0.8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 ol.versions > li.here { background: var(--target); }
@@ -279,7 +277,7 @@ p.reading::after { content: "..."; display: inline-block; vertical-align: bottom
 ul.listing .desc { color: var(--muted); font-size: 0.8em; margin-left: 1em; }
 header .age { color: var(--muted); }
 /* Kill server reaches every tree, so it alone wears the danger colour. */
-header button.kill { background: var(--danger); color: var(--page); }
+header button.kill { background: var(--danger); border-color: var(--danger); color: var(--page); }
 p.own { font-size: 0.8em; text-align: left; hyphens: none; }
 p.warn { color: var(--danger); }
 p.own code { font-size: inherit; }
@@ -307,14 +305,9 @@ main > .changed { animation: changed 3s ease-in; }
 @keyframes changed { from { background-color: var(--target); } to { background-color: transparent; } }
 /* The search box has a row of its own under the header and leaves the
    row's right end to the button that copies the page's text and the one
-   that copies a link. Both take
-   the scope boxes' look, a Windows 3.1 screen in greys: the box is a
-   sunken field, shadow above and left, light below and right; the button
-   is raised, the inverse, and sinks while pressed. Both keep the page's
-   colour: a grey fill made the box the heaviest thing above the content
-   and said nothing. Corners are square, as the
-   boxes' are. The box holds the keyboard on every page, so focus changes
-   nothing. */
+   that copies a link. All three are flat, as on printed paper: one
+   border in the text's colour, square corners, the page's colour inside.
+   The box holds the keyboard on every page, so focus changes nothing. */
 div.search {
   display: flex;
   gap: 1em;
@@ -332,9 +325,8 @@ div.search {
 }
 input.search, button.copy, button.share {
   font: inherit;
-  border: 1px solid;
+  border: 1px solid var(--text);
   border-radius: 0;
-  border-color: var(--shadow) var(--light) var(--light) var(--shadow);
 }
 input.search {
   flex: 1 1 auto;
@@ -347,15 +339,13 @@ input.search:focus { outline: none; }
 span.tools { display: flex; gap: 1em; flex: none; }
 button.copy, button.share {
   flex: none;
-  color: var(--muted);
+  color: inherit;
   background: var(--page);
-  border-color: var(--light) var(--shadow) var(--shadow) var(--light);
   padding: 0.15em 0.7em;
   cursor: pointer;
   white-space: nowrap;
 }
-button.copy:hover, button.copy:focus-visible, button.share:hover, button.share:focus-visible { color: inherit; outline: none; }
-button.copy:active, button.share:active { border-color: var(--shadow) var(--light) var(--light) var(--shadow); }
+button.copy:focus-visible, button.share:focus-visible { outline: none; }
 /* While the copy button reads the page's text, the program's own lines and links
    leave the layout, so only the page's content is copied: a listing's
    history and parent entries, a code page's view links and scope boxes,
