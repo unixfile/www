@@ -2,5 +2,5 @@ build/
 # go build without -o
 /www
 # www's locks for serving this tree
-/*.lock
-/*.LOCK
+/*.*.*.*-*.lock
+/*.*.*.*-*.LOCK
