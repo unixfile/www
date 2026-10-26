@@ -474,3 +474,25 @@ func TestNotFoundCoin(t *testing.T) {
 		t.Errorf("status %d, want 404 with the coin and the message: %s", rec.Code, body)
 	}
 }
+
+// A server's build and start show on the index only with --stamp; they
+// serve debugging alone.
+func TestIndexTimesOnlyWithStamp(t *testing.T) {
+	defer func() { showBuilt = false }()
+	b := indexServer{binary: "/usr/bin/www", built: time.Now(), commit: "1f2241d", since: time.Now()}
+	for _, show := range []bool{false, true} {
+		showBuilt = show
+		got := b.account()
+		if has := strings.Contains(got, "built ") && strings.Contains(got, "up since "); has != show {
+			t.Errorf("stamp %t: %s", show, got)
+		}
+		if !strings.Contains(got, "www") {
+			t.Errorf("stamp %t: the binary is missing: %s", show, got)
+		}
+	}
+	showBuilt = false
+	s, _, _ := serveTree(t)
+	if body := get(s.handler(), "/").Body.String(); strings.Contains(body, "since ") || strings.Contains(body, "class=\"since") {
+		t.Errorf("index without --stamp shows times: %s", body)
+	}
+}

@@ -136,7 +136,9 @@ func (a about) status() string {
 
 // built is when the running binary was written, read once at start, so
 // each page can say which build served it. showBuilt, set by --stamp,
-// puts it above the header.
+// puts it above the header, and on the index, each server's build and
+// start and when each lock was written. Without it they stay hidden, as
+// they serve debugging alone.
 var showBuilt bool
 
 var buildCommit = buildRev()
@@ -616,14 +618,16 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 	var sinces []string
 	ownSince := make([]string, len(trees))
 	for i, t := range trees {
-		if t.lock != nil {
+		if t.lock != nil && showBuilt {
 			ownSince[i] = "since " + clock(t.lock.info.ModTime())
 		}
 	}
 	sinces = append(sinces, ownSince...)
 	for _, srv := range servers {
 		for _, t := range srv.trees {
-			sinces = append(sinces, "since "+clock(t.since))
+			if showBuilt {
+				sinces = append(sinces, "since "+clock(t.since))
+			}
 		}
 	}
 	lead := leadStyle(sinces)
@@ -644,8 +648,12 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 		if !srv.own {
 			body.WriteString("<table class=\"locks own\"" + lead + ">\n")
 			for _, t := range srv.trees {
-				fmt.Fprintf(&body, "<tr><td><span class=\"since lead\">%s</span> <a href=\"%s\" title=\"%s\">%s</a></td></tr>\n",
-					"since "+clock(t.since), esc(t.url), esc(t.lockPath), segments(tildePath(t.dir)))
+				since := ""
+				if showBuilt {
+					since = "since " + clock(t.since)
+				}
+				fmt.Fprintf(&body, "<tr><td>%s<a href=\"%s\" title=\"%s\">%s</a></td></tr>\n",
+					sinceLead(since), esc(t.url), esc(t.lockPath), segments(tildePath(t.dir)))
 			}
 			body.WriteString("</table>\n")
 			continue
@@ -660,10 +668,10 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 			if t.lock != nil {
 				lockPath = t.lock.path
 			}
-			fmt.Fprintf(&body, "<tr><td><span class=\"since lead\">%s</span> <a href=\"%s\" title=\"%s\">%s</a></td>"+
+			fmt.Fprintf(&body, "<tr><td>%s<a href=\"%s\" title=\"%s\">%s</a></td>"+
 				"<td><form method=\"post\" action=\""+ownPath+"stop\"><input type=\"hidden\" name=\"tree\" value=\"%s\">"+
 				"<input type=\"hidden\" name=\"from\" value=\"index\"><button>Delete lock</button></form></td></tr>\n",
-				ownSince[i], esc(t.prefixURL()), esc(lockPath), segments(t.label), esc(t.prefix))
+				sinceLead(ownSince[i]), esc(t.prefixURL()), esc(lockPath), segments(t.label), esc(t.prefix))
 		}
 		body.WriteString("</table>\n")
 	}
@@ -680,6 +688,15 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 		Body: template.HTML(body.String())})
 }
 
+// sinceLead is a tree's lock time leading its row on the index, or ""
+// when the index shows none.
+func sinceLead(since string) string {
+	if since == "" {
+		return ""
+	}
+	return "<span class=\"since lead\">" + template.HTMLEscapeString(since) + "</span> "
+}
+
 // indexServer is a server, or an install with none, as the index shows
 // it.
 type indexServer struct {
@@ -694,9 +711,9 @@ type indexServer struct {
 	trees      []servedTree // another server's trees
 }
 
-// account is the line under a server's address: its binary, the build it
-// runs and since when. A server whose binary changed on disk names no
-// build, since the file on disk is not the code it runs.
+// account is the line under a server's address: its binary, and with
+// --stamp the build it runs and since when. A server whose binary changed
+// on disk names no build, since the file on disk is not the code it runs.
 func (b indexServer) account() string {
 	esc := template.HTMLEscapeString
 	var parts []string
@@ -705,10 +722,10 @@ func (b indexServer) account() string {
 	} else {
 		parts = append(parts, "<code>"+segments(tildePath(b.binary))+"</code>")
 	}
-	if !b.stale && !b.built.IsZero() {
+	if showBuilt && !b.stale && !b.built.IsZero() {
 		parts = append(parts, "built "+esc(clock(b.built))+" from "+esc(b.commit))
 	}
-	if !b.since.IsZero() {
+	if showBuilt && !b.since.IsZero() {
 		parts = append(parts, "up since "+esc(clock(b.since)))
 	}
 	return strings.Join(parts, ", ")
