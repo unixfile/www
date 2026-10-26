@@ -16,7 +16,7 @@ func TestParseArgs(t *testing.T) {
 		want config
 	}{
 		{nil, config{dir: "."}},
-		{[]string{"--foreground", "--stamp"}, config{dir: ".", fg: true, stamp: true}},
+		{[]string{"--foreground", "--debug"}, config{dir: ".", fg: true, debug: true}},
 		{[]string{"--cache=64M"}, config{dir: ".", cache: "64M"}},
 		{[]string{"--cache", "0"}, config{dir: ".", cache: "0"}},
 		{[]string{"docs", "--foreground", "--no-open"}, config{dir: "docs", fg: true, noopen: true}},

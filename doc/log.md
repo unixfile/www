@@ -20,6 +20,7 @@ Each server's start with its binary and commit, eg `/usr/bin/www 54cca2a`, and `
 Each tree served and withdrawn, with the cause: a deleted lock, a Delete lock or Kill server button, or a signal. Then the server's stop and exit.
 Stale locks and registry links cleared after a crash, and the SIGTERM that `--kill` and `--restart` send.
 Every page request, with method, path, status and time taken. Live reload streams, the stylesheet, fonts and the favicon come with every page and are left out. A shared server adds the visitor's address.
+Bug reports from the bug button that `--debug` shows, as one line starting `bug:` with the page's URL, the note, the window, the browser, the build and the snapshot's path.
 Faults: render and git failures, refused links, inotify falling back to polling, and what net/http reports. A detached server's stderr goes to the same place, so a panic is kept.
 
 A secret share's token never reaches the log. Paths do, and on shares so do visitors' addresses. Your user journal is readable by you and by members of `adm` and `systemd-journal`.

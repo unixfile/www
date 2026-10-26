@@ -151,7 +151,7 @@ header > span { display: inline-flex; gap: 1em; align-items: baseline; flex: non
 header form { display: inline; }
 /* Buttons are flat, as on printed paper: one border in the text's
    colour, square corners, no bevel. */
-header button, table.locks button {
+header button, table.locks button, p.built button.bug {
   font: inherit;
   color: inherit;
   background: var(--page);
@@ -161,6 +161,9 @@ header button, table.locks button {
   cursor: pointer;
   white-space: nowrap;
 }
+/* The bug button is flat as every button is, but in the stamp's faint
+   colour and with little padding, so it stays as quiet as the stamp. */
+p.built button.bug { color: inherit; border-color: currentColor; padding: 0 0.4em; margin-left: 0.4em; }
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
 pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, div.gone { font-family: ui-monospace, "Iosevka", monospace; }
@@ -274,7 +277,7 @@ ol.versions > li.here { background: var(--target); }
 ol.versions > li.log { border-top: 1px solid var(--rule); margin-top: 0.3em; padding-top: 0.3em; }
 /* An error reads at a listing's size, not code's. Below a 404, where the
    path went and the names close to it read the same way. */
-pre.error { white-space: pre-wrap; font-size: inherit; line-height: inherit; }
+pre.error { white-space: pre-wrap; overflow-wrap: anywhere; font-size: inherit; line-height: inherit; }
 div.gone { text-align: left; }
 div.gone p { margin: 0.6em 0 0; }
 div.gone ul.listing { margin: 0.2em 0 0; }

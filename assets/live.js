@@ -514,6 +514,35 @@
 		backlinks();
 	});
 
+	// The bug button, in the stamp with --debug, logs the page as a bug:
+	// its URL, the selected text as the note, the window's size and scroll,
+	// the browser, and a snapshot of the page as it stands, scripts taken
+	// out, so the snapshot shows what the reader saw without running again.
+	// It says logged or failed, then bug again.
+	document.addEventListener("click", (e) => {
+		const b = e.target.closest("button.bug");
+		if (!b) return;
+		const page = document.documentElement.cloneNode(true);
+		for (const s of page.querySelectorAll("script")) s.remove();
+		const inputs = page.querySelectorAll("input");
+		document.querySelectorAll("input").forEach((el, i) => inputs[i] && inputs[i].setAttribute("value", el.value));
+		const base = document.createElement("base");
+		base.href = location.href;
+		page.querySelector("head").prepend(base);
+		const body = new URLSearchParams({
+			url: location.href,
+			note: String(getSelection()).trim(),
+			view: innerWidth + "x" + innerHeight + "+" + Math.round(scrollY),
+			ua: navigator.userAgent,
+			page: "<!doctype html>\n" + page.outerHTML,
+		});
+		const said = (word) => {
+			b.textContent = word;
+			setTimeout(() => (b.textContent = "bug"), 2000);
+		};
+		fetch(b.dataset.post, { method: "POST", body }).then((r) => said(r.ok ? "logged" : "failed"), () => said("failed"));
+	});
+
 	// The build stamp counts the seconds since the binary was built. It is
 	// looked up on each tick, since a doc's update replaces it.
 	setInterval(() => {

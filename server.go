@@ -135,11 +135,11 @@ func (a about) status() string {
 }
 
 // built is when the running binary was written, read once at start, so
-// each page can say which build served it. showBuilt, set by --stamp,
+// each page can say which build served it. debugOn, set by --debug,
 // puts it above the header, and on the index, each server's build and
 // start and when each lock was written. Without it they stay hidden, as
 // they serve debugging alone.
-var showBuilt bool
+var debugOn bool
 
 var buildCommit = buildRev()
 
@@ -357,6 +357,10 @@ func (s *server) handler() http.Handler {
 	// address has none either; its server stops with the default address.
 	if !s.shared && s.web == nil {
 		mux.HandleFunc("POST "+ownPath+"stop", s.handleStop)
+	}
+	// The bug button is there only with --debug, which a share never shows.
+	if debugOn && !s.shared {
+		mux.HandleFunc("POST "+ownPath+"bug", s.handleBug)
 	}
 	mux.HandleFunc("GET "+ownPath+"live", s.handleLive)
 	mux.HandleFunc("GET /", s.handlePath)
@@ -590,7 +594,7 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/":
 		s.serveIndex(w, r, http.StatusOK, "")
 	default:
-		s.serveIndex(w, r, http.StatusNotFound, "Not found: "+fullURL(r))
+		s.serveIndex(w, r, http.StatusNotFound, "Not found:\n"+fullURL(r))
 	}
 }
 
@@ -618,14 +622,14 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 	var sinces []string
 	ownSince := make([]string, len(trees))
 	for i, t := range trees {
-		if t.lock != nil && showBuilt {
+		if t.lock != nil && debugOn {
 			ownSince[i] = "since " + clock(t.lock.info.ModTime())
 		}
 	}
 	sinces = append(sinces, ownSince...)
 	for _, srv := range servers {
 		for _, t := range srv.trees {
-			if showBuilt {
+			if debugOn {
 				sinces = append(sinces, "since "+clock(t.since))
 			}
 		}
@@ -649,7 +653,7 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 			body.WriteString("<table class=\"locks own\"" + lead + ">\n")
 			for _, t := range srv.trees {
 				since := ""
-				if showBuilt {
+				if debugOn {
 					since = "since " + clock(t.since)
 				}
 				fmt.Fprintf(&body, "<tr><td>%s<a href=\"%s\" title=\"%s\">%s</a></td></tr>\n",
@@ -712,7 +716,7 @@ type indexServer struct {
 }
 
 // account is the line under a server's address: its binary, and with
-// --stamp the build it runs and since when. A server whose binary changed
+// --debug the build it runs and since when. A server whose binary changed
 // on disk names no build, since the file on disk is not the code it runs.
 func (b indexServer) account() string {
 	esc := template.HTMLEscapeString
@@ -722,10 +726,10 @@ func (b indexServer) account() string {
 	} else {
 		parts = append(parts, "<code>"+segments(tildePath(b.binary))+"</code>")
 	}
-	if showBuilt && !b.stale && !b.built.IsZero() {
+	if debugOn && !b.stale && !b.built.IsZero() {
 		parts = append(parts, "built "+esc(clock(b.built))+" from "+esc(b.commit))
 	}
-	if showBuilt && !b.since.IsZero() {
+	if debugOn && !b.since.IsZero() {
 		parts = append(parts, "up since "+esc(clock(b.since)))
 	}
 	return strings.Join(parts, ", ")
@@ -1189,7 +1193,7 @@ type page struct {
 	// permanent URL for it, which the share button copies; ForgeLines is
 	// how that forge marks lines.
 	Forge, ForgeLines string
-	Built   *stamp // when the binary was built, above the header, with --stamp; none on a share
+	Built   *stamp // when the binary was built, above the header, with --debug; none on a share
 }
 
 func (t *tree) title(name string) string {
@@ -1248,7 +1252,7 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	if p.Live == "" {
 		p.Live = liveURL(r)
 	}
-	if showBuilt && !p.Shared && !built.IsZero() {
+	if debugOn && !p.Shared && !built.IsZero() {
 		p.Built = &stamp{Clock: clock(built), Millis: built.UnixMilli(), Ago: int(time.Since(built).Seconds()),
 			Commit: buildCommit, Rendered: rendered(r)}
 	}
@@ -1302,8 +1306,9 @@ func (t *tree) why(ref *refusal) string {
 	return ref.Error()
 }
 
-// fullURL is the URL r asked for, without its query, so a "Not found"
-// line names it whole when copied away from the address bar.
+// fullURL is the URL r asked for, without its query, so "Not found"
+// names it whole when copied away from the address bar. It goes on a line
+// of its own, since a URL often runs past the column.
 func fullURL(r *http.Request) string {
 	return (&url.URL{Scheme: "http", Host: r.Host, Path: r.URL.Path}).String()
 }
@@ -1317,7 +1322,7 @@ func (t *tree) notFound(w http.ResponseWriter, r *http.Request, name string) {
 		Crumbs: t.crumbs(name),
 		Kind:   "error",
 		Body: template.HTML(`<p class="coin" aria-hidden="true"><span><span>404</span><span>404</span></span></p>` +
-			`<pre class="error">Not found: ` + template.HTMLEscapeString(fullURL(r)) + "</pre>\n" + t.goneBody(r.Context(), name)),
+			`<pre class="error">Not found:` + "\n" + template.HTMLEscapeString(fullURL(r)) + "</pre>\n" + t.goneBody(r.Context(), name)),
 	})
 }
 

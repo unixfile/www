@@ -384,20 +384,20 @@ func TestLocalHost(t *testing.T) {
 	}
 }
 
-// The build stamp shows only with --stamp, and never on a share. It names
+// The build stamp shows only with --debug, and never on a share. It names
 // the commit and the render time.
 func TestBuildStamp(t *testing.T) {
 	s, tr, _ := serveTree(t)
-	defer func() { showBuilt = false }()
+	defer func() { debugOn = false }()
 	for _, c := range []struct{ show, shared, want bool }{
 		{false, false, false}, {true, false, true}, {true, true, false},
 	} {
-		showBuilt, tr.shared = c.show, c.shared
+		debugOn, tr.shared = c.show, c.shared
 		body := get(s.handler(), "/a/").Body.String()
 		if got := strings.Contains(body, `<p class="built" data-built="`); got != c.want {
 			t.Errorf("stamp=%v shared=%v: shown=%v", c.show, c.shared, got)
 		}
-		if c.want && !regexp.MustCompile(`s ago, from [^<]+, rendered in [0-9.]+ ms</p>`).MatchString(body) {
+		if c.want && !regexp.MustCompile(`s ago, from [^<]+, rendered in [0-9.]+ ms <button class="bug"`).MatchString(body) {
 			t.Errorf("stamp lacks commit or render time: %s", body)
 		}
 	}
@@ -470,18 +470,18 @@ func TestNotFoundCoin(t *testing.T) {
 	s, _, _ := serveTree(t)
 	rec := get(s.handler(), "/nowhere.md")
 	body := rec.Body.String()
-	if rec.Code != http.StatusNotFound || !strings.Contains(body, `<p class="coin" aria-hidden="true">`) || !strings.Contains(body, "Not found: http://127.31.1.1:8080/nowhere.md</pre>") {
+	if rec.Code != http.StatusNotFound || !strings.Contains(body, `<p class="coin" aria-hidden="true">`) || !strings.Contains(body, "Not found:\nhttp://127.31.1.1:8080/nowhere.md</pre>") {
 		t.Errorf("status %d, want 404 with the coin and the message: %s", rec.Code, body)
 	}
 }
 
-// A server's build and start show on the index only with --stamp; they
+// A server's build and start show on the index only with --debug; they
 // serve debugging alone.
 func TestIndexTimesOnlyWithStamp(t *testing.T) {
-	defer func() { showBuilt = false }()
+	defer func() { debugOn = false }()
 	b := indexServer{binary: "/usr/bin/" + progName, built: time.Now(), commit: "1f2241d", since: time.Now()}
 	for _, show := range []bool{false, true} {
-		showBuilt = show
+		debugOn = show
 		got := b.account()
 		if has := strings.Contains(got, "built ") && strings.Contains(got, "up since "); has != show {
 			t.Errorf("stamp %t: %s", show, got)
@@ -490,9 +490,9 @@ func TestIndexTimesOnlyWithStamp(t *testing.T) {
 			t.Errorf("stamp %t: the binary is missing: %s", show, got)
 		}
 	}
-	showBuilt = false
+	debugOn = false
 	s, _, _ := serveTree(t)
 	if body := get(s.handler(), "/").Body.String(); strings.Contains(body, "since ") || strings.Contains(body, "class=\"since") {
-		t.Errorf("index without --stamp shows times: %s", body)
+		t.Errorf("index without --debug shows times: %s", body)
 	}
 }

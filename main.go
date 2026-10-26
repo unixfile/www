@@ -69,7 +69,7 @@ type config struct {
 	fg      bool
 	noopen  bool
 	persist bool   // write a persistent lock, so the tree is served after reboot
-	stamp   bool   // show the build time above each page's header
+	debug   bool   // show the build stamp, the index's times and the bug button
 	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
 	disk    string // the disk for online repos, eg 4G; "" takes defaultDisk
 	help    bool
@@ -111,10 +111,12 @@ Options:
   -p, --persist         write a .LOCK instead of a .lock: the tree is served
                         again after a reboot or a stopped server, by the
                         next server on its address or by --restart
-  --stamp               show the binary's build time, the seconds since, its
-                        commit and the page's render time, small and faint,
-                        above each page's header; with --restart, on the
-                        new servers
+  --debug               show what serves debugging: above each page's
+                        header, small and faint, the binary's build time,
+                        the seconds since, its commit, the page's render
+                        time and a bug button that logs the page; on the
+                        index, each server's build and start and each
+                        lock's time; with --restart, on the new servers
   --cache=SIZE          memory a new server may spend on cached git answers,
                         eg 64M; 0 caches nothing [default: 32M]
   --disk=SIZE           disk a new server may fill with online repos, eg 4G;
@@ -148,7 +150,7 @@ func (c *config) switches() map[string]*bool {
 		"foreground": &c.fg,
 		"no-open":    &c.noopen,
 		"persist":    &c.persist,
-		"stamp":      &c.stamp,
+		"debug":      &c.debug,
 		"help":       &c.help,
 		"version":    &c.version,
 		"restart":    &c.restart,
@@ -270,7 +272,7 @@ func parseArgs(args []string) (config, error) {
 			dirs = append(dirs, a)
 		}
 	}
-	if c.commit != "" && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.stamp ||
+	if c.commit != "" && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.debug ||
 		c.sharing || c.secret || c.addr != "" || c.cache != "" || c.disk != "") {
 		return c, &errno{syscall.EINVAL, "--commit takes a directory and no other option"}
 	}

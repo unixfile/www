@@ -15,7 +15,7 @@ build:
 syntax:
 	cd syntax && CGO_ENABLED=1 go build -o ../build/$(NAME)-syntax .
 
-# run serves this directory from build/ with --stamp, on port 8080 beside
+# run serves this directory from build/ with --debug, on port 8080 beside
 # an installed server on port 80. A server already there is replaced by
 # this build, serving the same trees, so its open pages go on under the
 # new code; the browser opens only when no page of this directory was
@@ -23,7 +23,7 @@ syntax:
 RUNADDR := 127.31.$(shell expr $$(id -u) - 1000).1:8080
 
 run: build syntax
-	@build/$(NAME) --restart --stamp -a $(RUNADDR) .
+	@build/$(NAME) --restart --debug -a $(RUNADDR) .
 
 test:
 	go vet ./...
