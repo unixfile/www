@@ -16,8 +16,8 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"path"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -51,6 +51,7 @@ var layout = template.Must(template.New("layout").Funcs(template.FuncMap{
 	"liveJS":   func() template.JS { return template.JS(liveJS) },
 	"styleURL": func() string { return styleURL },
 	"ownPath":  func() string { return ownPath },
+	"progName": func() string { return progName },
 }).Parse(layoutHTML))
 
 // maxCode caps the size of a file shown as a code page; larger files go raw.
@@ -1233,12 +1234,12 @@ type page struct {
 	Kind    string
 	Body    template.HTML
 	Raw     bool
-	Tree    string       // prefix the stop button withdraws, or "" for every tree
-	Search  string       // the tree's URL, which answers ?search=, or "" off a tree
+	Tree    string        // prefix the stop button withdraws, or "" for every tree
+	Search  string        // the tree's URL, which answers ?search=, or "" off a tree
 	Status  template.HTML // the server's age, on the index, or a repo's commit on the web address
-	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
+	Style   template.CSS  // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
-	Bug     bool // the bug button at the page's foot
+	Bug     bool   // the bug button at the page's foot
 	Shared  bool   // a shared server's page, which has no button
 	NoStop  bool   // a page on the web address, which has no button
 	Live    string // the URL of the page's live reload stream, or ""
@@ -1247,7 +1248,7 @@ type page struct {
 	// permanent URL for it, which the share button copies; ForgeLines is
 	// how that forge marks lines.
 	Forge, ForgeLines string
-	Built   *stamp // when the binary was built, above the header, with --debug; none on a share
+	Built             *stamp // when the binary was built, above the header, with --debug; none on a share
 }
 
 func (t *tree) title(name string) string {
@@ -1382,7 +1383,7 @@ func (t *tree) notFound(w http.ResponseWriter, r *http.Request, name string) {
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),
 		Kind:   "error",
-		Body: template.HTML(coin("404") + `<table class="gone">` + "\n" + notFoundRow(r) + t.goneRows(r.Context(), name) + "</table>\n"),
+		Body:   template.HTML(coin("404") + `<table class="gone">` + "\n" + notFoundRow(r) + t.goneRows(r.Context(), name) + "</table>\n"),
 	})
 }
 

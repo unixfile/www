@@ -22,8 +22,8 @@ func postBug(h http.Handler, form url.Values, site string) *httptest.ResponseRec
 }
 
 // Every page's foot holds the bug button. A report gets the next number,
-// one line in the log, N.kv and N.html, its stylesheet inline; a comment
-// joins N.kv and the log. A deleted bug's number is not given again.
+// one line in the log, N.kv with the server's state and N.html, its
+// stylesheet inline; a comment joins N.kv and the log. A deleted bug's number is not given again.
 func TestBugReport(t *testing.T) {
 	useJournal(t, "")
 	state := t.TempDir()
@@ -38,7 +38,7 @@ func TestBugReport(t *testing.T) {
 	}
 	s, _, _ := serveTree(t)
 	h := s.handler()
-	if !strings.Contains(get(h, "/").Body.String(), `<p class="bug"><button class="bug" data-post="`+ownPath+`bug"`) {
+	if !strings.Contains(get(h, "/").Body.String(), `<p class="bug"><button class="bug" data-post="`+ownPath+`bug"`) || !strings.Contains(get(h, "/").Body.String(), ">"+progName+" bug</button>") {
 		t.Errorf("no bug button at the foot")
 	}
 	if rec := postBug(h, form, "cross-site"); rec.Code != http.StatusForbidden {
@@ -53,7 +53,7 @@ func TestBugReport(t *testing.T) {
 		t.Errorf("snapshot lacks the inline stylesheet or the page: %.200s", b)
 	}
 	kv, _ := os.ReadFile(filepath.Join(dir, "1.kv"))
-	for _, want := range []string{"url http://127.31.1.1:8080/nowhere.md\n", `note the coin\nis cut off` + "\n", "view 1280x800+0\n", "ua Brave\n", "build " + buildCommit + "\n", "time 20"} {
+	for _, want := range []string{"url http://127.31.1.1:8080/nowhere.md\n", `note the coin\nis cut off` + "\n", "view 1280x800+0\n", "ua Brave\n", "build " + buildCommit + "\n", "time 20", "pid ", "stale no\n", "command " + progName, "tree.0 "} {
 		if !strings.Contains(string(kv), want) {
 			t.Errorf("1.kv lacks %q:\n%s", want, kv)
 		}

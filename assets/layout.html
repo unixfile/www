@@ -17,7 +17,7 @@
 {{end}}{{end}}<main>
 {{.Body}}
 </main>
-{{if .Bug}}<p class="bug"><button class="bug" data-post="{{ownPath}}bug" title="file this page as a bug, with the selected text as its note">bug</button></p>
+{{if .Bug}}<p class="bug"><button class="bug" data-post="{{ownPath}}bug" title="report a bug in {{progName}} and this server; the page and the selected text go with it">{{progName}} bug</button></p>
 {{end}}
 </body>
 </html>

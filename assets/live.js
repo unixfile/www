@@ -514,15 +514,18 @@
 		backlinks();
 	});
 
-	// The bug button, at each page's foot, files the page as a numbered
-	// bug: its URL, the selected text as the note, the window's size and
-	// scroll, the browser, and a snapshot of the page as it stands,
-	// scripts taken out, so the snapshot shows what the reader saw without
-	// running again. The button then says the number, and a field beside it
-	// takes a comment: Enter adds it, Escape or leaving the field drops it.
+	// The bug button, at each page's foot, files a numbered bug in the
+	// program itself, not in the tree it shows. It sends the page's URL, the
+	// selected text as the note, the window's size and scroll, the browser,
+	// and a snapshot of the page as it stands, scripts taken out, so the
+	// snapshot shows what the reader saw without running again; the server
+	// adds its own state. The button then says the number, and a field
+	// beside it takes a comment: Enter adds it, Escape or leaving the field
+	// drops it.
 	const bugSaid = (b, word) => {
+		b.dataset.label ??= b.textContent;
 		b.textContent = word;
-		setTimeout(() => (b.textContent = "bug"), 3000);
+		setTimeout(() => (b.textContent = b.dataset.label), 3000);
 	};
 	const bugComment = (b, n) => {
 		const f = document.createElement("input");

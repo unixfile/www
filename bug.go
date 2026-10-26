@@ -20,9 +20,10 @@ const maxBug = 16 << 20
 // page's foot, or adds a comment to one. A report is one line in the log,
 // which `journalctl --user -t www -g '^bug '` finds; N.kv under the state
 // directory, as keyval: the time, URL, selected text as the note, the
-// window's size and scroll, the browser and the build; and N.html, the
-// page as the reader saw it. It answers with the number. A comment names
-// the number and is added to the log and to N.kv.
+// window's size and scroll, the browser, the build and the server's
+// state from bugState; and N.html, the page as the reader saw it. It
+// answers with the number. A comment names the number and is added to
+// the log and to N.kv.
 func (s *server) handleBug(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "a bug report must come from an "+progName+" page", http.StatusForbidden)
@@ -54,14 +55,14 @@ func (s *server) handleBug(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	n, err := fileBug(dir, [][2]string{
+	n, err := fileBug(dir, append([][2]string{
 		{"time", time.Now().Format(time.RFC3339)},
 		{"url", r.PostFormValue("url")},
 		{"note", clip(r.PostFormValue("note"))},
 		{"view", r.PostFormValue("view")},
 		{"ua", r.PostFormValue("ua")},
 		{"build", buildCommit},
-	})
+	}, s.bugState()...))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		logErr("bug report not filed: %s", err)
@@ -76,6 +77,38 @@ func (s *server) handleBug(w http.ResponseWriter, r *http.Request) {
 		r.PostFormValue("view"), strconv.Quote(r.PostFormValue("ua")), buildCommit, snap)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprint(w, n)
+}
+
+// bugState is the server's part of a report: its process, its binary and
+// whether a rebuild has replaced it, the address, when it started, the
+// command line, and each tree it serves as tree.0, tree.1 and on. The
+// button reports bugs in the program, so a report names the server that
+// filed it, eg a stale one on another port.
+func (s *server) bugState() [][2]string {
+	stale := "no"
+	if s.about.stale() {
+		stale = "yes"
+	}
+	started := ""
+	if !s.about.started.IsZero() {
+		started = s.about.started.Format(time.RFC3339)
+	}
+	addr := ""
+	if s.about.ep.IsValid() {
+		addr = s.about.ep.String()
+	}
+	fields := [][2]string{
+		{"pid", strconv.Itoa(os.Getpid())},
+		{"exe", s.about.exe},
+		{"stale", stale},
+		{"addr", addr},
+		{"started", started},
+		{"command", commandLine(os.Args[1:])},
+	}
+	for i, t := range s.list() {
+		fields = append(fields, [2]string{"tree." + strconv.Itoa(i), t.dir})
+	}
+	return fields
 }
 
 // clip cuts a note or comment to 2,000 bytes, so a stray paste of a whole

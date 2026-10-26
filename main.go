@@ -119,7 +119,8 @@ Options:
                         and each lock's time; with --restart, on the new
                         servers
   --no-bug              hide the bug button at the foot of each page, which
-                        files the page as a numbered bug report; a share
+                        files a numbered bug in this program, not in the
+                        tree, with the page and the server's state; a share
                         never shows it; with --restart, on the new servers
   --cache=SIZE          memory a new server may spend on cached git answers,
                         eg 64M; 0 caches nothing [default: 32M]

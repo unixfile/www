@@ -2,11 +2,11 @@
 
 ## Bug reports
 
-A small, faint bug button sits at the foot of every page. A click files the page as a numbered bug, and the button says which, eg `bug 7 filed`. Text selected on the page goes in as the note. A field then opens beside the button for a comment: Enter adds it, Escape or clicking away leaves the bug without one.
+A small, faint `www bug` button sits at the foot of every page. It reports a bug in www and the server, not in the tree you are reading. A click files a numbered bug with the page attached, and the button says which, eg `bug 7 filed`. Text selected on the page goes in as the note. A field then opens beside the button for a comment: Enter adds it, Escape or clicking away leaves the bug without one.
 
 Each report lands in `~/.local/state/www/bugs/`, or below `$XDG_STATE_HOME` when set:
 
-- `7.kv`: the report as keyval: the time, the page's URL, the note, the window's size and scroll as `view`, the browser as `ua`, the build, and each comment as `comment.0`, `comment.1` and on
+- `7.kv`: the report as keyval: the time, the page's URL, the note, the window's size and scroll as `view`, the browser as `ua`, the build, then the server: its `pid`, its binary as `exe`, `stale yes` if a rebuild has replaced that binary, its `addr`, when it `started`, its `command` line and each tree it serves as `tree.0`, `tree.1` and on, then each comment as `comment.0`, `comment.1` and on
 - `7.html`: the page as it stood at the click, script changes included, with its stylesheet and no script, so it opens as you saw it
 - `next`: the number the next report gets. Numbers only grow, so a bug deleted once fixed never gives its number away
 
