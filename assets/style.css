@@ -151,7 +151,7 @@ header > span { display: inline-flex; gap: 1em; align-items: baseline; flex: non
 header form { display: inline; }
 /* Buttons are flat, as on printed paper: one border in the text's
    colour, square corners, no bevel. */
-header button, table.locks button, p.built button.bug {
+header button, table.locks button, p.bug button.bug {
   font: inherit;
   color: inherit;
   background: var(--page);
@@ -161,9 +161,12 @@ header button, table.locks button, p.built button.bug {
   cursor: pointer;
   white-space: nowrap;
 }
-/* The bug button is flat as every button is, but in the stamp's faint
-   colour and with little padding, so it stays as quiet as the stamp. */
-p.built button.bug { color: inherit; border-color: currentColor; padding: 0 0.4em; margin-left: 0.4em; }
+/* The bug button sits at the page's foot, flat as every button is, but
+   small, faint and with little padding, so it never draws the eye from
+   the page. After a report, a field beside it takes a comment. */
+p.bug { font-family: ui-monospace, "Iosevka", monospace; font-size: 0.45em; color: var(--faint); text-align: right; margin: 3em 0 0; }
+p.bug button.bug { color: inherit; border-color: currentColor; padding: 0 0.4em; }
+p.bug input { font: inherit; color: var(--text); background: var(--page); border: 1px solid var(--faint); border-radius: 0; padding: 0 0.4em; margin-right: 0.6em; width: 30ch; max-width: 60%; }
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
 pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone { font-family: ui-monospace, "Iosevka", monospace; }

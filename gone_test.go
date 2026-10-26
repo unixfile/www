@@ -119,8 +119,8 @@ func TestStrayPath(t *testing.T) {
 				t.Errorf("%s: lacks %q:\n%s", p, w, body)
 			}
 		}
-		if strings.Contains(body, "<button") || strings.Contains(body, "this page") {
-			t.Errorf("%s: a stray path shows the index or a button:\n%s", p, body)
+		if strings.Contains(body, "Kill server") || strings.Contains(body, "Delete lock") || strings.Contains(body, ", this page") {
+			t.Errorf("%s: a stray path shows the index or a stop button:\n%s", p, body)
 		}
 	}
 	if body := get(h, "/notez/").Body.String(); strings.Contains(body, "/other/") {

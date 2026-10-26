@@ -23,7 +23,7 @@ import (
 // which is how trees come back after a reboot. Without a named address or
 // --force, it leaves the addresses another binary last served, so the
 // package's unit and a build from make install never take each other's
-// servers. With --debug, the new servers show what serves debugging. With a
+// servers. With --debug, the new servers show what serves debugging, and with --no-bug they hide the bug button. With a
 // directory, it then serves that directory on c.ep, as a start does, and
 // opens it unless a page of it was open on the old server.
 func restart(c config) int {
@@ -48,7 +48,7 @@ func restart(c config) int {
 				say("the persistent trees on %s wait for %s, so they stay; -f serves them with this binary", ep, other)
 				continue
 			} else if len(kept) > 0 {
-				err = startTrees(ep, kept, c.debug)
+				err = startTrees(ep, kept, c.debug, c.noBug)
 			} else if !named || c.dir != "" {
 				continue
 			}
@@ -57,7 +57,7 @@ func restart(c config) int {
 			continue
 		} else if err == nil {
 			var pages []string
-			if pages, err = restartServer(ep, pid, trees, c.debug); err == nil {
+			if pages, err = restartServer(ep, pid, trees, c.debug, c.noBug); err == nil {
 				say("the server on %s is replaced; %s", ep, reloading(len(pages)))
 			}
 			if ep == c.ep {
@@ -142,6 +142,9 @@ func startDir(c config, open []string) int {
 	if c.debug {
 		args = append(args, "--debug")
 	}
+	if c.noBug {
+		args = append(args, "--no-bug")
+	}
 	cmd := exec.Command(exe, append(args, "--", dir)...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -169,7 +172,7 @@ func pagesOf(n int) string {
 // the server leaves as it stops. A binary that could not bind the
 // server's port leaves the server alone, since stopping it would drop its
 // trees.
-func restartServer(ep netip.AddrPort, pid int, trees []servedTree, debug bool) ([]string, error) {
+func restartServer(ep netip.AddrPort, pid int, trees []servedTree, debug, noBug bool) ([]string, error) {
 	if ep.Port() < 1024 && !lowPortOK() {
 		return nil, &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
 			", so the server on " + ep.String() + " keeps its old one. Run the installed package's " + progName + ", which holds cap_net_bind_service"}
@@ -189,13 +192,13 @@ func restartServer(ep netip.AddrPort, pid int, trees []servedTree, debug bool) (
 		pages = strings.FieldsFunc(string(b), func(r rune) bool { return r == '\n' })
 		os.Remove(record)
 	}
-	return pages, startTrees(ep, trees, debug)
+	return pages, startTrees(ep, trees, debug, noBug)
 }
 
 // startTrees serves each tree on ep through this binary, as a start from
 // the command line would, persistent ones with --persist. The first start
-// runs the server, so --debug reaches it.
-func startTrees(ep netip.AddrPort, trees []servedTree, debug bool) error {
+// runs the server, so --debug and --no-bug reach it.
+func startTrees(ep netip.AddrPort, trees []servedTree, debug, noBug bool) error {
 	if ep.Port() < 1024 && !lowPortOK() {
 		return &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
 			", so it cannot serve " + ep.String() + ". Run the installed package's " + progName + ", which holds cap_net_bind_service"}
@@ -222,6 +225,9 @@ func startTrees(ep netip.AddrPort, trees []servedTree, debug bool) error {
 		}
 		if debug {
 			args = append(args, "--debug")
+		}
+		if noBug {
+			args = append(args, "--no-bug")
 		}
 		cmd := exec.Command(exe, append(args, "--", t.dir)...)
 		cmd.Env = env

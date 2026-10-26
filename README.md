@@ -36,8 +36,9 @@ To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`
 - `--secret`: serve a shared tree under the token in `WWW_SECRET`, or a random one, so only those holding the link reach it
 - `--foreground`: when no server runs on the address yet, serve in the foreground until Ctrl-C
 - `--no-open`: print the URL without opening a browser
+- `--no-bug`: hide the bug button at the foot of each page and refuse reports; `--restart` passes it to the new servers when given
 - `-p`, `--persist`: write a persistent lock, such as `127.31.1.1-8080.LOCK`, so the tree is served again after a reboot; see [Serving after reboot](#serving-after-reboot)
-- `--debug`: show what serves debugging: above each page's header, the build stamp and a bug button, see [debugging](doc/debugging.md); on the index, each server's build and start time and each lock's time. `make run` sets it; `--restart` passes it to the new servers when given, and leaves it off otherwise
+- `--debug`: show what serves debugging: above each page's header, the build stamp, see [debugging](doc/debugging.md); on the index, each server's build and start time and each lock's time. `make run` sets it; `--restart` passes it to the new servers when given, and leaves it off otherwise
 - `--cache=SIZE`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
 - `--disk=SIZE`: disk a new server may fill with online repos, eg `4G`; it drops the repos read longest ago. The default is `2G`, and `--restart` goes back to it
 - `--restart`: replace every server this binary started with one running it now, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one, when this binary served it last; with `-a` or `--share`, only the server on that address, whichever binary runs it; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
@@ -79,7 +80,7 @@ The package also ships a system template, `www@.service`, which serves a user's 
 
 ## Debugging
 
-`--debug` puts a build stamp and a bug button above each page. The button logs the page as a bug, with a snapshot of what you saw. See [doc/debugging.md](doc/debugging.md).
+A faint bug button at the foot of every page files the page as a numbered bug, with a snapshot of what you saw and an optional comment, in `~/.local/state/www/bugs/` and the log. `--debug` adds a build stamp above each page. See [doc/debugging.md](doc/debugging.md).
 
 ## Online repos
 

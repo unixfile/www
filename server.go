@@ -141,6 +141,9 @@ func (a about) status() string {
 // they serve debugging alone.
 var debugOn bool
 
+// bugOff, set by --no-bug, hides the bug button and refuses reports.
+var bugOff bool
+
 var buildCommit = buildRev()
 
 var built = func() time.Time {
@@ -360,8 +363,8 @@ func (s *server) handler() http.Handler {
 	if !s.shared && s.web == nil {
 		mux.HandleFunc("POST "+ownPath+"stop", s.handleStop)
 	}
-	// The bug button is there only with --debug, which a share never shows.
-	if debugOn && !s.shared {
+	// The bug button is on every page but a share's, unless --no-bug.
+	if !bugOff && !s.shared {
 		mux.HandleFunc("POST "+ownPath+"bug", s.handleBug)
 	}
 	mux.HandleFunc("GET "+ownPath+"live", s.handleLive)
@@ -1235,6 +1238,7 @@ type page struct {
 	Status  template.HTML // the server's age, on the index, or a repo's commit on the web address
 	Style   template.CSS // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
+	Bug     bool // the bug button at the page's foot
 	Shared  bool   // a shared server's page, which has no button
 	NoStop  bool   // a page on the web address, which has no button
 	Live    string // the URL of the page's live reload stream, or ""
@@ -1302,6 +1306,7 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	if p.Live == "" {
 		p.Live = liveURL(r)
 	}
+	p.Bug = !bugOff && !p.Shared && !p.Stopped
 	if debugOn && !p.Shared && !built.IsZero() {
 		p.Built = &stamp{Clock: clock(built), Millis: built.UnixMilli(), Ago: int(time.Since(built).Seconds()),
 			Commit: buildCommit, Rendered: rendered(r)}

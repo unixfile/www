@@ -255,7 +255,7 @@ func ifaceOf(a netip.Addr) string {
 func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home, origin string) int {
 	logInfo("server starts on %s: %s", c.ep, build())
 	go warmLexers()
-	debugOn = c.debug
+	debugOn, bugOff = c.debug, c.noBug
 	size := int64(defaultCache)
 	if c.cache != "" {
 		size, _ = parseSize(c.cache)

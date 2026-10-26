@@ -69,7 +69,8 @@ type config struct {
 	fg      bool
 	noopen  bool
 	persist bool   // write a persistent lock, so the tree is served after reboot
-	debug   bool   // show the build stamp, the index's times and the bug button
+	debug   bool   // show the build stamp and the index's times
+	noBug   bool   // hide the bug button and refuse reports
 	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
 	disk    string // the disk for online repos, eg 4G; "" takes defaultDisk
 	help    bool
@@ -113,10 +114,13 @@ Options:
                         next server on its address or by --restart
   --debug               show what serves debugging: above each page's
                         header, small and faint, the binary's build time,
-                        the seconds since, its commit, the page's render
-                        time and a bug button that logs the page; on the
-                        index, each server's build and start and each
-                        lock's time; with --restart, on the new servers
+                        the seconds since, its commit and the page's render
+                        time; on the index, each server's build and start
+                        and each lock's time; with --restart, on the new
+                        servers
+  --no-bug              hide the bug button at the foot of each page, which
+                        files the page as a numbered bug report; a share
+                        never shows it; with --restart, on the new servers
   --cache=SIZE          memory a new server may spend on cached git answers,
                         eg 64M; 0 caches nothing [default: 32M]
   --disk=SIZE           disk a new server may fill with online repos, eg 4G;
@@ -151,6 +155,7 @@ func (c *config) switches() map[string]*bool {
 		"no-open":    &c.noopen,
 		"persist":    &c.persist,
 		"debug":      &c.debug,
+		"no-bug":     &c.noBug,
 		"help":       &c.help,
 		"version":    &c.version,
 		"restart":    &c.restart,
@@ -272,7 +277,7 @@ func parseArgs(args []string) (config, error) {
 			dirs = append(dirs, a)
 		}
 	}
-	if c.commit != "" && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.debug ||
+	if c.commit != "" && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.debug || c.noBug ||
 		c.sharing || c.secret || c.addr != "" || c.cache != "" || c.disk != "") {
 		return c, &errno{syscall.EINVAL, "--commit takes a directory and no other option"}
 	}

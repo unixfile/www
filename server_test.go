@@ -198,7 +198,7 @@ func TestStopRefusesOtherSites(t *testing.T) {
 	// A browser may send Origin: null on its own same-origin form post.
 	for _, origin := range []string{"http://127.31.1.1:8080", "null"} {
 		rec := do(h, "POST", ownPath+"stop", "Sec-Fetch-Site", "same-origin", "Origin", origin)
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusGone {
 			t.Fatalf("same-origin stop with Origin %s: status %d", origin, rec.Code)
 		}
 		select {
@@ -235,7 +235,8 @@ func TestIndexDeleteReturns(t *testing.T) {
 		t.Errorf("first delete: status %d location %q stopped %d", rec.Code, rec.Header().Get("Location"), len(got))
 	}
 	rec = post("tree=%2Fother%2F&from=index")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Stopped serving ~/other") {
+	if rec.Code != http.StatusGone || !strings.Contains(rec.Body.String(), "<th>stopped</th><td><span class=\"seg\">~/</span><wbr><span class=\"seg\">other</span></td>") ||
+		!strings.Contains(rec.Body.String(), "<th>server</th><td>stopped; close this tab</td>") || !strings.Contains(rec.Body.String(), `<span>410</span>`) {
 		t.Errorf("last delete: status %d: %s", rec.Code, rec.Body.String())
 	}
 	// The server closes as this page leaves, so the page carries its style.
@@ -359,7 +360,7 @@ func TestStopWithdrawsOneTree(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	s.handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || len(got) != 1 || got[0] != other {
+	if rec.Code != http.StatusGone || len(got) != 1 || got[0] != other {
 		t.Fatalf("status %d, withdrew %v, want only the other tree", rec.Code, got)
 	}
 	if got[0] == tr {
@@ -397,7 +398,7 @@ func TestBuildStamp(t *testing.T) {
 		if got := strings.Contains(body, `<p class="built" data-built="`); got != c.want {
 			t.Errorf("stamp=%v shared=%v: shown=%v", c.show, c.shared, got)
 		}
-		if c.want && !regexp.MustCompile(`s ago, from [^<]+, rendered in [0-9.]+ ms <button class="bug"`).MatchString(body) {
+		if c.want && !regexp.MustCompile(`s ago, from [^<]+, rendered in [0-9.]+ ms</p>`).MatchString(body) {
 			t.Errorf("stamp lacks commit or render time: %s", body)
 		}
 	}

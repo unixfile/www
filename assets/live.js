@@ -514,11 +514,40 @@
 		backlinks();
 	});
 
-	// The bug button, in the stamp with --debug, logs the page as a bug:
-	// its URL, the selected text as the note, the window's size and scroll,
-	// the browser, and a snapshot of the page as it stands, scripts taken
-	// out, so the snapshot shows what the reader saw without running again.
-	// It says logged or failed, then bug again.
+	// The bug button, at each page's foot, files the page as a numbered
+	// bug: its URL, the selected text as the note, the window's size and
+	// scroll, the browser, and a snapshot of the page as it stands,
+	// scripts taken out, so the snapshot shows what the reader saw without
+	// running again. The button then says the number, and a field beside it
+	// takes a comment: Enter adds it, Escape or leaving the field drops it.
+	const bugSaid = (b, word) => {
+		b.textContent = word;
+		setTimeout(() => (b.textContent = "bug"), 3000);
+	};
+	const bugComment = (b, n) => {
+		const f = document.createElement("input");
+		f.placeholder = "comment on bug " + n;
+		f.setAttribute("aria-label", "comment on bug " + n);
+		b.before(f);
+		f.focus();
+		let done = false;
+		const end = () => {
+			if (done) return;
+			done = true;
+			f.remove();
+		};
+		f.addEventListener("keydown", (e) => {
+			if (e.key === "Escape") return end();
+			if (e.key !== "Enter" || !f.value.trim()) return;
+			const body = new URLSearchParams({ bug: n, comment: f.value.trim() });
+			end();
+			fetch(b.dataset.post, { method: "POST", body }).then(
+				(r) => bugSaid(b, r.ok ? "comment on bug " + n + " added" : "comment failed"),
+				() => bugSaid(b, "comment failed"),
+			);
+		});
+		f.addEventListener("blur", end);
+	};
 	document.addEventListener("click", (e) => {
 		const b = e.target.closest("button.bug");
 		if (!b) return;
@@ -536,11 +565,15 @@
 			ua: navigator.userAgent,
 			page: "<!doctype html>\n" + page.outerHTML,
 		});
-		const said = (word) => {
-			b.textContent = word;
-			setTimeout(() => (b.textContent = "bug"), 2000);
-		};
-		fetch(b.dataset.post, { method: "POST", body }).then((r) => said(r.ok ? "logged" : "failed"), () => said("failed"));
+		fetch(b.dataset.post, { method: "POST", body })
+			.then((r) => (r.ok ? r.text() : Promise.reject()))
+			.then(
+				(n) => {
+					bugSaid(b, "bug " + n + " filed");
+					bugComment(b, n);
+				},
+				() => bugSaid(b, "failed"),
+			);
 	});
 
 	// The build stamp counts the seconds since the binary was built. It is
