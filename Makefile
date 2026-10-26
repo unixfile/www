@@ -41,8 +41,11 @@ clean:
 	rm -rf build
 
 # install and install-deb end by moving running servers to the new binary,
-# so no server keeps old code. A server on port 80 stays put under the
-# binary from make install, which cannot bind it. install also ships the
+# so no server keeps old code. install moves only the servers its own
+# binary started, so the package keeps its servers. install-deb removes the
+# make install link, so it takes every server with --force. A server on
+# port 80 stays put under the binary from make install, which cannot bind
+# it. install also ships the
 # user unit, disabled, which serves .LOCK trees again at login; it never
 # uses sudo, so the system template comes only with the package.
 USERUNIT := $(HOME)/.config/systemd/user/$(NAME).service
@@ -104,7 +107,7 @@ install-deb: uninstall
 	sudo -v; auth=$$?; \
 	wait $$build && [ $$auth -eq 0 ]
 	sudo apt install --reinstall ./$(DEB)
-	-/usr/bin/$(NAME) --restart
+	-/usr/bin/$(NAME) --restart --force
 
 uninstall-deb:
 	sudo apt remove $(NAME)

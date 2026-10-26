@@ -21,11 +21,12 @@ func TestWriteTrees(t *testing.T) {
 	trees[3].dir = `/a\b`
 	trees[4].dir = "/tab\there"
 	trees[5].dir = "/ends in space "
+	trees[7].binary = "/bin/sh"
 	b.Reset()
 	writeTrees(&b, trees)
 	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
-	if len(lines) != 22 {
-		t.Fatalf("%d lines, want 22", len(lines))
+	if len(lines) != 23 {
+		t.Fatalf("%d lines, want 23", len(lines))
 	}
 	for i := 1; i < len(lines); i++ {
 		if lines[i-1] >= lines[i] {
@@ -38,6 +39,7 @@ func TestWriteTrees(t *testing.T) {
 		`tree.03.dir /a\\b`,
 		`tree.04.dir /tab\there`,
 		`tree.05.dir /ends in space \0`,
+		"tree.07.binary /bin/sh",
 		"tree.10.url http://u/",
 	} {
 		if !strings.Contains(b.String(), want+"\n") {

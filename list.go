@@ -23,7 +23,8 @@ type servedTree struct {
 	token    string    // the secret path's token, or ""
 	since    time.Time // when the lock was written
 	lockPath string
-	persist  bool // the lock outlives its server
+	persist  bool   // the lock outlives its server
+	binary   string // the server's binary, or "" when unrecorded
 }
 
 // readTree reads the lock that a registry link targets and reports whether
@@ -35,7 +36,7 @@ func readTree(ep netip.AddrPort, target string) (servedTree, bool) {
 		return servedTree{}, false
 	}
 	t := servedTree{ep: ep, pid: l.pid, dir: filepath.Dir(lockPath), url: l.url, token: token,
-		lockPath: lockPath, persist: isPersist(lockPath)}
+		lockPath: lockPath, persist: isPersist(lockPath), binary: binaryOf(ep)}
 	if info, err := os.Stat(lockPath); err == nil {
 		t.since = info.ModTime()
 	}
@@ -128,12 +129,16 @@ func list(c config) int {
 	return 0
 }
 
-// writeTrees prints trees as keyval: a tree.N.dir and a tree.N.url line
-// for each, every index the same width, so the lines sort in key order.
-// No trees print nothing, which is an empty keyval file.
+// writeTrees prints trees as keyval: a tree.N.binary line when the binary
+// is known, then a tree.N.dir and a tree.N.url line for each, every index
+// the same width, so the lines sort in key order. No trees print nothing,
+// which is an empty keyval file.
 func writeTrees(w io.Writer, trees []servedTree) {
 	width := len(strconv.Itoa(max(len(trees)-1, 0)))
 	for i, t := range trees {
+		if t.binary != "" {
+			fmt.Fprintf(w, "tree.%0*d.binary %s\n", width, i, kvValue(t.binary))
+		}
 		fmt.Fprintf(w, "tree.%0*d.dir %s\n", width, i, kvValue(t.dir))
 		fmt.Fprintf(w, "tree.%0*d.url %s\n", width, i, kvValue(t.url))
 	}

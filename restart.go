@@ -20,10 +20,12 @@ import (
 // else every server, with one running the current binary and serving the
 // same trees, as --list and --kill pick their servers. An address with no
 // server but with persistent locks in its registry gets a server again,
-// which is how trees come back after a reboot. With --stamp, the new
-// servers show the build stamp. With a directory, it then serves that
-// directory on c.ep, as a start does, and opens it unless a page of it
-// was open on the old server.
+// which is how trees come back after a reboot. Without a named address or
+// --force, it leaves the addresses another binary last served, so the
+// package's unit and a build from make install never take each other's
+// servers. With --stamp, the new servers show the build stamp. With a
+// directory, it then serves that directory on c.ep, as a start does, and
+// opens it unless a page of it was open on the old server.
 func restart(c config) int {
 	eps, err := endpoints()
 	if err != nil {
@@ -36,13 +38,23 @@ func restart(c config) int {
 	code := 0
 	var open []string // pages that were open on c.ep's old server
 	for _, ep := range eps {
+		other := ""
+		if !named && !c.force {
+			other = otherBinary(ep)
+		}
 		pid, trees, err := servedTrees(ep)
 		if errors.Is(err, syscall.ESRCH) {
-			if kept := persistedTrees(ep); len(kept) > 0 {
+			if kept := persistedTrees(ep); len(kept) > 0 && other != "" {
+				say("the persistent trees on %s wait for %s, so they stay; -f serves them with this binary", ep, other)
+				continue
+			} else if len(kept) > 0 {
 				err = startTrees(ep, kept, c.stamp)
 			} else if !named || c.dir != "" {
 				continue
 			}
+		} else if err == nil && other != "" {
+			say("the server on %s runs %s, so it stays; -f moves it to this binary", ep, other)
+			continue
 		} else if err == nil {
 			var pages []string
 			if pages, err = restartServer(ep, pid, trees, c.stamp); err == nil {

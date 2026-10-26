@@ -9,7 +9,7 @@ It is fast. A page from a running server takes one to three milliseconds, a serv
 ```
 www [-p] [--foreground] [--no-open] [-a ADDR] [DIR]
 www [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [DIR]
-www --restart [--no-open] [-a ADDR | --share[=HOST]] [DIR]
+www --restart [-f] [--no-open] [-a ADDR | --share[=HOST]] [DIR]
 www -l [-a ADDR | --share[=HOST]] [DIR]
 www --kill [-a ADDR | --share[=HOST]]
 www --commit=REV [DIR]
@@ -25,7 +25,7 @@ The URL is all it prints, so `url=$(www --no-open)` works. Running `www` again i
 Trees on one address share one server. The first `www` starts it in the background, and later ones hand their tree to it and return.
 When something other than your www on that address holds the port, `www` fails at once with `E98` and names the listeners there.
 The server exits when its last lock is gone. SIGTERM stops it at once and removes every lock but a persistent `.LOCK`, as does the Kill server button on the index at `/`.
-A running server keeps the binary it started with. `www --restart` moves every server's trees to the current binary, and `make install` and `make install-deb` run it for you; open tabs reload onto the new binary, and it says how many did. A binary without the capability for port 80, such as the one from `make install`, leaves a port-80 server on its old binary and says so.
+A running server keeps the binary it started with. `www --restart` moves every server's trees to the current binary, and `make install` and `make install-deb` run it for you; open tabs reload onto the new binary, and it says how many did. It moves only the servers its own binary started, so the package and a build from `make install` leave each other's servers alone; it names each server it leaves, and `-f` takes them too. `make install-deb` passes `-f`, since it removes the `make install` link. A binary without the capability for port 80, such as the one from `make install`, leaves a port-80 server on its old binary and says so.
 
 The index at `/` lists the server's locks: each tree with the time its lock was written and a Delete lock button, and the lock's path on hover. Trees on other addresses follow as plain links, since only their own server may stop them. The header shows when the server started, and a warning appears when the binary on disk has changed since.
 To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`. Type the name with its slash, eg `www/`, or the browser searches for it.
@@ -39,8 +39,9 @@ To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`
 - `--stamp`: show the binary's build time, the seconds since, its commit and the page's render time, small and faint, above each page's header. `make run` sets it; `--restart` passes it to the new servers when given, and leaves it off otherwise
 - `--cache=SIZE`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
 - `--disk=SIZE`: disk a new server may fill with online repos, eg `4G`; it drops the repos read longest ago. The default is `2G`, and `--restart` goes back to it
-- `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one; with `-a` or `--share`, only the server on that address; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
-- `-l`, `--list`: print each served tree's directory and URL as keyval, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it. A directory that holds no served tree prints nothing; one that does not exist fails with `E2`
+- `--restart`: replace every server this binary started with one running it now, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one, when this binary served it last; with `-a` or `--share`, only the server on that address, whichever binary runs it; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
+- `-f`, `--force`: with `--restart`, take the servers and persistent trees of other binaries too
+- `-l`, `--list`: print each served tree's directory, URL and binary as keyval, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it. A directory that holds no served tree prints nothing; one that does not exist fails with `E2`
 - `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
 - `--commit=REV`: print as keyval the commit REV names in the repo of DIR, or of the current directory: its full hash, its stardate and its subject. REV is a stardate, eg `261024.4`, a hash or any name git takes, so `git show $(www --commit=261024.4 | sed -n 's/^hash //p')` shows a commit seen on a page. A day and x, eg `261026.x`, works while one commit alone holds it. A commit or repo that is not there fails with `E2`
 - `-V`, `--version`: print when the binary was built and the commit it came from, as the stamp says it, eg `www built 2026-10-21 12:49, from 1aa282c+modified`
@@ -48,13 +49,15 @@ To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`
 
 Options follow GNU style. Short ones combine, as in `-pa 127.31.1.2`, and options may follow the directory. Optional values go joined, as in `--share=192.168.1.5`; with a space the address would be read as the directory, and www says so. `-f` and `-n` mean force and dry run in every tool of the author's, so `--foreground` and `--no-open` have no short form. The help text is written in docopt notation, except that docopt has no way to write the optional `=HOST`.
 
-`--list` and `--kill` print [keyval](https://unixfile.github.io/keyval/): two lines per tree, sorted, with every index the same width.
+`--list` and `--kill` print [keyval](https://unixfile.github.io/keyval/): three lines per tree, sorted, with every index the same width. The binary line is missing for a server that started before www recorded it.
 
 ```
+tree.0.binary /usr/bin/www
 tree.0.dir /home/t/keep/notes
 tree.0.url http://127.31.1.1/keep/notes/
+tree.1.binary /home/t/scratch/github.com/unixfile/www/build/www
 tree.1.dir /home/t/scratch/github.com/unixfile/www
-tree.1.url http://127.31.1.1/scratch/github.com/unixfile/www/
+tree.1.url http://127.31.1.1:8080/scratch/github.com/unixfile/www/
 ```
 
 Two variables set the default addresses. `--help` shows each value and where it comes from, and an error from a bad value names its variable.

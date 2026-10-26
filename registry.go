@@ -202,18 +202,63 @@ func (r *registry) writePages(paths []string) {
 	}
 }
 
-// markServer records this process as the server of the registry.
+// binaryFile, in a registry, names the binary of the last server on its
+// endpoint. It outlives the server, unlike serverFile, so --restart can
+// tell which binary persistent trees wait for, and leaves the servers of
+// another install alone.
+const binaryFile = "binary"
+
+// markServer records this process as the server of the registry, and its
+// binary.
 func (r *registry) markServer() error {
+	if exe, err := os.Executable(); err == nil {
+		if err := os.WriteFile(filepath.Join(r.dir, binaryFile), []byte(exe+"\n"), 0o600); err != nil {
+			return err
+		}
+	}
 	return os.WriteFile(filepath.Join(r.dir, serverFile),
 		[]byte(fmt.Sprintf("pid: %d\nboot_id: %s\n", os.Getpid(), bootID())), 0o600)
 }
 
+// binaryOf reads which binary last served ep, or "" for a registry with no
+// record, eg one older than the record.
+func binaryOf(ep netip.AddrPort) string {
+	dir, err := registryDir(ep)
+	if err != nil {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(dir, binaryFile))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(string(b), "\n")
+}
+
+// otherBinary names the binary that last served ep when that is not this
+// binary and still exists. A registry with no record, or whose binary is
+// gone, belongs to whichever binary restarts it.
+func otherBinary(ep netip.AddrPort) string {
+	b := binaryOf(ep)
+	exe, err := os.Executable()
+	if b == "" || err != nil || b == exe {
+		return ""
+	}
+	if _, err := os.Stat(b); err != nil {
+		return ""
+	}
+	return b
+}
+
 // unmarkServer removes the record, unless another server has written its
-// own.
+// own. The binary record stays while persistent trees wait for a server,
+// and goes with the last link.
 func (r *registry) unmarkServer() {
 	p := filepath.Join(r.dir, serverFile)
 	if b, err := os.ReadFile(p); err == nil && parseLock(b).pid == os.Getpid() {
 		os.Remove(p)
+	}
+	if links, err := r.links(); err == nil && len(links) == 0 {
+		os.Remove(filepath.Join(r.dir, binaryFile))
 	}
 }
 

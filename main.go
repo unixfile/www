@@ -75,6 +75,7 @@ type config struct {
 	help    bool
 	version bool
 	restart bool
+	force   bool // --restart takes servers of other binaries too
 	list    bool
 	kill    bool
 	commit  string // the commit --commit looks up
@@ -85,7 +86,7 @@ type config struct {
 var usageText = strings.NewReplacer("@NAME@", progName, "@ENV@", envPrefix).Replace(`Usage:
   @NAME@ [-p] [--foreground] [--no-open] [-a ADDR] [DIR]
   @NAME@ [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [DIR]
-  @NAME@ --restart [--no-open] [-a ADDR | --share[=HOST]] [DIR]
+  @NAME@ --restart [-f] [--no-open] [-a ADDR | --share[=HOST]] [DIR]
   @NAME@ -l [-a ADDR | --share[=HOST]] [DIR]
   @NAME@ --kill [-a ADDR | --share[=HOST]]
   @NAME@ --commit=REV [DIR]
@@ -118,13 +119,17 @@ Options:
                         eg 64M; 0 caches nothing [default: 32M]
   --disk=SIZE           disk a new server may fill with online repos, eg 4G;
                         it drops the repos read longest ago [default: 2G]
-  --restart             replace every server with one running this binary,
-                        serving the same trees, and start one for persistent
-                        trees that have none; with -a or --share, only the
-                        server on that address; with DIR, serve it too and
+  --restart             replace every server this binary started with one
+                        running it now, serving the same trees, and start
+                        one for its persistent trees that have none; with
+                        -a or --share, only the server on that address,
+                        whichever binary runs it; with DIR, serve it too and
                         open it unless a page of it was open
-  -l, --list            print each served tree's directory and URL as
-                        keyval; with DIR, only the trees at or below it
+  -f, --force           with --restart, take the servers and persistent
+                        trees of other binaries too, eg the package's
+  -l, --list            print each served tree's directory, URL and the
+                        binary that serves it as keyval; with DIR, only the
+                        trees at or below it
   --kill                stop every server and print the trees it served as
                         --list does; with -a or --share, only the server on
                         that address
@@ -147,6 +152,7 @@ func (c *config) switches() map[string]*bool {
 		"help":       &c.help,
 		"version":    &c.version,
 		"restart":    &c.restart,
+		"force":      &c.force,
 		"list":       &c.list,
 		"kill":       &c.kill,
 	}
@@ -154,7 +160,7 @@ func (c *config) switches() map[string]*bool {
 
 // -f and -n are reserved for --force and --dry-run in every tool of the
 // user's, so --foreground and --no-open have no short form.
-var shorts = map[byte]string{'p': "persist", 'h': "help", 'V': "version", 'l': "list"}
+var shorts = map[byte]string{'p': "persist", 'h': "help", 'V': "version", 'l': "list", 'f': "force"}
 
 // parseArgs reads options the GNU way. Short ones combine, as in -pl, and
 // take a value joined or apart: -aIP or -a IP. Long ones take --addr IP or
@@ -267,6 +273,9 @@ func parseArgs(args []string) (config, error) {
 	if c.commit != "" && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.stamp ||
 		c.sharing || c.secret || c.addr != "" || c.cache != "" || c.disk != "") {
 		return c, &errno{syscall.EINVAL, "--commit takes a directory and no other option"}
+	}
+	if c.force && !c.restart {
+		return c, &errno{syscall.EINVAL, "--force goes with --restart"}
 	}
 	if c.restart && c.fg {
 		return c, &errno{syscall.EINVAL, "--restart takes no --foreground"}
