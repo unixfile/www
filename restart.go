@@ -126,7 +126,7 @@ func startDir(c config, open []string) int {
 		args = []string{"--share=" + c.ep.String()}
 	}
 	if c.noopen {
-		args = append(args, "-n")
+		args = append(args, "--no-open")
 	}
 	if c.stamp {
 		args = append(args, "--stamp")
@@ -195,9 +195,9 @@ func startTrees(ep netip.AddrPort, trees []servedTree, stamp bool) error {
 	}
 	var failed error
 	for _, t := range trees {
-		args := []string{"-n", "-a", ep.String()}
+		args := []string{"--no-open", "-a", ep.String()}
 		if shared(ep) {
-			args = []string{"-n", "--share=" + ep.String()}
+			args = []string{"--no-open", "--share=" + ep.String()}
 		}
 		// The token goes on the command line, where ps shows it; the lock
 		// in the tree already holds it for anyone who can read the tree.
