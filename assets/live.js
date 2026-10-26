@@ -468,8 +468,15 @@
 	document.documentElement.addEventListener("pointerleave", (e) => {
 		if (e.pointerType !== "touch") calm();
 	});
+	// A faded row lets a tap through to the text below, so a tap counts by
+	// where it lands.
 	document.addEventListener("pointerdown", (e) => {
-		if (e.pointerType === "touch" && e.target.closest && e.target.closest(chrome)) wake();
+		if (e.pointerType !== "touch") return;
+		const on = [...document.querySelectorAll(chrome)].some((el) => {
+			const r = el.getBoundingClientRect();
+			return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+		});
+		if (on) wake();
 	});
 	addEventListener("scroll", settle, { passive: true });
 	document.addEventListener("focusin", settle);
