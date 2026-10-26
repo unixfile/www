@@ -761,7 +761,9 @@ func detach(c config) int {
 
 func failNow(code syscall.Errno, msg string) int {
 	logErr("E%d: %s", code, msg)
-	fmt.Fprintf(os.Stderr, "E%d: %s\n", code, msg)
+	if !stderrIsJournal() {
+		fmt.Fprintf(os.Stderr, "E%d: %s\n", code, msg)
+	}
 	return int(code)
 }
 

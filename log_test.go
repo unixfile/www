@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -173,5 +175,26 @@ func TestRequestLogShared(t *testing.T) {
 	b, _ := os.ReadFile(path)
 	if !strings.Contains(string(b), " from 192.0.2.1:1234\n") {
 		t.Errorf("shared log lacks the visitor:\n%s", b)
+	}
+}
+
+// Under systemd, stderr is the journal, so what is logged is not printed
+// as well.
+func TestStderrIsJournal(t *testing.T) {
+	var st syscall.Stat_t
+	if err := syscall.Fstat(2, &st); err != nil {
+		t.Skip(err)
+	}
+	t.Setenv("JOURNAL_STREAM", fmt.Sprintf("%d:%d", st.Dev, st.Ino))
+	if !stderrIsJournal() {
+		t.Error("stderr's own device and inode are not the journal")
+	}
+	t.Setenv("JOURNAL_STREAM", fmt.Sprintf("%d:%d", st.Dev, st.Ino+1))
+	if stderrIsJournal() {
+		t.Error("another inode is the journal")
+	}
+	t.Setenv("JOURNAL_STREAM", "")
+	if stderrIsJournal() {
+		t.Error("no JOURNAL_STREAM is the journal")
 	}
 }

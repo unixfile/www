@@ -164,6 +164,18 @@ func openLogFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
 }
 
+// stderrIsJournal reports whether stderr is a journal stream that systemd
+// connected, as it does for a unit's process, by JOURNAL_STREAM, its
+// device and inode. A line logged then needs no copy on stderr, which
+// would show it twice in the journal.
+func stderrIsJournal() bool {
+	var st syscall.Stat_t
+	if os.Getenv("JOURNAL_STREAM") == "" || syscall.Fstat(2, &st) != nil {
+		return false
+	}
+	return os.Getenv("JOURNAL_STREAM") == fmt.Sprintf("%d:%d", st.Dev, st.Ino)
+}
+
 // logSink is where a detached server's stderr goes: a journal stream, or
 // the fallback file. A panic writes there, past every logger. It returns
 // nil when neither opens, and stderr then goes nowhere, as before.

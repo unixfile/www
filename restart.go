@@ -90,7 +90,9 @@ func reloading(n int) string {
 // say tells the user and the log what a restart did.
 func say(format string, args ...any) {
 	logInfo(format, args...)
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	if !stderrIsJournal() {
+		fmt.Fprintf(os.Stderr, format+"\n", args...)
+	}
 }
 
 // startDir serves c.dir on c.ep once the servers are replaced. A tree the
