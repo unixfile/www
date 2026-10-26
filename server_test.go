@@ -479,14 +479,14 @@ func TestNotFoundCoin(t *testing.T) {
 // serve debugging alone.
 func TestIndexTimesOnlyWithStamp(t *testing.T) {
 	defer func() { showBuilt = false }()
-	b := indexServer{binary: "/usr/bin/www", built: time.Now(), commit: "1f2241d", since: time.Now()}
+	b := indexServer{binary: "/usr/bin/" + progName, built: time.Now(), commit: "1f2241d", since: time.Now()}
 	for _, show := range []bool{false, true} {
 		showBuilt = show
 		got := b.account()
 		if has := strings.Contains(got, "built ") && strings.Contains(got, "up since "); has != show {
 			t.Errorf("stamp %t: %s", show, got)
 		}
-		if !strings.Contains(got, "www") {
+		if !strings.Contains(got, progName) {
 			t.Errorf("stamp %t: the binary is missing: %s", show, got)
 		}
 	}
