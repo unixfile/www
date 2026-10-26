@@ -69,6 +69,15 @@ func git(ctx context.Context, dir string, args ...string) ([]byte, error) {
 // when set. git rewrites a progress line in place with \r, so each
 // rewrite is a line.
 func gitProgress(ctx context.Context, dir string, progress func(string), args ...string) ([]byte, error) {
+	return gitRun(ctx, dir, nil, progress, args...)
+}
+
+// gitIn is git with stdin as its standard input.
+func gitIn(ctx context.Context, dir string, stdin io.Reader, args ...string) ([]byte, error) {
+	return gitRun(ctx, dir, stdin, nil, args...)
+}
+
+func gitRun(ctx context.Context, dir string, stdin io.Reader, progress func(string), args ...string) ([]byte, error) {
 	remote := inCache(dir)
 	pre := []string{"-c", "protocol.allow=never"}
 	if remote {
@@ -78,6 +87,7 @@ func gitProgress(ctx context.Context, dir string, progress func(string), args ..
 	args = append(append(pre, "-c", "core.fsmonitor=false", "-c", "core.quotePath=false", "--no-pager", "--literal-pathspecs"), args...)
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
+	cmd.Stdin = stdin
 	for _, kv := range os.Environ() {
 		if !strings.HasPrefix(kv, "GIT_") && !strings.HasPrefix(kv, "SSH_ASKPASS=") {
 			cmd.Env = append(cmd.Env, kv)

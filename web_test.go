@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -22,6 +23,8 @@ type forge struct {
 	root string
 	host string // host:port, as a URL on the web address names it
 	work map[string]string
+	// packs counts git's requests for objects
+	packs atomic.Int32
 }
 
 func newForge(t *testing.T, api http.Handler) *forge {
@@ -33,6 +36,9 @@ func newForge(t *testing.T, api http.Handler) *forge {
 		Env: []string{"GIT_PROJECT_ROOT=" + f.root, "GIT_HTTP_EXPORT_ALL=1"}, Stderr: io.Discard}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/info/refs") || strings.HasSuffix(r.URL.Path, "/git-upload-pack") {
+			if strings.HasSuffix(r.URL.Path, "/git-upload-pack") {
+				f.packs.Add(1)
+			}
 			backend.ServeHTTP(w, r)
 			return
 		}
@@ -174,6 +180,36 @@ func TestWebReadsARepoOnTheVisit(t *testing.T) {
 	}
 	if rec := read(t, w, path); rec.Code != http.StatusOK {
 		t.Errorf("read again: %d\n%s", rec.Code, rec.Body)
+	}
+}
+
+// A version's listing fetches the files its partial clone lacks in one
+// request, where ls-tree -l would fetch them one by one for their sizes.
+func TestWebVersionFetchesADirectoryAtOnce(t *testing.T) {
+	f := newForge(t, nil)
+	files := map[string]string{}
+	for _, n := range []string{"a", "b", "c", "d", "e"} {
+		files["src/"+n+".go"] = "package " + n + "\n"
+	}
+	first := f.repo(t, "acct/code", files)
+	for p := range files {
+		files[p] += "// changed\n"
+	}
+	f.repo(t, "acct/code", files)
+	w := testWeb(t, defaultDisk)
+	if rec := read(t, w, "/"+f.host+"/acct/code/"); rec.Code != http.StatusOK {
+		t.Fatalf("head: %d\n%s", rec.Code, rec.Body)
+	}
+	before := f.packs.Load()
+	rec := webGet(w, "/"+f.host+"/acct/code@"+first[:12]+"/src/")
+	for i := 0; i < 3 && rec.Code == http.StatusMovedPermanently; i++ {
+		rec = webGet(w, rec.Header().Get("Location"))
+	}
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "e.go") {
+		t.Fatalf("first commit's src/: %d\n%s", rec.Code, rec.Body)
+	}
+	if n := f.packs.Load() - before; n != 1 {
+		t.Errorf("the listing took %d requests, want 1", n)
 	}
 }
 

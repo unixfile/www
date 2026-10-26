@@ -269,9 +269,14 @@ func (c commitFS) list(name string) ([]gitEntry, error) {
 	if v, ok := gitCache.get(key); ok {
 		return v.([]gitEntry), nil
 	}
-	spec := "./"
+	spec, treeRev := "./", c.rev+"^{tree}"
 	if name != "." {
-		spec = "./" + name + "/"
+		spec, treeRev = "./"+name+"/", c.rev+":"+name
+	}
+	if inCache(c.dir) {
+		if err := fetchMissing(context.Background(), c.dir, treeRev, name, c.rev); err != nil {
+			return nil, err
+		}
 	}
 	out, err := git(context.Background(), c.dir, "ls-tree", "-l", "-z", c.rev, "--", spec)
 	if err != nil {
@@ -296,6 +301,34 @@ func (c commitFS) list(name string) ([]gitEntry, error) {
 	}
 	gitCache.put(key, entries, size)
 	return entries, nil
+}
+
+// fetchMissing fetches the blobs of the directory tree names that a
+// partial clone lacks, in one request. ls-tree -l reads each blob's size,
+// and git would fetch each missing blob for it in a request of its own,
+// about half a second apiece on GitHub: 12 s for fzf's src/. rev-list
+// with --missing=print never fetches, and tree:1 keeps it to the
+// directory's own entries. name and rev only label the log line.
+func fetchMissing(ctx context.Context, dir, tree, name, rev string) error {
+	out, err := git(ctx, dir, "rev-list", "--objects", "--missing=print", "--filter=tree:1", tree)
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for _, l := range strings.Split(string(out), "\n") {
+		if obj, ok := strings.CutPrefix(l, "?"); ok {
+			missing = append(missing, obj)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	start := time.Now()
+	_, err = gitIn(ctx, dir, strings.NewReader(strings.Join(missing, "\n")+"\n"),
+		"-c", "fetch.negotiationAlgorithm=noop", "fetch", "--no-tags", "--no-write-fetch-head",
+		"--recurse-submodules=no", "--filter=blob:none", "--stdin", "origin")
+	logInfo("fetched %d files of %s at %s in %s in %d ms", len(missing), name, rev[:12], tildePath(dir), time.Since(start).Milliseconds())
+	return err
 }
 
 // entry finds name in its directory's listing.
