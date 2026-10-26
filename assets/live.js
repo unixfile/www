@@ -398,6 +398,7 @@
 	const clearSearch = () => {
 		box().value = "";
 		runSearch();
+		settle();
 	};
 	// jump leaves the search for a match in the whole page: a line of code
 	// by its anchor, anything else scrolled to the middle.
@@ -417,7 +418,55 @@
 		if (!e.target.matches("input.search")) return;
 		clearTimeout(timer);
 		timer = setTimeout(runSearch, 120);
+		settle();
 	});
+
+	// The controls fade while none is needed: the box, copy and share, raw,
+	// the stop button and a code page's views. They show while the query
+	// has a character, while the mouse moves inside the column, while
+	// keyboard focus is on one of them or a crumb, and after a tap on
+	// their rows on a touch screen. They fade 2 s after the mouse stops and
+	// at once when it leaves the column. Focus in the empty box does not
+	// count, since the box holds focus on every page.
+	const chrome = "header, div.search, div.view";
+	// While calmTimer runs, the mouse or a tap keeps the controls shown.
+	let calmTimer = null;
+	const needed = () => {
+		const f = document.activeElement;
+		return searching() || (!!f && !!f.closest && !!f.closest(chrome) && !f.matches("input.search"));
+	};
+	const calm = () => {
+		clearTimeout(calmTimer);
+		calmTimer = null;
+		if (!needed()) document.documentElement.classList.add("calm");
+	};
+	const wake = () => {
+		clearTimeout(calmTimer);
+		document.documentElement.classList.remove("calm");
+		calmTimer = setTimeout(calm, 2000);
+	};
+	// settle runs when the need changes: the query, or focus.
+	const settle = () => {
+		if (needed()) document.documentElement.classList.remove("calm");
+		else if (!calmTimer) calm();
+	};
+	document.addEventListener("pointermove", (e) => {
+		if (e.pointerType === "touch") return;
+		const r = document.body.getBoundingClientRect();
+		if (e.clientX >= r.left && e.clientX <= r.right) wake();
+		else calm();
+	});
+	// A finger leaves the page at the end of every tap, so only the mouse
+	// leaving counts.
+	document.documentElement.addEventListener("pointerleave", (e) => {
+		if (e.pointerType !== "touch") calm();
+	});
+	document.addEventListener("pointerdown", (e) => {
+		if (e.pointerType === "touch" && e.target.closest && e.target.closest(chrome)) wake();
+	});
+	document.addEventListener("focusin", settle);
+	document.addEventListener("focusout", () => setTimeout(settle));
+	document.addEventListener("DOMContentLoaded", calm);
 
 	// Below a doc, the docs that link to it. The server walks the tree for
 	// them, which can take longer than the page itself, so they arrive
