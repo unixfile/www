@@ -427,11 +427,11 @@
 	// leave gaps in the header. They show while the query has a character,
 	// while the mouse moves inside the column, while keyboard focus is on
 	// one of them or a crumb, and after the page scrolls up, by wheel,
-	// finger or key. They fade 2 s after the mouse or the scroll stops and
-	// at once when the mouse leaves the column. Focus in the empty box does
-	// not count, since the box holds focus on every page.
+	// finger or key. Shown, they fade only 2 s after the last of these
+	// ends, never at once. Focus in the empty box does not count, since the
+	// box holds focus on every page.
 	const chrome = "header, div.search, div.view";
-	// While calmTimer runs, the mouse or a scroll up keeps the controls shown.
+	// While calmTimer runs, the controls stay shown.
 	let calmTimer = null;
 	const atTop = () => {
 		const m = document.querySelector("main");
@@ -443,7 +443,6 @@
 		return atTop() || searching() || (!!f && !!f.closest && !!f.closest(chrome) && !f.matches("input.search"));
 	};
 	const calm = () => {
-		clearTimeout(calmTimer);
 		calmTimer = null;
 		if (!needed()) document.documentElement.classList.add("calm");
 	};
@@ -452,14 +451,15 @@
 		document.documentElement.classList.remove("calm");
 		calmTimer = setTimeout(calm, 2000);
 	};
-	// settle runs when the need changes: the scroll, the query, or focus.
+	// settle runs when the need may have changed: the scroll, the query, or
+	// focus. A need that ends starts the 2 s unless they already run.
 	const settle = () => {
 		if (needed()) document.documentElement.classList.remove("calm");
-		else if (!calmTimer) calm();
+		else if (!calmTimer && !document.documentElement.classList.contains("calm")) calmTimer = setTimeout(calm, 2000);
 	};
 	// After a scroll the browser sends a move to the mouse that rests, as
 	// the page moved under it. Only a move on the screen counts, or a mouse
-	// resting beside the column would hide what the scroll up showed.
+	// resting in the column would show the controls on every scroll.
 	let mx = null;
 	let my = null;
 	document.addEventListener("pointermove", (e) => {
@@ -468,12 +468,6 @@
 		my = e.screenY;
 		const r = document.body.getBoundingClientRect();
 		if (e.clientX >= r.left && e.clientX <= r.right) wake();
-		else calm();
-	});
-	// A finger leaves the page at the end of every tap, so only the mouse
-	// leaving counts.
-	document.documentElement.addEventListener("pointerleave", (e) => {
-		if (e.pointerType !== "touch") calm();
 	});
 	let lastY = scrollY;
 	addEventListener("scroll", () => {
@@ -483,7 +477,7 @@
 	}, { passive: true });
 	document.addEventListener("focusin", settle);
 	document.addEventListener("focusout", () => setTimeout(settle));
-	document.addEventListener("DOMContentLoaded", calm);
+	document.addEventListener("DOMContentLoaded", settle);
 
 	// Below a doc, the docs that link to it. The server walks the tree for
 	// them, which can take longer than the page itself, so they arrive
