@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"debug/buildinfo"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -202,15 +203,30 @@ func build() string {
 // buildRev names the commit the binary was built from, eg 54cca2a, with
 // +modified for a build from uncommitted code.
 func buildRev() string {
-	rev, modified := "", false
+	var settings []debug.BuildSetting
 	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, s := range info.Settings {
-			switch s.Key {
-			case "vcs.revision":
-				rev = s.Value
-			case "vcs.modified":
-				modified = s.Value == "true"
-			}
+		settings = info.Settings
+	}
+	return revOf(settings)
+}
+
+// fileRev is buildRev for a binary on disk, eg the other install's.
+func fileRev(path string) string {
+	info, err := buildinfo.ReadFile(path)
+	if err != nil {
+		return revOf(nil)
+	}
+	return revOf(info.Settings)
+}
+
+func revOf(settings []debug.BuildSetting) string {
+	rev, modified := "", false
+	for _, s := range settings {
+		switch s.Key {
+		case "vcs.revision":
+			rev = s.Value
+		case "vcs.modified":
+			modified = s.Value == "true"
 		}
 	}
 	if len(rev) > 7 {

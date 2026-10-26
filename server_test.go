@@ -1,8 +1,10 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -418,15 +420,44 @@ func TestStylesheetCached(t *testing.T) {
 	}
 }
 
-// The index names the server's binary, and the stale warning's command
-// names it by path when PATH leads to another binary.
-func TestIndexNamesBinary(t *testing.T) {
+// The index lists every server in the order of their addresses, each
+// with its binary, so it reads the same from any of them. Only this
+// server's trees carry buttons; another's address links to its index.
+// The stale warning's command names the binary by path when PATH leads
+// to another binary.
+func TestIndexListsEveryServer(t *testing.T) {
+	ep := testEndpoint(t)
+	ln, err := net.Listen("tcp", "127.31.250.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	other := netip.MustParseAddrPort(ln.Addr().String())
+	ln.Close()
+	dir := t.TempDir()
+	_, served := start(t, config{dir: dir, ep: other})
+	defer func() {
+		os.Remove(filepath.Join(dir, lockName(other)))
+		<-served
+	}()
+
 	s, tr, _ := serveTree(t)
 	tr.prefix, tr.label = "/notes/", "~/notes"
-	s.about.exe = "/opt/other/" + progName
+	s.about = about{ep: ep, started: time.Now(), exe: "/opt/other/" + progName}
 	body := get(s.handler(), "/").Body.String()
-	if !strings.Contains(body, "<p class=\"own\">Binary: <code>"+segments(s.about.exe)+"</code></p>") {
-		t.Errorf("index lacks the binary: %s", body)
+	own := "<h2 class=\"own\">" + ep.String() + ", this page</h2>\n<p class=\"own\"><code>" + segments(s.about.exe) + "</code>"
+	theirs := "<h2 class=\"own\"><a href=\"" + origin(other) + "/\">" + other.String() + "</a></h2>"
+	i, j := strings.Index(body, own), strings.Index(body, theirs)
+	if i < 0 || j < 0 {
+		t.Fatalf("index lacks a server: %s", body)
+	}
+	if (ep.Compare(other) < 0) != (i < j) {
+		t.Errorf("servers out of address order: %s", body)
+	}
+	if strings.Count(body, "<button>Delete lock</button>") != 1 {
+		t.Errorf("want one Delete lock button, for this server's tree: %s", body)
+	}
+	if !strings.Contains(body, `<a href="`+origin(other)+dir+`/" title="`+filepath.Join(dir, lockName(other))+`">`+segments(dir)+"</a>") {
+		t.Errorf("index lacks the other server's tree: %s", body)
 	}
 	if got, want := s.about.restartCmd(), s.about.exe+" --restart"; got != want {
 		t.Errorf("restart command %q, want %q", got, want)
