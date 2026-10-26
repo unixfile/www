@@ -1,6 +1,6 @@
 # www
 
-Browse trees of Markdown docs in the browser, rendered on each request, with their git history.
+www reads a directory in the browser: Markdown as pages, code as highlighted source, a repo with its history. It runs on your machine and needs no build step.
 
 It is fast. A page from a running server takes one to three milliseconds, a server starts in about 40 ms, and a test in `make test` fails any page that takes over five.
 
