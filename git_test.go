@@ -139,16 +139,24 @@ func TestHistoryRedirectKeepsQuery(t *testing.T) {
 	}
 }
 
-// Doc and code pages name their last commit at the top.
+// Doc and code pages say at the top whether they match their last
+// commit, which they name on hover; an edit since makes them changed.
 func TestPageTopNamesLastCommit(t *testing.T) {
-	s, _ := repoTree(t)
+	s, dir := repoTree(t)
 	h := s.handler()
 	for p, subject := range map[string]string{"/index.md": "Add the docs", "/a/b.go": "Rename the package &lt;b&gt;"} {
 		body := get(h, p).Body.String()
-		if !strings.Contains(body, `<details class="own latest" data-timeline="?timeline">`) || !strings.Contains(body, `</span> · <span class="subject" title=`) || !strings.Contains(body, `">`+subject+`</span></summary>`) ||
-			!strings.Contains(body, `<div class="versions"><a href="?log">&lt;(git log)</a></div>`) {
+		if !strings.Contains(body, `<details class="own latest" data-timeline="?timeline">`) || !strings.Contains(body, ` · `+subject+` · `) || !strings.Contains(body, `">current</span></summary>`) ||
+			!strings.Contains(body, `<div class="versions"><a href="?log">&lt;(git log)</a></div>`) || strings.Contains(body, `class="own now"`) {
 			t.Errorf("%s: no top line with %q:\n%s", p, subject, body)
 		}
+	}
+	if id := head(t, dir, "HEAD:a/b.go"); blobID([]byte("package b\n"), len(id)) != id {
+		t.Errorf("blob id %s, git says %s", blobID([]byte("package b\n"), len(id)), id)
+	}
+	os.WriteFile(filepath.Join(dir, "a", "b.go"), []byte("package c\n"), 0o644)
+	if body := get(h, "/a/b.go").Body.String(); !strings.Contains(body, `">changed</span></summary>`) {
+		t.Errorf("edited page is not changed:\n%s", body)
 	}
 	if body := get(h, "/untracked/x.txt").Body.String(); strings.Contains(body, "?log") {
 		t.Errorf("untracked file has a top line:\n%s", body)

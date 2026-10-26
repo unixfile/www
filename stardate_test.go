@@ -88,7 +88,7 @@ func TestPendingVersion(t *testing.T) {
 	if !regexp.MustCompile(`^[0-9]{6}\.x$`).MatchString(star) {
 		t.Fatalf("unpushed commit is %q, want its day and x", star)
 	}
-	if body := get(h, "/a/b.go").Body.String(); !strings.Contains(body, ">"+star+"</span> · ") {
+	if body := get(h, "/a/b.go").Body.String(); !strings.Contains(body, `title="`+star+` · `) {
 		t.Errorf("top line names no %s:\n%s", star, body)
 	}
 	rec := get(h, "/@"+short+"/a/")

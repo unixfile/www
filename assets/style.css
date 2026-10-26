@@ -258,7 +258,11 @@ ul.decls span.what { color: var(--muted); display: inline-block; min-width: 9ch;
 details.latest { position: relative; margin-bottom: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 0.6em; color: var(--muted); }
 details.latest > summary { list-style: none; cursor: pointer; }
 details.latest > summary::-webkit-details-marker { display: none; }
-details.latest a, details.latest span.subject { color: var(--text); }
+details.latest a, details.latest span.subject, details.latest span.state { color: var(--text); }
+details.latest > summary:hover span.state { text-decoration: underline; text-decoration-color: var(--rule); }
+/* On a version, the link to the page as it is sits at the top line's
+   right end, outside the line's one target. */
+a.now { float: right; position: relative; z-index: 1; margin-left: 1em; font-size: max(0.5em, 11px); }
 details.latest > summary:hover span.subject { text-decoration: underline; text-decoration-color: var(--rule); }
 details.latest > div.versions, details.latest > ol.versions { position: absolute; z-index: 1; top: 100%; left: 0; margin: 0;
   max-height: 60vh; overflow-y: auto; min-width: 20em; max-width: 100%; padding: 0.4em 0; list-style: none;

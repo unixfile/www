@@ -800,7 +800,7 @@ func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string
 		t.fail(w, r, name, http.StatusInternalServerError, err.Error())
 		return
 	}
-	body = template.HTML(t.logLine(r.Context(), name)) + body
+	body = template.HTML(t.logLine(r.Context(), name, b)) + body
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
 }
 
@@ -851,7 +851,7 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 		return
 	}
 	var body strings.Builder
-	body.WriteString(t.logLine(r.Context(), name))
+	body.WriteString(t.logLine(r.Context(), name, b))
 	// The links to the other views and to the raw file float over the
 	// code's top right corner; div.code bounds how far they follow the
 	// page down. A tree that cannot be had says why above the flat code.

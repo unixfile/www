@@ -90,7 +90,7 @@ func (t *tree) versionLine(ctx context.Context, name string, dir bool) string {
 	c := t.base.lastAt(ctx, name, t.at)
 	now := (&url.URL{Path: t.base.prefix + rest}).String()
 	stars := stardatesIn(ctx, t.dir)
-	return topLine(c, stars.label(c), now, t.base.versionURL(stars, c, rest))
+	return topLine(c, stars.label(c), "", now, t.base.versionURL(stars, c, rest), now)
 }
 
 // lastAt is the newest commit up to at that touched name, a path below

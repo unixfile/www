@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
@@ -387,8 +390,8 @@ func (t *tree) starsFor(ctx context.Context, name string) *stardates {
 }
 
 // logLine is the line at the top of a doc or code page in a repo, or ""
-// when no commit touched the page.
-func (t *tree) logLine(ctx context.Context, name string) string {
+// when no commit touched the page. b is the page's file as read.
+func (t *tree) logLine(ctx context.Context, name string, b []byte) string {
 	if t.at != nil {
 		return t.versionLine(ctx, name, false)
 	}
@@ -396,30 +399,97 @@ func (t *tree) logLine(ctx context.Context, name string) string {
 	if c == nil {
 		return ""
 	}
-	return topLine(c, t.starsFor(ctx, name).label(c), "", "")
+	state := "current"
+	if t.pageChanged(ctx, name, b) {
+		state = "changed"
+	}
+	return topLine(c, t.starsFor(ctx, name).label(c), state, "", "", "")
 }
 
-// topLine is the line at the top of a page in a repo. It names the
-// commit shown, by subject and star, its stardate or hash, with hash and
-// exact time on hover,
-// and the whole line is one target: it opens a menu of the page's
-// versions, which loads from base?timeline. here, when not "", is the
-// URL of the version shown, which the menu marks. Without the script the
-// menu holds a link to the history.
-func topLine(c *commit, star, base, here string) string {
+// topLine is the line at the top of a page in a repo, and the whole line
+// is one target: it opens a menu of the page's versions, which loads from
+// base?timeline. On the page as it is, the line says only state, current
+// or changed, since where the reader is matters more than which commit;
+// the commit, by star, its stardate or hash, and subject, is on hover.
+// On a version, the line names the commit by star and subject, and now,
+// a link outside the line, leads to the page as it is. here, when not
+// "", is the URL of the version shown, which the menu marks. Without the
+// script the menu holds a link to the history.
+func topLine(c *commit, star, state, base, here, now string) string {
 	esc := template.HTMLEscapeString
+	what := star + " · " + subjectOf(c)
 	// The stardate leads, as it does in histories and the version menu.
 	line := fmt.Sprintf("<span class=\"date\" title=\"%s %s\">%s</span> · <span class=\"subject\" title=\"%s %s\">%s</span>",
 		esc(c.short), exact(c.date), esc(star), esc(c.short), exact(c.date), esc(subjectOf(c)))
+	if state != "" {
+		line = fmt.Sprintf("<span class=\"state\" title=\"%s · %s %s\">%s</span>", esc(what), esc(c.short), exact(c.date), state)
+	}
 	if here != "" {
 		here = " data-here=\"" + esc(here) + "\""
 	}
+	// The link to the page as it is floats right, before the line, so
+	// it stays out of the line's one target.
+	out := ""
+	if now != "" {
+		out = fmt.Sprintf("<a class=\"own now\" href=\"%s\">current</a>\n", esc(now))
+	}
 	// The whole line opens the timeline, so no word labels it; the name
 	// shows on hover and is read out first.
-	label := "timeline, " + star + ", " + subjectOf(c)
-	return fmt.Sprintf("<details class=\"own latest\" data-timeline=\"%s?timeline\"%s>\n<summary title=\"timeline\" aria-label=\"%s\">%s</summary>\n"+
+	label := "timeline, " + state + ", " + what
+	if state == "" {
+		label = "timeline, " + what
+	}
+	return out + fmt.Sprintf("<details class=\"own latest\" data-timeline=\"%s?timeline\"%s>\n<summary title=\"timeline\" aria-label=\"%s\">%s</summary>\n"+
 		"<div class=\"versions\"><a href=\"%s?log\">%s</a></div>\n</details>\n",
 		esc(base), here, esc(label), line, esc(base), esc(logLabel))
+}
+
+// pageChanged reports whether b, the file of the page at name, differs
+// from its last commit. Git's id for b, against the id HEAD keeps for
+// the path, answers in microseconds; git status, which took 16 ms on
+// node, runs only when the ids differ, since a filter such as autocrlf
+// can make equal files differ in bytes.
+func (t *tree) pageChanged(ctx context.Context, name string, b []byte) bool {
+	if id := t.committedBlob(ctx, name); id != "" && blobID(b, len(id)) == id {
+		return false
+	}
+	return t.changed(ctx, name)
+}
+
+// committedBlob is the id of the blob HEAD holds for the file at name, or
+// "" when git cannot say. It is kept under HEAD's commit.
+func (t *tree) committedBlob(ctx context.Context, name string) string {
+	dir, spec, err := t.gitPlace(name)
+	if err != nil {
+		return ""
+	}
+	r := repoAt(ctx, dir)
+	if r.complaint != "" {
+		return ""
+	}
+	key := "blob\x00" + r.gitDir + "\x00" + r.head(ctx) + "\x00" + dir + "\x00" + spec
+	if v, ok := gitCache.get(key); ok {
+		return v.(string)
+	}
+	out, err := git(ctx, dir, "rev-parse", "--verify", "-q", "HEAD:./"+spec)
+	id := strings.TrimSpace(string(out))
+	if err != nil {
+		id = ""
+	}
+	gitCache.put(key, id, int64(len(key)+len(id)+32))
+	return id
+}
+
+// blobID is git's id for a blob holding b: SHA-1 for an id of n = 40 hex
+// digits, else SHA-256.
+func blobID(b []byte, n int) string {
+	h := sha256.New()
+	if n == 40 {
+		h = sha1.New()
+	}
+	fmt.Fprintf(h, "blob %d\x00", len(b))
+	h.Write(b)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // changed reports whether name, a file or everything below a directory,
