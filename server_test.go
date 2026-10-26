@@ -417,3 +417,18 @@ func TestStylesheetCached(t *testing.T) {
 		t.Errorf("page does not link %s: %s", styleURL, body)
 	}
 }
+
+// The index names the server's binary, and the stale warning's command
+// names it by path when PATH leads to another binary.
+func TestIndexNamesBinary(t *testing.T) {
+	s, tr, _ := serveTree(t)
+	tr.prefix, tr.label = "/notes/", "~/notes"
+	s.about.exe = "/opt/other/" + progName
+	body := get(s.handler(), "/").Body.String()
+	if !strings.Contains(body, "<p class=\"own\">Binary: <code>"+segments(s.about.exe)+"</code></p>") {
+		t.Errorf("index lacks the binary: %s", body)
+	}
+	if got, want := s.about.restartCmd(), s.about.exe+" --restart"; got != want {
+		t.Errorf("restart command %q, want %q", got, want)
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -108,8 +109,19 @@ func (a about) stale() bool {
 }
 
 // restartCmd is the command that moves this server's trees to the new
-// binary; with no address it moves every server's.
+// binary; with no address it moves every server its binary started. It
+// names the binary by its path when the name on PATH leads to another,
+// eg the package's, which would leave this server alone.
 func (a about) restartCmd() string {
+	if a.exe != "" {
+		p, err := exec.LookPath(progName)
+		if err == nil {
+			p, err = filepath.EvalSymlinks(p)
+		}
+		if err != nil || p != a.exe {
+			return tildePath(a.exe) + " --restart"
+		}
+	}
 	return progName + " --restart"
 }
 
@@ -619,6 +631,9 @@ func (s *server) serveIndex(w http.ResponseWriter, r *http.Request, status int, 
 				since, esc(t.prefixURL()), esc(lockPath), segments(t.label), esc(t.prefix))
 		}
 		body.WriteString("</table>\n")
+	}
+	if s.about.exe != "" {
+		body.WriteString("<p class=\"own\">Binary: <code>" + segments(tildePath(s.about.exe)) + "</code></p>\n")
 	}
 	if s.webURL != "" {
 		fmt.Fprintf(&body, "<p class=\"own\">Online repos: <a href=\"%s/\">%s/</a></p>\n", esc(s.webURL), esc(strings.TrimPrefix(s.webURL, "http://")))
