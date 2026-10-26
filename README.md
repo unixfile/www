@@ -7,12 +7,15 @@ It is fast. A page from a running server takes one to three milliseconds, a serv
 ## Usage
 
 ```
-www [-p] [--foreground] [--no-open] [-a ADDR] [DIR]
-www [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [DIR]
-www --restart [-f] [--no-open] [-a ADDR | --share[=HOST]] [DIR]
-www -l [-a ADDR | --share[=HOST]] [DIR]
+www [-p] [--foreground] [--no-open] [-a ADDR] [--debug] [--no-bug]
+    [--cache=SIZE] [--disk=SIZE] [--] [DIR]
+www [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [--debug]
+    [--no-bug] [--cache=SIZE] [--disk=SIZE] [--] [DIR]
+www --restart [-f] [--no-open] [--debug] [--no-bug]
+    [-a ADDR | --share[=HOST]] [--] [DIR]
+www -l [-a ADDR | --share[=HOST]] [--] [DIR]
 www --kill [-a ADDR | --share[=HOST]]
-www --commit=REV [DIR]
+www --commit=REV [--] [DIR]
 www -h | --help
 www -V | --version
 ```
