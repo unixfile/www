@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -41,6 +44,56 @@ func TestNumberCommits(t *testing.T) {
 	}
 	if got := old.extend("d", []byte("d x1 2026-10-25T09:00:00+02:00")); got != nil {
 		t.Errorf("a line off the old tip extended: %v", got.byHash)
+	}
+}
+
+// A commit on the local branch that origin's line has not reached reads as
+// its day and x, and a merge it made names what it brought in after
+// itself; none of them gets a place or an address.
+func TestPendingCommits(t *testing.T) {
+	s := fresh().extend("a", []byte("a 2026-10-24T16:00:00+02:00"))
+	p := s.withPending("m", []byte(strings.Join([]string{
+		"m b y 2026-10-26T10:00:00+02:00",
+		"y a 2026-10-26T09:30:00+02:00",
+		"b a 2026-10-26T09:00:00+02:00",
+	}, "\x00")))
+	for h, want := range map[string]string{"a": "261024.1", "b": "261026.x", "m": "261026.x", "y": "261026.x.1"} {
+		c := &commit{hash: h, short: h + "0"}
+		if got := p.label(c); got != want {
+			t.Errorf("%s: %q, want %q", h, got, want)
+		}
+		if h != "a" && p.addr(c) != c.short {
+			t.Errorf("%s addresses as %q, want its hash", h, p.addr(c))
+		}
+	}
+	if s.pending != nil || len(p.byDate) != 1 || p.perDay["261026"] != 0 {
+		t.Errorf("pending commits were numbered: %v %v", p.byDate, p.perDay)
+	}
+}
+
+// An unpushed commit shows its day and x on the page and in a version's
+// crumb, and its version keeps the hash in its address.
+func TestPendingVersion(t *testing.T) {
+	s, dir := repoTree(t)
+	h := s.handler()
+	branch, err := exec.Command("git", "-C", dir, "symbolic-ref", "--short", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "update-ref", "refs/remotes/origin/"+strings.TrimSpace(string(branch)), "HEAD~1").CombinedOutput(); err != nil {
+		t.Fatalf("update-ref: %v\n%s", err, out)
+	}
+	short := head(t, dir, "HEAD")[:7]
+	star := stardatesIn(context.Background(), dir).label(&commit{hash: head(t, dir, "HEAD"), short: short})
+	if !regexp.MustCompile(`^[0-9]{6}\.x$`).MatchString(star) {
+		t.Fatalf("unpushed commit is %q, want its day and x", star)
+	}
+	if body := get(h, "/a/b.go").Body.String(); !strings.Contains(body, ">"+star+"</span> · ") {
+		t.Errorf("top line names no %s:\n%s", star, body)
+	}
+	rec := get(h, "/@"+short+"/a/")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), " @ "+star+"</a>") {
+		t.Errorf("version @%s: %d\n%s", short, rec.Code, rec.Body.String())
 	}
 }
 

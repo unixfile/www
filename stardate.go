@@ -17,33 +17,41 @@ import (
 // first-parent line of origin's main or master, else of the local main or
 // master, so every clone of one repo names its published commits alike,
 // and checking out a branch moves nothing. The line only grows, so a
-// stardate keeps naming one commit unless history is rewritten. Commits
-// off the line, eg not yet pushed, have none and show their hash.
+// stardate keeps naming one commit unless history is rewritten. A commit
+// on the local branch of that name but not yet pushed has a day and no
+// place yet, eg 261026.x; it gets its number when origin's line reaches
+// it, so a rebase before the push renames nothing. Commits on no main
+// line, eg on another branch, show their hash.
 type stardates struct {
-	tip    string            // the main line's head, which the numbers run to
-	byHash map[string]string // full hash to stardate
-	byDate map[string]string // stardate to full hash
-	perDay map[string]int    // main-line commits per day so far
+	tip     string            // the main line's head, which the numbers run to
+	byHash  map[string]string // full hash to stardate
+	byDate  map[string]string // stardate to full hash
+	perDay  map[string]int    // main-line commits per day so far
+	pending map[string]string // full hash to day.x, for unpushed commits
 }
 
 // mainRefs are the refs the main line follows, in order of preference.
 var mainRefs = []string{"refs/remotes/origin/main", "refs/remotes/origin/master", "refs/heads/main", "refs/heads/master"}
 
-// mainTip is the commit at the head of r's main line.
-func (r repo) mainTip(ctx context.Context) (string, bool) {
-	table := exists(filepath.Join(r.common, "reftable"))
+// mainTip is the commit at the head of r's main line, and the ref it
+// came from.
+func (r repo) mainTip(ctx context.Context) (string, string, bool) {
 	for _, ref := range mainRefs {
-		if !table {
-			if h, ok := r.readRef(ref); ok && isHash(h) {
-				return h, true
-			}
-			continue
-		}
-		if out, err := git(ctx, r.gitDir, "rev-parse", "--verify", "-q", ref); err == nil {
-			return strings.TrimSpace(string(out)), true
+		if h, ok := r.refTip(ctx, ref); ok {
+			return h, ref, true
 		}
 	}
-	return "", false
+	return "", "", false
+}
+
+// refTip is the commit ref points at.
+func (r repo) refTip(ctx context.Context, ref string) (string, bool) {
+	if !exists(filepath.Join(r.common, "reftable")) {
+		h, ok := r.readRef(ref)
+		return h, ok && isHash(h)
+	}
+	out, err := git(ctx, r.gitDir, "rev-parse", "--verify", "-q", ref)
+	return strings.TrimSpace(string(out)), err == nil
 }
 
 // starFormat is how git prints a commit for numbering: hash, parents and
@@ -55,16 +63,40 @@ const starFormat = "--format=%H %P %cI"
 // fetch or push that moves the tip numbers only the new commits, as long
 // as the new line runs through the old tip; otherwise, eg after a force
 // push, it numbers all again. Numbering node's 49,203 commits took 657 ms
-// on 2026-10-24.
+// on 2026-10-24. When the line is origin's, the local branch of the same
+// name adds its unpushed commits as pending, kept under both tips.
 func stardatesIn(ctx context.Context, dir string) *stardates {
 	r := repoAt(ctx, dir)
 	if r.complaint != "" {
 		return nil
 	}
-	tip, ok := r.mainTip(ctx)
+	tip, ref, ok := r.mainTip(ctx)
 	if !ok {
 		return nil
 	}
+	s := numbered(ctx, dir, r, tip)
+	if s == nil || !strings.HasPrefix(ref, "refs/remotes/origin/") {
+		return s
+	}
+	local, ok := r.refTip(ctx, "refs/heads/"+strings.TrimPrefix(ref, "refs/remotes/origin/"))
+	if !ok || local == tip {
+		return s
+	}
+	key := "stardates local\x00" + r.common + "\x00" + tip + "\x00" + local
+	if v, ok := gitCache.get(key); ok {
+		return v.(*stardates)
+	}
+	out, err := git(ctx, dir, "log", "--no-show-signature", "-z", starFormat, local, "^"+tip)
+	if err != nil {
+		return s
+	}
+	p := s.withPending(local, out)
+	gitCache.put(key, p, 64+int64(len(p.pending))*2*(40+16+32))
+	return p
+}
+
+// numbered is the stardates of r's main line up to tip, kept under tip.
+func numbered(ctx context.Context, dir string, r repo, tip string) *stardates {
 	key, last := "stardates\x00"+r.common+"\x00"+tip, "stardates last\x00"+r.common
 	if v, ok := gitCache.get(key); ok {
 		return v.(*stardates)
@@ -104,18 +136,7 @@ type starNode struct {
 // new set; s stays as it was. It returns nil when tip's line does not run
 // through s's tip, since the old numbers would then be wrong.
 func (s *stardates) extend(tip string, out []byte) *stardates {
-	nodes := map[string]starNode{}
-	for _, rec := range strings.Split(string(out), "\x00") {
-		f := strings.Fields(rec)
-		if len(f) < 2 {
-			continue
-		}
-		when, err := time.Parse(time.RFC3339, f[len(f)-1])
-		if err != nil {
-			continue
-		}
-		nodes[f[0]] = starNode{parents: f[1 : len(f)-1], day: when.Format("060102")}
-	}
+	nodes := starNodes(out)
 	if s.tip != "" {
 		h := tip
 		for n, ok := nodes[h]; ok && len(n.parents) > 0; n, ok = nodes[h] {
@@ -130,17 +151,55 @@ func (s *stardates) extend(tip string, out []byte) *stardates {
 	return n
 }
 
+// withPending is s with the commits of out, git's records of a local
+// line up to local beyond s's tip, named pending by their day and x. s
+// stays as it was; the result shares its numbers.
+func (s *stardates) withPending(local string, out []byte) *stardates {
+	n := *s
+	n.pending = map[string]string{}
+	n.number(local, starNodes(out))
+	return &n
+}
+
+// starNodes reads out, git's records in starFormat, by hash.
+func starNodes(out []byte) map[string]starNode {
+	nodes := map[string]starNode{}
+	for _, rec := range strings.Split(string(out), "\x00") {
+		f := strings.Fields(rec)
+		if len(f) < 2 {
+			continue
+		}
+		when, err := time.Parse(time.RFC3339, f[len(f)-1])
+		if err != nil {
+			continue
+		}
+		nodes[f[0]] = starNode{parents: f[1 : len(f)-1], day: when.Format("060102")}
+	}
+	return nodes
+}
+
 // number names the commits of nodes along tip's first-parent line, the
-// main line, by day and place in the day.
+// main line, by day and place in the day. With s.pending set, it names
+// them pending instead: by day and x, with no place and no address.
 func (s *stardates) number(tip string, nodes map[string]starNode) {
 	name := func(h, d string) {
+		if s.pending != nil {
+			s.pending[h] = d
+			return
+		}
 		s.byHash[h], s.byDate[d] = d, h
+	}
+	known := func(h string) string {
+		if d := s.byHash[h]; d != "" {
+			return d
+		}
+		return s.pending[h]
 	}
 	// chain is the first-parent line back from h to the first commit
 	// already named, oldest first.
 	chain := func(h string) []string {
 		var c []string
-		for h != "" && s.byHash[h] == "" {
+		for h != "" && known(h) == "" {
 			n, ok := nodes[h]
 			if !ok {
 				break
@@ -164,22 +223,37 @@ func (s *stardates) number(tip string, nodes map[string]starNode) {
 		for _, p := range nodes[m].parents[min(1, len(nodes[m].parents)):] {
 			for _, h := range chain(p) {
 				n++
-				name(h, s.byHash[m]+"."+strconv.Itoa(n))
+				name(h, known(m)+"."+strconv.Itoa(n))
 				mergedIn(h)
 			}
 		}
 	}
 	for _, h := range chain(tip) {
 		d := nodes[h].day
+		if s.pending != nil {
+			name(h, d+".x")
+			mergedIn(h)
+			continue
+		}
 		s.perDay[d]++
 		name(h, d+"."+strconv.Itoa(s.perDay[d]))
 		mergedIn(h)
 	}
 }
 
-// label is what a reader sees for c: its stardate in s, or its short hash
-// when it has none.
+// label is what a reader sees for c: its stardate in s, its day and x
+// while it waits for a push, or its short hash when it has neither.
 func (s *stardates) label(c *commit) string {
+	if s != nil && s.pending[c.hash] != "" {
+		return s.pending[c.hash]
+	}
+	return s.addr(c)
+}
+
+// addr is what names c in a version's address: its stardate in s, or its
+// short hash when it has none. A pending day and x names no one commit,
+// so it never addresses one.
+func (s *stardates) addr(c *commit) string {
 	if s != nil {
 		if d := s.byHash[c.hash]; d != "" {
 			return d

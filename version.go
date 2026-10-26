@@ -49,11 +49,11 @@ func (t *tree) atVersion(ctx context.Context, seg string) (*tree, string, error)
 		return nil, "", fmt.Errorf("no commit %s in this repo", m[1])
 	}
 	c := cs[0]
-	best := "@" + stars.label(&c)
+	best := "@" + stars.addr(&c)
 	if v, ok := t.versions.Load(best); ok {
 		return v.(*tree), best, nil
 	}
-	v := &tree{dir: t.dir, realDir: t.realDir, prefix: t.prefix + best + "/", label: t.label, wd: -1, at: &c, base: t}
+	v := &tree{dir: t.dir, realDir: t.realDir, prefix: t.prefix + best + "/", label: t.label, wd: -1, at: &c, atLabel: stars.label(&c), base: t}
 	v.fsys = commitFS{dir: t.dir, rev: c.hash, when: c.date}
 	got, _ := t.versions.LoadOrStore(best, v)
 	return got.(*tree), best, nil
@@ -157,7 +157,7 @@ func (t *tree) historyInVersions(ctx context.Context, name string) bool {
 // versionURL is the URL of rest, a path below t, in commit c's version,
 // named by its stardate in s or else its short hash.
 func (t *tree) versionURL(s *stardates, c *commit, rest string) string {
-	return (&url.URL{Path: t.prefix + "@" + s.label(c) + "/" + rest}).String()
+	return (&url.URL{Path: t.prefix + "@" + s.addr(c) + "/" + rest}).String()
 }
 
 // commitFS reads a directory as it was in one commit: listings from git

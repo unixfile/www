@@ -222,6 +222,7 @@ type tree struct {
 	srv      *server     // the server that serves it, set when it joins
 	linked   linkIndex   // the relative links of each doc, for ?backlinks
 	at       *commit     // for a version, the commit it shows
+	atLabel  string      // for a version, its commit's stardate, day and x, or hash
 	base     *tree       // for a version, the tree it is a version of
 	versions sync.Map    // the versions served so far, by full hash
 }
@@ -1023,7 +1024,7 @@ type page struct {
 func (t *tree) title(name string) string {
 	at := ""
 	if t.at != nil {
-		at = " @ " + t.atName()
+		at = " @ " + t.atLabel
 	}
 	if name == "." {
 		return path.Base(t.label) + at
@@ -1034,16 +1035,11 @@ func (t *tree) title(name string) string {
 	return name
 }
 
-// atName is what a version is called in its address, eg 261024.4.
-func (t *tree) atName() string {
-	return strings.TrimPrefix(path.Base(t.prefix), "@")
-}
-
 // rootCrumb is the tree's first breadcrumb: its base name, with the full
 // path on hover. The address bar already shows the path.
 func (t *tree) rootCrumb() crumb {
 	if t.at != nil {
-		return crumb{Label: path.Base(t.label) + " @ " + t.atName(), Title: t.label + " as of " + t.at.hash}
+		return crumb{Label: path.Base(t.label) + " @ " + t.atLabel, Title: t.label + " as of " + t.at.hash}
 	}
 	return crumb{Label: path.Base(t.label), Title: t.label}
 }
