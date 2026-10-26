@@ -590,7 +590,7 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/":
 		s.serveIndex(w, r, http.StatusOK, "")
 	default:
-		s.serveIndex(w, r, http.StatusNotFound, "Not found: "+r.URL.Path)
+		s.serveIndex(w, r, http.StatusNotFound, "Not found: "+fullURL(r))
 	}
 }
 
@@ -1302,6 +1302,12 @@ func (t *tree) why(ref *refusal) string {
 	return ref.Error()
 }
 
+// fullURL is the URL r asked for, without its query, so a "Not found"
+// line names it whole when copied away from the address bar.
+func fullURL(r *http.Request) string {
+	return (&url.URL{Scheme: "http", Host: r.Host, Path: r.URL.Path}).String()
+}
+
 // notFound is the page for a path the tree lacks: 404 turns like a coin
 // above the message, and below it, where git says the path went and the
 // names close to it. Other failures say why in the plain line alone.
@@ -1311,7 +1317,7 @@ func (t *tree) notFound(w http.ResponseWriter, r *http.Request, name string) {
 		Crumbs: t.crumbs(name),
 		Kind:   "error",
 		Body: template.HTML(`<p class="coin" aria-hidden="true"><span><span>404</span><span>404</span></span></p>` +
-			`<pre class="error">Not found: ` + template.HTMLEscapeString(name) + "</pre>\n" + t.goneBody(r.Context(), name)),
+			`<pre class="error">Not found: ` + template.HTMLEscapeString(fullURL(r)) + "</pre>\n" + t.goneBody(r.Context(), name)),
 	})
 }
 
