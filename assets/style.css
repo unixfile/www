@@ -275,7 +275,7 @@ ol.versions > li.log { border-top: 1px solid var(--rule); margin-top: 0.3em; pad
 pre.error { white-space: pre-wrap; color: var(--danger); }
 /* A missing path's 404 turns like a coin: the digits go edge-on and back,
    slow down, rock once and stop facing the reader. Each face is text. */
-p.coin { margin: 0.5em 0 0.3em; text-align: center; perspective: 600px; font-family: ui-monospace, "Iosevka", monospace; font-size: 1.6em; color: var(--danger); }
+p.coin { margin: 0.2em 0 0.1em; line-height: 1; text-align: center; perspective: 18em; font-family: ui-monospace, "Iosevka", monospace; font-size: 6em; color: var(--text); }
 p.coin > span { display: inline-grid; transform-style: preserve-3d; animation: coin 2.4s cubic-bezier(.12,.62,.25,1) both; }
 p.coin > span > span { grid-area: 1 / 1; backface-visibility: hidden; }
 p.coin > span > span + span { transform: rotateY(180deg); }
