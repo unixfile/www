@@ -285,7 +285,6 @@ p.coin > span > span + span { transform: rotateY(180deg); }
   91%  { transform: rotateY(1792deg); }
   100% { transform: rotateY(1800deg); }
 }
-@media (prefers-reduced-motion: reduce) { p.coin > span { animation: none; } }
 /* While git reads a repo, its page names each step git takes and the
    dots after "reading" keep moving, so a slow clone shows it is alive. */
 pre.steps { white-space: pre-wrap; color: var(--muted); }
