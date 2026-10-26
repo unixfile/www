@@ -40,6 +40,8 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"--share=10.0.0.1:9000", "--secret", "docs"}, config{dir: "docs", sharing: true, share: "10.0.0.1:9000", secret: true}},
 		{[]string{"--restart", "--share=10.0.0.1"}, config{sharing: true, share: "10.0.0.1", restart: true}},
 		{[]string{"--kill"}, config{kill: true}},
+		{[]string{"--commit=261024.4"}, config{dir: ".", commit: "261024.4"}},
+		{[]string{"--commit", "HEAD", "docs"}, config{dir: "docs", commit: "HEAD"}},
 		{[]string{"--kill", "--share"}, config{sharing: true, kill: true}},
 	}
 	for _, tc := range ok {
@@ -73,6 +75,11 @@ func TestParseArgs(t *testing.T) {
 		{"--share", "--secret="},
 		{"--restart", "--share", "--secret"},
 		{"--kill", "docs"},
+		{"--commit"},
+		{"--commit="},
+		{"--commit=HEAD", "-l"},
+		{"--commit=HEAD", "-a", "127.31.1.2"},
+		{"--commit=HEAD", "--no-open"},
 		{"--kill", "-l"},
 		{"--kill", "--restart"},
 		{"--kill", "--share", "--secret"},

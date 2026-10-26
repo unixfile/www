@@ -12,6 +12,7 @@ www [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [DIR]
 www --restart [--no-open] [-a ADDR | --share[=HOST]] [DIR]
 www -l [-a ADDR | --share[=HOST]] [DIR]
 www --kill [-a ADDR | --share[=HOST]]
+www --commit=REV [DIR]
 www -h | --help
 www -V | --version
 ```
@@ -41,6 +42,7 @@ To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`
 - `--restart`: replace every server with one running this binary, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one; with `-a` or `--share`, only the server on that address; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
 - `-l`, `--list`: print each served tree's directory and URL as keyval, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it. A directory that holds no served tree prints nothing; one that does not exist fails with `E2`
 - `--kill`: stop every server and print the trees it served, as `--list` does; with `-a` or `--share`, only the server on that address
+- `--commit=REV`: print as keyval the commit REV names in the repo of DIR, or of the current directory: its full hash, its stardate and its subject. REV is a stardate, eg `261024.4`, a hash or any name git takes, so `git show $(www --commit=261024.4 | sed -n 's/^hash //p')` shows a commit seen on a page. A day and x, eg `261026.x`, works while one commit alone holds it. A commit or repo that is not there fails with `E2`
 - `-V`, `--version`: print when the binary was built and the commit it came from, as the stamp says it, eg `www built 2026-10-21 12:49, from 1aa282c+modified`
 - `-h`, `--help`: print the options
 

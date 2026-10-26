@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -24,6 +25,54 @@ import (
 // that version. A stardate always holds a dot, which no hash does.
 var atSegment = regexp.MustCompile(`^@([0-9a-f]{4,40}|[0-9]{6}(?:\.[0-9]+)+)$`)
 
+// stardateRev matches a stardate, eg 261024.4 or 261024.4.2, or a day and
+// x, eg 261026.x, as the name of a commit.
+var stardateRev = regexp.MustCompile(`^[0-9]{6}\.(?:[0-9]+|x)(?:\.[0-9]+)*$`)
+
+// findCommit is the commit rev names in the repo dir lies in, and that
+// repo's stardates. rev is a stardate, a day and x that one commit alone
+// holds while it waits for a push, or anything git rev-parse takes.
+func findCommit(ctx context.Context, dir, rev string) (commit, *stardates, error) {
+	stars, spec := stardatesIn(ctx, dir), rev
+	missing := &errno{syscall.ENOENT, "no commit " + rev + " in this repo"}
+	switch {
+	case strings.HasPrefix(rev, "-"):
+		// git would read it as an option.
+		return commit{}, stars, missing
+	case stardateRev.MatchString(rev) && strings.Contains(rev, ".x"):
+		var held []string
+		if stars != nil {
+			for h, d := range stars.pending {
+				if d == rev {
+					held = append(held, h)
+				}
+			}
+		}
+		switch len(held) {
+		case 0:
+			return commit{}, stars, &errno{syscall.ENOENT, "no commit " + rev + " waits for a push in this repo"}
+		case 1:
+			spec = held[0]
+		default:
+			return commit{}, stars, &errno{syscall.EINVAL, fmt.Sprintf("%s names %d commits until they are pushed; give a hash", rev, len(held))}
+		}
+	case stardateRev.MatchString(rev):
+		if stars == nil || stars.byDate[rev] == "" {
+			return commit{}, stars, &errno{syscall.ENOENT, "no commit " + rev + " on this repo's main line"}
+		}
+		spec = stars.byDate[rev]
+	}
+	out, err := git(ctx, dir, "log", "-1", "--no-show-signature", "-z", "--format="+commitFormat, spec+"^{commit}", "--")
+	if err != nil {
+		return commit{}, stars, missing
+	}
+	cs := parseCommits(out)
+	if len(cs) == 0 {
+		return commit{}, stars, missing
+	}
+	return cs[0], stars, nil
+}
+
 // atVersion is the tree t as it was in the commit seg names, eg @261024.4
 // or @5430ac3, and the segment that names it best: its stardate, else
 // git's short hash. A commit never changes, so each is built once per
@@ -33,22 +82,13 @@ func (t *tree) atVersion(ctx context.Context, seg string) (*tree, string, error)
 	if m == nil {
 		return nil, "", fs.ErrNotExist
 	}
-	stars, rev := stardatesIn(ctx, t.dir), m[1]
-	if strings.Contains(rev, ".") {
-		if stars == nil || stars.byDate[rev] == "" {
-			return nil, "", fmt.Errorf("no commit %s on this repo's main line", rev)
-		}
-		rev = stars.byDate[rev]
-	}
-	out, err := git(ctx, t.dir, "log", "-1", "--no-show-signature", "-z", "--format="+commitFormat, rev+"^{commit}", "--")
+	c, stars, err := findCommit(ctx, t.dir, m[1])
 	if err != nil {
-		return nil, "", fmt.Errorf("no commit %s in this repo", m[1])
+		return nil, "", err
 	}
-	cs := t.commits(out)
-	if len(cs) == 0 {
-		return nil, "", fmt.Errorf("no commit %s in this repo", m[1])
+	if t.shared {
+		c.body = dropTrailers(c.body)
 	}
-	c := cs[0]
 	best := "@" + stars.addr(&c)
 	if v, ok := t.versions.Load(best); ok {
 		return v.(*tree), best, nil

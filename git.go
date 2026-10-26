@@ -188,8 +188,20 @@ func (t *tree) gitLog(ctx context.Context, name string, n int) ([]commit, error)
 // commitFormat is how git prints a commit for commits to read.
 const commitFormat = "%H%n%h%n%aI%n%s%n%b"
 
-// commits reads git's records in commitFormat, each ended by a NUL.
+// commits reads git's records in commitFormat, each ended by a NUL; a
+// share drops their trailers.
 func (t *tree) commits(out []byte) []commit {
+	log := parseCommits(out)
+	if t.shared {
+		for i := range log {
+			log[i].body = dropTrailers(log[i].body)
+		}
+	}
+	return log
+}
+
+// parseCommits reads git's records in commitFormat, each ended by a NUL.
+func parseCommits(out []byte) []commit {
 	var log []commit
 	for _, rec := range strings.Split(string(out), "\x00") {
 		f := strings.SplitN(rec, "\n", 5)
@@ -200,9 +212,6 @@ func (t *tree) commits(out []byte) []commit {
 		c.date, _ = time.Parse(time.RFC3339, f[2])
 		if len(f) == 5 {
 			c.body = strings.TrimSpace(f[4])
-		}
-		if t.shared {
-			c.body = dropTrailers(c.body)
 		}
 		log = append(log, c)
 	}

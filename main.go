@@ -77,6 +77,7 @@ type config struct {
 	restart bool
 	list    bool
 	kill    bool
+	commit  string // the commit --commit looks up
 }
 
 // usageText is written in docopt notation, except that --share takes its
@@ -87,6 +88,7 @@ var usageText = strings.NewReplacer("@NAME@", progName, "@ENV@", envPrefix).Repl
   @NAME@ --restart [--no-open] [-a ADDR | --share[=HOST]] [DIR]
   @NAME@ -l [-a ADDR | --share[=HOST]] [DIR]
   @NAME@ --kill [-a ADDR | --share[=HOST]]
+  @NAME@ --commit=REV [DIR]
   @NAME@ -h | --help
   @NAME@ -V | --version
 
@@ -126,6 +128,10 @@ Options:
   --kill                stop every server and print the trees it served as
                         --list does; with -a or --share, only the server on
                         that address
+  --commit=REV          print as keyval the commit REV names in DIR's repo:
+                        its full hash, its stardate and its subject; REV is
+                        a stardate, eg 261024.4, a hash or any name git
+                        takes
   -V, --version         print when the binary was built and its commit
   -h, --help            print this help
 `)
@@ -204,6 +210,17 @@ func parseArgs(args []string) (config, error) {
 				c.secret = true
 				continue
 			}
+			if name == "commit" {
+				v, err := value(&i, "--commit", val)
+				if err != nil {
+					return c, err
+				}
+				if v == "" {
+					return c, &errno{syscall.EINVAL, "option --commit needs a value"}
+				}
+				c.commit = v
+				continue
+			}
 			if name == "cache" || name == "disk" {
 				v, err := value(&i, "--"+name, val)
 				if err != nil {
@@ -247,17 +264,21 @@ func parseArgs(args []string) (config, error) {
 			dirs = append(dirs, a)
 		}
 	}
+	if c.commit != "" && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.stamp ||
+		c.sharing || c.secret || c.addr != "" || c.cache != "" || c.disk != "") {
+		return c, &errno{syscall.EINVAL, "--commit takes a directory and no other option"}
+	}
 	if c.restart && c.fg {
-		return c, &errno{syscall.EINVAL, "--restart takes no -f"}
+		return c, &errno{syscall.EINVAL, "--restart takes no --foreground"}
 	}
 	if c.persist && (c.restart || c.list || c.kill) {
 		return c, &errno{syscall.EINVAL, "--persist goes with a start, not with --restart, --list or --kill"}
 	}
 	if c.list && (c.restart || c.fg) {
-		return c, &errno{syscall.EINVAL, "--list takes no --restart or -f"}
+		return c, &errno{syscall.EINVAL, "--list takes no --restart or --foreground"}
 	}
 	if c.kill && (len(dirs) > 0 || c.fg || c.restart || c.list) {
-		return c, &errno{syscall.EINVAL, "--kill takes no directory, -f, --restart or --list"}
+		return c, &errno{syscall.EINVAL, "--kill takes no directory, --foreground, --restart or --list"}
 	}
 	if c.addr != "" && c.sharing {
 		return c, &errno{syscall.EINVAL, "-a and --share name one address each; give one"}
@@ -299,6 +320,10 @@ func main() {
 	if c.version {
 		fmt.Println(versionLine(built, buildCommit))
 		os.Exit(0)
+	}
+	if c.commit != "" {
+		noteRun()
+		os.Exit(lookupCommit(os.Stdout, c))
 	}
 	if hint := spacedShare(c); hint != "" {
 		noteRun()
