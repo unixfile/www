@@ -284,7 +284,6 @@ pre.error { white-space: pre-wrap; font-size: inherit; line-height: inherit; ove
 table.gone { margin: 0; text-align: left; }
 table.gone th, table.gone td { border: 0; padding: 0.075em 0; vertical-align: top; text-align: left; font-weight: normal; }
 table.gone th { padding-right: 1em; white-space: nowrap; }
-body.index table.gone { font-size: 0.8em; margin-bottom: 1em; }
 /* A missing path's 404 turns like a coin: the digits go edge-on and back,
    slow down, rock once and stop facing the reader. Each face is text. */
 p.coin { margin: 0.2em 0 0.1em; line-height: 1; text-align: center; perspective: 18em; font-family: ui-monospace, "Iosevka", monospace; font-size: 6em; color: var(--text); }

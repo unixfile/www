@@ -599,7 +599,7 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/":
 		s.serveIndex(w, r, http.StatusOK, "")
 	default:
-		s.serveIndex(w, r, http.StatusNotFound, coin+`<table class="gone">`+"\n"+notFoundRow(r)+"</table>\n")
+		s.serveStray(w, r)
 	}
 }
 

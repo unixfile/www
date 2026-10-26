@@ -270,3 +270,52 @@ func (t *tree) goneRows(ctx context.Context, name string) string {
 	}
 	return b.String()
 }
+
+// serveStray is the 404 for a path outside every tree: the coin, the URL,
+// and as help the served trees whose address shares the most with the
+// path, or every tree when none shares more than the root. It is a page
+// of its own, with no buttons, so a typo never lands on the index and its
+// Kill server. A secret tree is never named.
+func (s *server) serveStray(w http.ResponseWriter, r *http.Request) {
+	var trees []*tree
+	best := 1
+	for _, t := range s.list() {
+		if t.secret {
+			continue
+		}
+		n := commonPrefix(r.URL.Path, t.prefix)
+		switch {
+		case n > best:
+			trees, best = []*tree{t}, n
+		case n == best:
+			trees = append(trees, t)
+		}
+	}
+	label := "close"
+	if best == 1 {
+		label = "served"
+	}
+	var b strings.Builder
+	b.WriteString(coin + `<table class="gone">` + "\n" + notFoundRow(r))
+	for i, t := range trees {
+		if i == 5 {
+			break
+		}
+		if i > 0 {
+			label = ""
+		}
+		b.WriteString(goneRow(label, fmt.Sprintf("<a href=\"%s\">%s/</a>", template.HTMLEscapeString(t.prefixURL()), segments(t.label))))
+	}
+	b.WriteString("</table>\n")
+	render(w, r, http.StatusNotFound, page{Title: "not found", Crumbs: []crumb{indexCrumb, {Label: "not found"}}, Kind: "error",
+		Body: template.HTML(b.String()), NoStop: true, Shared: s.shared})
+}
+
+// commonPrefix is how many bytes a and b share from their start.
+func commonPrefix(a, b string) int {
+	n := 0
+	for n < len(a) && n < len(b) && a[n] == b[n] {
+		n++
+	}
+	return n
+}

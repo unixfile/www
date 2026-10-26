@@ -97,3 +97,33 @@ func TestEditDistance(t *testing.T) {
 		}
 	}
 }
+
+// A path outside every tree gets a clean 404: the URL and, as help, the
+// trees nearest it, or every tree when none is near. No index, no button.
+func TestStrayPath(t *testing.T) {
+	s, tr, dir := serveTree(t)
+	tr.prefix, tr.label = "/notes/", "~/notes"
+	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other")
+	h := s.handler()
+	for p, want := range map[string][]string{
+		"/notez/x.md": {"<th>close</th><td><a href=\"/notes/\">", "<th>not found</th>"},
+		"/zzz":        {"<th>served</th><td><a href=\"/notes/\">", "<td><a href=\"/other/\">"},
+	} {
+		rec := get(h, p)
+		body := rec.Body.String()
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", p, rec.Code)
+		}
+		for _, w := range want {
+			if !strings.Contains(body, w) {
+				t.Errorf("%s: lacks %q:\n%s", p, w, body)
+			}
+		}
+		if strings.Contains(body, "<button") || strings.Contains(body, "this page") {
+			t.Errorf("%s: a stray path shows the index or a button:\n%s", p, body)
+		}
+	}
+	if body := get(h, "/notez/").Body.String(); strings.Contains(body, "/other/") {
+		t.Errorf("a near tree is shown with a far one:\n%s", body)
+	}
+}
