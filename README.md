@@ -49,7 +49,7 @@ To reach the server by name, add a line such as `127.31.1.1 www` to `/etc/hosts`
 - `-V`, `--version`: print when the binary was built and the commit it came from, as the stamp says it, eg `www built 2026-10-21 12:49, from 1aa282c+modified`
 - `-h`, `--help`: print the options
 
-Options follow GNU style. Short ones combine, as in `-pa 127.31.1.2`, and options may follow the directory. Optional values go joined, as in `--share=192.168.1.5`; with a space the address would be read as the directory, and www says so. `-f` and `-n` mean force and dry run in every tool of the author's, so `--foreground` and `--no-open` have no short form. The help text is written in docopt notation, except that docopt has no way to write the optional `=HOST`.
+Options follow GNU style. Short ones combine, as in `-pa 127.31.1.2`, and options may follow the directory. Optional values go joined, as in `--share=192.168.1.5`; with a space the address would be read as the directory, and www says so. `-f` and `-n` mean force and dry run in every tool of the author's, so `--foreground` and `--no-open` have no short form. The help text is written in docopt notation, except that docopt has no way to write the optional `=HOST`. `make test` checks it with docopt-ng, run through `uv`, and skips the check where `uv` is missing.
 
 `--list` and `--kill` print [keyval](https://unixfile.github.io/keyval/): three lines per tree, sorted, with every index the same width. The binary line is missing for a server that started before www recorded it.
 

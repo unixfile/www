@@ -1,8 +1,11 @@
 package main
 
 import (
+	"errors"
 	"net/netip"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -11,40 +14,7 @@ import (
 // Options parse the GNU way: short ones combine, values sit joined or apart,
 // and options may follow the directory.
 func TestParseArgs(t *testing.T) {
-	ok := []struct {
-		args []string
-		want config
-	}{
-		{nil, config{dir: "."}},
-		{[]string{"--foreground", "--debug"}, config{dir: ".", fg: true, debug: true}},
-		{[]string{"--cache=64M"}, config{dir: ".", cache: "64M"}},
-		{[]string{"--cache", "0"}, config{dir: ".", cache: "0"}},
-		{[]string{"docs", "--foreground", "--no-open"}, config{dir: "docs", fg: true, noopen: true}},
-		{[]string{"-a", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
-		{[]string{"-a127.31.1.2:9000"}, config{dir: ".", addr: "127.31.1.2:9000"}},
-		{[]string{"-pa", "127.31.1.2"}, config{dir: ".", persist: true, addr: "127.31.1.2"}},
-		{[]string{"--addr", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
-		{[]string{"--addr=127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
-		{[]string{"--", "-f"}, config{dir: "-f"}},
-		{[]string{"-h"}, config{dir: ".", help: true}},
-		{[]string{"--help"}, config{dir: ".", help: true}},
-		{[]string{"--version"}, config{dir: ".", version: true}},
-		{[]string{"-V"}, config{dir: ".", version: true}},
-		{[]string{"--restart", "-a", "127.31.1.2"}, config{addr: "127.31.1.2", restart: true}},
-		{[]string{"--restart", "-a", "127.31.1.2", "."}, config{dir: ".", addr: "127.31.1.2", restart: true}},
-		{[]string{"-l"}, config{list: true}},
-		{[]string{"--list", "docs"}, config{dir: "docs", list: true}},
-		{[]string{"--share=0.0.0.0"}, config{dir: ".", sharing: true, share: "0.0.0.0"}},
-		{[]string{"--share"}, config{dir: ".", sharing: true}},
-		{[]string{"--share", "docs"}, config{dir: "docs", sharing: true}},
-		{[]string{"--share=10.0.0.1:9000", "--secret", "docs"}, config{dir: "docs", sharing: true, share: "10.0.0.1:9000", secret: true}},
-		{[]string{"--restart", "--share=10.0.0.1"}, config{sharing: true, share: "10.0.0.1", restart: true}},
-		{[]string{"--kill"}, config{kill: true}},
-		{[]string{"--commit=261024.4"}, config{dir: ".", commit: "261024.4"}},
-		{[]string{"--commit", "HEAD", "docs"}, config{dir: "docs", commit: "HEAD"}},
-		{[]string{"--kill", "--share"}, config{sharing: true, kill: true}},
-	}
-	for _, tc := range ok {
+	for _, tc := range parseOK {
 		got, err := parseArgs(tc.args)
 		if err != nil || got != tc.want {
 			t.Errorf("%q: %+v, %v; want %+v", tc.args, got, err, tc.want)
@@ -91,6 +61,85 @@ func TestParseArgs(t *testing.T) {
 			t.Errorf("%q: no error", args)
 		}
 	}
+}
+
+// parseOK holds command lines www takes, and what each parses to.
+var parseOK = []struct {
+	args []string
+	want config
+}{
+	{nil, config{dir: "."}},
+	{[]string{"--foreground", "--debug"}, config{dir: ".", fg: true, debug: true}},
+	{[]string{"--cache=64M"}, config{dir: ".", cache: "64M"}},
+	{[]string{"--cache", "0"}, config{dir: ".", cache: "0"}},
+	{[]string{"docs", "--foreground", "--no-open"}, config{dir: "docs", fg: true, noopen: true}},
+	{[]string{"-a", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
+	{[]string{"-a127.31.1.2:9000"}, config{dir: ".", addr: "127.31.1.2:9000"}},
+	{[]string{"-pa", "127.31.1.2"}, config{dir: ".", persist: true, addr: "127.31.1.2"}},
+	{[]string{"--addr", "127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
+	{[]string{"--addr=127.31.1.2"}, config{dir: ".", addr: "127.31.1.2"}},
+	{[]string{"--", "-f"}, config{dir: "-f"}},
+	{[]string{"-h"}, config{dir: ".", help: true}},
+	{[]string{"--help"}, config{dir: ".", help: true}},
+	{[]string{"--version"}, config{dir: ".", version: true}},
+	{[]string{"-V"}, config{dir: ".", version: true}},
+	{[]string{"--restart", "-a", "127.31.1.2"}, config{addr: "127.31.1.2", restart: true}},
+	{[]string{"--restart", "-a", "127.31.1.2", "."}, config{dir: ".", addr: "127.31.1.2", restart: true}},
+	{[]string{"--restart", "--debug", "--no-bug"}, config{restart: true, debug: true, noBug: true}},
+	{[]string{"--disk=4G", "--no-bug", "docs"}, config{dir: "docs", disk: "4G", noBug: true}},
+	{[]string{"-l"}, config{list: true}},
+	{[]string{"--list", "docs"}, config{dir: "docs", list: true}},
+	{[]string{"--share=0.0.0.0"}, config{dir: ".", sharing: true, share: "0.0.0.0"}},
+	{[]string{"--share"}, config{dir: ".", sharing: true}},
+	{[]string{"--share", "docs"}, config{dir: "docs", sharing: true}},
+	{[]string{"--share=10.0.0.1:9000", "--secret", "docs"}, config{dir: "docs", sharing: true, share: "10.0.0.1:9000", secret: true}},
+	{[]string{"--restart", "--share=10.0.0.1"}, config{sharing: true, share: "10.0.0.1", restart: true}},
+	{[]string{"--kill"}, config{kill: true}},
+	{[]string{"--commit=261024.4"}, config{dir: ".", commit: "261024.4"}},
+	{[]string{"--commit", "HEAD", "docs"}, config{dir: "docs", commit: "HEAD"}},
+	{[]string{"--kill", "--share"}, config{sharing: true, kill: true}},
+}
+
+// The usage text is docopt, and docopt takes every command line in
+// parseOK. docopt-ng runs through uv, and the test skips without it.
+// docopt has no option with an optional value, so --share[=HOST] is
+// checked as --share.
+func TestUsageIsDocopt(t *testing.T) {
+	uv, err := exec.LookPath("uv")
+	if err != nil {
+		t.Skip("uv is not installed")
+	}
+	usage := filepath.Join(t.TempDir(), "usage")
+	if err := os.WriteFile(usage, []byte(strings.ReplaceAll(usageText, "--share[=HOST]", "--share")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var lines strings.Builder
+	for _, tc := range parseOK {
+		args := make([]string, len(tc.args))
+		for i, a := range tc.args {
+			if strings.HasPrefix(a, "--share=") {
+				a = "--share"
+			}
+			args[i] = shellQuote(a)
+		}
+		lines.WriteString(strings.Join(args, " ") + "\n")
+	}
+	cmd := exec.Command(uv, "run", "--quiet", "--script", "testdata/docopt-check.py", usage)
+	cmd.Stdin = strings.NewReader(lines.String())
+	out, err := cmd.CombinedOutput()
+	var ee *exec.ExitError
+	switch {
+	case err == nil:
+	case errors.As(err, &ee) && ee.ExitCode() == 22:
+		t.Errorf("docopt-ng:\n%s", out)
+	default:
+		t.Skipf("uv could not run docopt-ng: %v\n%s", err, out)
+	}
+}
+
+// shellQuote quotes s for shlex.split.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // A tree is within a directory at or above it, never beside it.

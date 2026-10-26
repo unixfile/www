@@ -84,13 +84,18 @@ type config struct {
 
 // usageText is written in docopt notation, except that --share takes its
 // HOST optionally, as GNU optional arguments do, which docopt cannot say.
+// TestUsageIsDocopt checks it with docopt-ng. A pattern goes on over
+// indented lines.
 var usageText = strings.NewReplacer("@NAME@", progName, "@ENV@", envPrefix).Replace(`Usage:
-  @NAME@ [-p] [--foreground] [--no-open] [-a ADDR] [DIR]
-  @NAME@ [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [DIR]
-  @NAME@ --restart [-f] [--no-open] [-a ADDR | --share[=HOST]] [DIR]
-  @NAME@ -l [-a ADDR | --share[=HOST]] [DIR]
+  @NAME@ [-p] [--foreground] [--no-open] [-a ADDR] [--debug] [--no-bug]
+      [--cache=SIZE] [--disk=SIZE] [--] [DIR]
+  @NAME@ [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [--debug]
+      [--no-bug] [--cache=SIZE] [--disk=SIZE] [--] [DIR]
+  @NAME@ --restart [-f] [--no-open] [--debug] [--no-bug]
+      [-a ADDR | --share[=HOST]] [--] [DIR]
+  @NAME@ -l [-a ADDR | --share[=HOST]] [--] [DIR]
   @NAME@ --kill [-a ADDR | --share[=HOST]]
-  @NAME@ --commit=REV [DIR]
+  @NAME@ --commit=REV [--] [DIR]
   @NAME@ -h | --help
   @NAME@ -V | --version
 
@@ -128,8 +133,8 @@ Options:
                         it drops the repos read longest ago [default: 2G]
   --restart             replace every server this binary started with one
                         running it now, serving the same trees, and start
-                        one for its persistent trees that have none; with
-                        -a or --share, only the server on that address,
+                        one for its persistent trees that have none; with an
+                        address from -a or --share, only the server there,
                         whichever binary runs it; with DIR, serve it too and
                         open it unless a page of it was open
   -f, --force           with --restart, take the servers and persistent
@@ -137,9 +142,9 @@ Options:
   -l, --list            print each served tree's directory, URL and the
                         binary that serves it as keyval; with DIR, only the
                         trees at or below it
-  --kill                stop every server and print the trees it served as
-                        --list does; with -a or --share, only the server on
-                        that address
+  --kill                stop every server and print the trees it served,
+                        as with --list; with an address from -a or --share,
+                        only the server there
   --commit=REV          print as keyval the commit REV names in DIR's repo:
                         its full hash, its stardate and its subject; REV is
                         a stardate, eg 261024.4, a hash or any name git
