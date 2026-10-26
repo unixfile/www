@@ -867,7 +867,7 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		t.fail(w, r, name, http.StatusNotFound, "Not found: "+name)
+		t.notFound(w, r, name)
 		return
 	}
 	if info.IsDir() && !strings.HasSuffix(r.URL.Path, "/") {
@@ -1036,7 +1036,7 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 func (t *tree) serveRaw(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
 	f, err := t.fsys.Open(name)
 	if err != nil {
-		t.fail(w, r, name, http.StatusNotFound, "Not found: "+name)
+		t.notFound(w, r, name)
 		return
 	}
 	defer f.Close()
@@ -1283,6 +1283,18 @@ func (t *tree) why(ref *refusal) string {
 		return "Refused: " + ref.link
 	}
 	return ref.Error()
+}
+
+// notFound is the page for a path the tree lacks: 404 turns like a coin
+// above the message. Other failures say why in the plain line alone.
+func (t *tree) notFound(w http.ResponseWriter, r *http.Request, name string) {
+	t.render(w, r, http.StatusNotFound, page{
+		Title:  t.title(name),
+		Crumbs: t.crumbs(name),
+		Kind:   "error",
+		Body: template.HTML(`<p class="coin" aria-hidden="true"><span><span>404</span><span>404</span></span></p>` +
+			`<pre class="error">Not found: ` + template.HTMLEscapeString(name) + "</pre>"),
+	})
 }
 
 func (t *tree) fail(w http.ResponseWriter, r *http.Request, name string, status int, msg string) {

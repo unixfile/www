@@ -463,3 +463,14 @@ func TestIndexListsEveryServer(t *testing.T) {
 		t.Errorf("restart command %q, want %q", got, want)
 	}
 }
+
+// A missing path's 404 turns a coin above its message, hidden from screen
+// readers. A refusal says why without one; TestLinksRefusedSayWhy checks.
+func TestNotFoundCoin(t *testing.T) {
+	s, _, _ := serveTree(t)
+	rec := get(s.handler(), "/nowhere.md")
+	body := rec.Body.String()
+	if rec.Code != http.StatusNotFound || !strings.Contains(body, `<p class="coin" aria-hidden="true">`) || !strings.Contains(body, "Not found: nowhere.md") {
+		t.Errorf("status %d, want 404 with the coin and the message: %s", rec.Code, body)
+	}
+}

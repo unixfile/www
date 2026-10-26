@@ -273,6 +273,19 @@ ol.versions > li { padding: 0.15em 0.8em; white-space: nowrap; overflow: hidden;
 ol.versions > li.here { background: var(--target); }
 ol.versions > li.log { border-top: 1px solid var(--rule); margin-top: 0.3em; padding-top: 0.3em; }
 pre.error { white-space: pre-wrap; color: var(--danger); }
+/* A missing path's 404 turns like a coin: the digits go edge-on and back,
+   slow down, rock once and stop facing the reader. Each face is text. */
+p.coin { margin: 0.5em 0 0.3em; text-align: center; perspective: 600px; font-family: ui-monospace, "Iosevka", monospace; font-size: 1.6em; color: var(--danger); }
+p.coin > span { display: inline-grid; transform-style: preserve-3d; animation: coin 2.4s cubic-bezier(.12,.62,.25,1) both; }
+p.coin > span > span { grid-area: 1 / 1; backface-visibility: hidden; }
+p.coin > span > span + span { transform: rotateY(180deg); }
+@keyframes coin {
+  0%   { transform: rotateY(0); }
+  82%  { transform: rotateY(1818deg); }
+  91%  { transform: rotateY(1792deg); }
+  100% { transform: rotateY(1800deg); }
+}
+@media (prefers-reduced-motion: reduce) { p.coin > span { animation: none; } }
 /* While git reads a repo, its page names each step git takes and the
    dots after "reading" keep moving, so a slow clone shows it is alive. */
 pre.steps { white-space: pre-wrap; color: var(--muted); }
@@ -354,10 +367,10 @@ button.copy:focus-visible, button.share:focus-visible { outline: none; }
 /* While the copy button reads the page's text, the program's own lines and links
    leave the layout, so only the page's content is copied: a listing's
    history and parent entries, a code page's view links and scope boxes,
-   which the text would count as breaks. Line numbers are generated
+   which the text would count as breaks, and a 404's coin. Line numbers are generated
    content, which the text never holds. */
 body.copying main .own, body.copying main div.view, body.copying main div.backlinks,
-body.copying main li.log, body.copying main li:has(> a[href="../"]), body.copying main i.scope, body.copying main a.web, body.copying main div.semantic { display: none; }
+body.copying main li.log, body.copying main li:has(> a[href="../"]), body.copying main i.scope, body.copying main a.web, body.copying main div.semantic, body.copying main p.coin { display: none; }
 /* Search results: the path is the program's and mono, a matching line is
    the file's and stays mono too, in the muted colour. */
 div.found .line { color: var(--muted); font-size: 0.8em; hyphens: none; }

@@ -90,6 +90,9 @@ func TestLinksRefusedSayWhy(t *testing.T) {
 		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("%s: status %d, body %q; want 403 with %q", p, rec.Code, rec.Body.String(), want)
 		}
+		if strings.Contains(rec.Body.String(), `class="coin"`) {
+			t.Errorf("%s: a refusal turns the 404 coin", p)
+		}
 	}
 }
 
