@@ -146,7 +146,7 @@ func (r *webRepo) status(prefix, urlPath string) template.HTML {
 	// the hash, and links this page in that version, so the address
 	// keeps naming it after the next fetch.
 	hash := strings.TrimPrefix(filepath.Base(r.tree.dir), ".wt-")
-	href := (&url.URL{Path: prefix + "@" + hash + "/" + strings.TrimPrefix(urlPath, prefix)}).String()
+	href := (&url.URL{Path: versionPrefix(prefix, "@"+hash) + strings.TrimPrefix(urlPath, prefix)}).String()
 	s := "@ <a href=\"" + template.HTMLEscapeString(href) + "\">" + hash[:7] + "</a> · fetched " + clock(r.fetched)
 	switch {
 	case r.fetching:

@@ -18,11 +18,14 @@ import (
 	"time"
 )
 
-// A version is a tree as it was in one commit, served below the tree's
-// URL at @ and the commit's stardate, eg /scratch/www/@261024.4/doc/, or
-// its hash when it has none. The version is a path segment rather than a
-// query, so relative links in its docs, listings and breadcrumbs stay in
-// that version. A stardate always holds a dot, which no hash does.
+// A version is a tree as it was in one commit, served at the tree's URL
+// with @ and the commit's stardate after its name, eg
+// /scratch/www@261024.4/doc/, or its hash when it has none. The version
+// qualifies the tree, so it sits on the tree's name, not below it as an
+// entry would; a tree at / has no name, so its versions sit below it, eg
+// /@261024.4/. The version is in the path rather than a query, so
+// relative links in its docs, listings and breadcrumbs stay in that
+// version. A stardate always holds a dot, which no hash does.
 var atSegment = regexp.MustCompile(`^@([0-9a-f]{4,40}|[0-9]{6}(?:\.[0-9]+)+)$`)
 
 // stardateRev matches a stardate, eg 261024.4 or 261024.4.2, or a day and
@@ -103,24 +106,57 @@ func (t *tree) atVersion(ctx context.Context, seg string) (*tree, string, error)
 	if v, ok := t.versions.Load(best); ok {
 		return v.(*tree), best, nil
 	}
-	v := &tree{dir: t.dir, realDir: t.realDir, prefix: t.prefix + best + "/", label: t.label, wd: -1, at: &c, atLabel: stars.label(&c), base: t}
+	v := &tree{dir: t.dir, realDir: t.realDir, prefix: versionPrefix(t.prefix, best), label: t.label, wd: -1, at: &c, atLabel: stars.label(&c), base: t}
 	v.fsys = commitFS{dir: t.dir, rev: c.hash, when: c.date}
 	got, _ := t.versions.LoadOrStore(best, v)
 	return got.(*tree), best, nil
 }
 
-// serveVersion serves a path below a version of t; first is the path's
-// first segment, eg @261024.4. A hash of a commit with a stardate, or a
-// longer or shorter hash than git's own, redirects to the best name. A share has no versions, as it shows no history.
-func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first string) {
-	name := t.name(r.URL.Path)
+// versionPrefix is the URL path of the version seg, eg @261024.4, of the
+// tree at prefix: the version on the tree's name, or below / for a tree
+// at the root.
+func versionPrefix(prefix, seg string) string {
+	if prefix == "/" {
+		return "/" + seg + "/"
+	}
+	return strings.TrimSuffix(prefix, "/") + seg + "/"
+}
+
+// versionIn reads urlPath as a path in a version of t, eg
+// /scratch/www@261024.4/doc/x.md: first is the version, @261024.4, and
+// rest the path below it, doc/x.md. A tree at / reads its versions as
+// entries, in serve.
+func (t *tree) versionIn(urlPath string) (first, rest string, ok bool) {
+	if t.prefix == "/" || !t.hasVersions() {
+		return "", "", false
+	}
+	after, found := strings.CutPrefix(urlPath, strings.TrimSuffix(t.prefix, "/")+"@")
+	if !found {
+		return "", "", false
+	}
+	seg, rest, _ := strings.Cut(after, "/")
+	if !atSegment.MatchString("@" + seg) {
+		return "", "", false
+	}
+	return "@" + seg, rest, true
+}
+
+// serveVersion serves rest, a path below a version of t; first names the
+// version, eg @261024.4. A hash of a commit with a stardate, or a longer
+// or shorter hash than git's own, redirects to the best name. A share has
+// no versions, as it shows no history.
+func (t *tree) serveVersion(w http.ResponseWriter, r *http.Request, first, rest string) {
 	v, seg, err := t.atVersion(r.Context(), first)
 	if err != nil {
+		name := strings.TrimSuffix(rest, "/")
+		if name == "" {
+			name = "."
+		}
 		t.fail(w, r, name, http.StatusNotFound, err.Error())
 		return
 	}
 	if seg != first {
-		u := t.prefix + seg + strings.TrimPrefix(r.URL.EscapedPath(), t.prefix+first)
+		u := (&url.URL{Path: versionPrefix(t.prefix, seg) + rest}).String()
 		if r.URL.RawQuery != "" {
 			u += "?" + r.URL.RawQuery
 		}
@@ -208,7 +244,7 @@ func (t *tree) historyInVersions(ctx context.Context, name string) bool {
 // versionURL is the URL of rest, a path below t, in commit c's version,
 // named by its stardate in s or else its short hash.
 func (t *tree) versionURL(s *stardates, c *commit, rest string) string {
-	return (&url.URL{Path: t.prefix + "@" + s.addr(c) + "/" + rest}).String()
+	return (&url.URL{Path: versionPrefix(t.prefix, "@"+s.addr(c)) + rest}).String()
 }
 
 // commitFS reads a directory as it was in one commit: listings from git

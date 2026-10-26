@@ -115,3 +115,39 @@ func TestVersionLinksOnlyForOwnHistory(t *testing.T) {
 		t.Errorf("index.md lost its versions:\n%s", body)
 	}
 }
+
+// A named tree's versions sit on its name, eg /notes@261024.1/, which
+// reads as the tree at that commit; the old address below the tree, eg
+// /notes/@261024.1/, redirects there for good. A tree around it never
+// claims the version, and a name that is no version is no version.
+func TestVersionOnTheName(t *testing.T) {
+	s, dir := repoTree(t)
+	tr := s.list()[0]
+	tr.prefix, tr.label = "/notes/", "~/notes"
+	addTree(t, s, t.TempDir(), "/", "~")
+	h := s.handler()
+	first := head(t, dir, "HEAD~1")
+	star := stardatesIn(context.Background(), dir).byHash[first]
+	at := "/notes@" + star + "/"
+	rec := get(h, at+"a/b.go")
+	if body := rec.Body.String(); rec.Code != 200 || !strings.Contains(body, `<a class="own now" href="/notes/a/b.go">current</a>`) || !strings.Contains(body, `data-here="`+at+`a/b.go"`) {
+		t.Errorf("version on the name: %d\n%s", rec.Code, body)
+	}
+	if rec := get(h, at); rec.Code != 200 || !strings.Contains(rec.Body.String(), `<a href="a/">a/</a>`) {
+		t.Errorf("version's root: %d", rec.Code)
+	}
+	for p, want := range map[string]string{
+		"/notes/@" + star + "/a/b.go":   at + "a/b.go",
+		"/notes/@" + star + "/":         at,
+		"/notes/@" + first[:7] + "/a/":  "/notes@" + first[:7] + "/a/",
+		"/notes@" + first[:7] + "/a/":   at + "a/",
+		"/notes/@" + star + "/?log":     at + "?log",
+	} {
+		if rec := get(h, p); rec.Code != 301 || rec.Header().Get("Location") != want {
+			t.Errorf("%s: %d to %q, want 301 to %q", p, rec.Code, rec.Header().Get("Location"), want)
+		}
+	}
+	if rec := get(h, "/notes@nothing/"); rec.Code != 404 || strings.Contains(rec.Body.String(), "~/notes") && !strings.Contains(rec.Body.String(), "not found") {
+		t.Errorf("a name that is no version: %d", rec.Code)
+	}
+}

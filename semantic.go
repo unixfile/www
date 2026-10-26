@@ -800,7 +800,7 @@ func (t *tree) serveDecl(w http.ResponseWriter, r *http.Request, name string, di
 	if t.historyInVersions(ctx, name) {
 		if old != nil {
 			if parent, err := git(ctx, gdir, "rev-parse", "--short=12", c.hash+"^"); err == nil {
-				u := (&url.URL{Path: t.prefix + "@" + strings.TrimSpace(string(parent)) + "/" + oldFile, Fragment: rows(osr, oer)}).String()
+				u := (&url.URL{Path: versionPrefix(t.prefix, "@"+strings.TrimSpace(string(parent))) + oldFile, Fragment: rows(osr, oer)}).String()
 				links = append(links, "<a href=\""+esc(u)+"\">before</a>")
 			}
 		}

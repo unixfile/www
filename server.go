@@ -289,14 +289,16 @@ func (s *server) byPrefix(prefix string) *tree {
 	return nil
 }
 
-// lookup returns the tree that serves path. A tree inside another wins, so
-// it keeps its own label and lock.
+// lookup returns the tree that serves path, or a version of, eg
+// /x/www@261024.4/. A tree inside another wins, so it keeps its own label
+// and lock.
 func (s *server) lookup(path string) *tree {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var best *tree
 	for _, t := range s.trees {
-		if strings.HasPrefix(path, t.prefix) && (best == nil || len(t.prefix) > len(best.prefix)) {
+		_, _, version := t.versionIn(path)
+		if (version || strings.HasPrefix(path, t.prefix)) && (best == nil || len(t.prefix) > len(best.prefix)) {
 			best = t
 		}
 	}
@@ -905,12 +907,28 @@ func (t *tree) name(urlPath string) string {
 }
 
 func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
+	if first, rest, ok := t.versionIn(r.URL.Path); ok {
+		t.serveVersion(w, r, first, rest)
+		return
+	}
 	name := t.name(r.URL.Path)
-	// A first segment such as @5430ac3 names a version, unless the tree
-	// holds an entry by that name.
-	if first, _, _ := strings.Cut(name, "/"); t.hasVersions() && atSegment.MatchString(first) {
+	// A first segment such as @5430ac3 named a version before versions
+	// moved beside the tree's name, unless the tree holds an entry by that
+	// name. It moves there for good, so old links still lead to it.
+	if first, rest, _ := strings.Cut(name, "/"); t.hasVersions() && atSegment.MatchString(first) {
 		if _, err := fs.Stat(t.fsys, first); err != nil {
-			t.serveVersion(w, r, first)
+			if t.prefix == "/" {
+				t.serveVersion(w, r, first, rest)
+				return
+			}
+			u := (&url.URL{Path: versionPrefix(t.prefix, first) + rest}).String()
+			if strings.HasSuffix(r.URL.Path, "/") && rest != "" {
+				u += "/"
+			}
+			if r.URL.RawQuery != "" {
+				u += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, u, http.StatusMovedPermanently)
 			return
 		}
 	}

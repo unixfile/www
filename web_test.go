@@ -137,7 +137,7 @@ func TestWebReadsARepoOnTheVisit(t *testing.T) {
 	if n := len(w.srv.list()); n != 1 {
 		t.Errorf("%d trees serve one repo", n)
 	}
-	if !strings.Contains(rec.Body.String(), `@ <a href="/`+f.host+`/acct/docs/@`+head[:12]+`/guide/a.md">`+head[:7]+"</a> · fetched ") {
+	if !strings.Contains(rec.Body.String(), `@ <a href="/`+f.host+`/acct/docs@`+head[:12]+`/guide/a.md">`+head[:7]+"</a> · fetched ") {
 		t.Errorf("no commit and fetch time in the header:\n%s", rec.Body)
 	}
 	if strings.Contains(rec.Body.String(), "Delete lock") {
@@ -149,9 +149,10 @@ func TestWebReadsARepoOnTheVisit(t *testing.T) {
 		t.Errorf("first commit's diff: %d\n%s", rec.Code, rec.Body)
 	}
 	// A version shows the repo as it was, fetching the old file; a hash
-	// redirects to the commit's stardate.
+	// redirects to the commit's stardate, and the old address, @ below the
+	// repo, to the version on its name.
 	rec = webGet(w, "/"+f.host+"/acct/docs/@"+first[:7]+"/README.md")
-	if rec.Code == http.StatusMovedPermanently {
+	for i := 0; i < 3 && rec.Code == http.StatusMovedPermanently; i++ {
 		rec = webGet(w, rec.Header().Get("Location"))
 	}
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Old</h1>") {
