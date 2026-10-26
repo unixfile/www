@@ -99,6 +99,9 @@ deb:
 # --reinstall replaces a build of the same commit, which apt would skip as
 # already installed. The link from make install goes first: ~/.local/bin
 # usually leads PATH, and its binary lacks the capability for port 80.
+# NEEDRESTART_MODE=l makes Debian's needrestart list the services that use
+# old libraries instead of asking which to restart; env sets it past sudo's
+# environment reset.
 # The package builds in the background while sudo asks for the password,
 # and its output is hidden so it does not break into the prompt. Plain make,
 # not $(MAKE), so make -n prints the line instead of running sudo.
@@ -106,7 +109,7 @@ install-deb: uninstall
 	@make -s deb >/dev/null & build=$$!; \
 	sudo -v; auth=$$?; \
 	wait $$build && [ $$auth -eq 0 ]
-	sudo apt install --reinstall ./$(DEB)
+	sudo env NEEDRESTART_MODE=l apt install --reinstall ./$(DEB)
 	-/usr/bin/$(NAME) --restart --force
 
 uninstall-deb:
