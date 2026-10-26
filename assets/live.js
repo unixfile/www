@@ -426,12 +426,12 @@
 	// first line sits below the search row, since faded controls there
 	// leave gaps in the header. They show while the query has a character,
 	// while the mouse moves inside the column, while keyboard focus is on
-	// one of them or a crumb, and after a tap on their rows on a touch
-	// screen. They fade 2 s after the mouse stops and at once when it
-	// leaves the column. Focus in the empty box does not count, since the
-	// box holds focus on every page.
+	// one of them or a crumb, and after the page scrolls up, by wheel,
+	// finger or key. They fade 2 s after the mouse or the scroll stops and
+	// at once when the mouse leaves the column. Focus in the empty box does
+	// not count, since the box holds focus on every page.
 	const chrome = "header, div.search, div.view";
-	// While calmTimer runs, the mouse or a tap keeps the controls shown.
+	// While calmTimer runs, the mouse or a scroll up keeps the controls shown.
 	let calmTimer = null;
 	const atTop = () => {
 		const m = document.querySelector("main");
@@ -468,17 +468,12 @@
 	document.documentElement.addEventListener("pointerleave", (e) => {
 		if (e.pointerType !== "touch") calm();
 	});
-	// A faded row lets a tap through to the text below, so a tap counts by
-	// where it lands.
-	document.addEventListener("pointerdown", (e) => {
-		if (e.pointerType !== "touch") return;
-		const on = [...document.querySelectorAll(chrome)].some((el) => {
-			const r = el.getBoundingClientRect();
-			return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-		});
-		if (on) wake();
-	});
-	addEventListener("scroll", settle, { passive: true });
+	let lastY = scrollY;
+	addEventListener("scroll", () => {
+		if (scrollY < lastY) wake();
+		else settle();
+		lastY = scrollY;
+	}, { passive: true });
 	document.addEventListener("focusin", settle);
 	document.addEventListener("focusout", () => setTimeout(settle));
 	document.addEventListener("DOMContentLoaded", calm);

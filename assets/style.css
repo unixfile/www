@@ -379,9 +379,9 @@ button.copy:focus-visible, button.share:focus-visible { outline: none; }
 /* Controls not needed fade out and keep their space, so the header holds
    still: the box, copy and share, raw, the stop button and a code page's
    views. The script marks the page calm; without it they stay. A faded
-   control takes no pointer, so a tap on a touch screen brings the
-   controls back first. The box keeps the keyboard. The sticky rows turn
-   clear too, so text scrolls through them unhidden. */
+   control takes no pointer, so nothing presses it unseen. The box keeps
+   the keyboard. The sticky rows turn clear too, so text scrolls through
+   them unhidden. */
 input.search, span.tools, header > span > a, header form, div.view > * { transition: opacity 0.3s; }
 div.search, div.view { transition: background-color 0.3s; }
 html.calm :is(input.search, span.tools, header > span > a, header form, div.view > *) { opacity: 0; pointer-events: none; }
