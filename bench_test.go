@@ -64,7 +64,7 @@ func BenchmarkSearch(b *testing.B) {
 // alone, then the whole page, whose difference is the page writer, and
 // the page with scopes, whose difference is the scope boxes. Go and
 // CSS come from this repo, CSS through chroma; Python, JavaScript and
-// shell from Debian's packages, the files the README times, skipped where
+// shell from Debian's packages, the files doc/speed.md names, skipped where
 // they are not installed.
 func BenchmarkCodePage(b *testing.B) {
 	pythons, _ := filepath.Glob("/usr/lib/python3*/argparse.py")

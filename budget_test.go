@@ -14,22 +14,33 @@ import (
 const pageBudget = 5 * time.Millisecond
 
 // Every kind of page renders within pageBudget once its git answers are
-// cached: a doc and a code page the size of www's own README and
-// render.go, a listing, histories and a commit's diff. Each takes the
-// median of 15 runs, so one slow run does not fail it.
+// cached: a doc of www's README and every file in doc/ joined, a code
+// page of render.go, a listing, histories and a commit's diff. Each takes
+// the median of 15 runs, so one slow run does not fail it.
 func TestPageBudget(t *testing.T) {
 	if raceOn {
 		t.Skip("the race detector slows every page past the budget")
 	}
 	needGit(t)
 	dir := t.TempDir()
-	for _, name := range []string{"README.md", "render.go"} {
+	docs, err := filepath.Glob("doc/*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var readme []byte
+	for _, name := range append([]string{"README.md"}, docs...) {
 		b, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		os.WriteFile(filepath.Join(dir, name), b, 0o644)
+		readme = append(append(readme, b...), '\n')
 	}
+	os.WriteFile(filepath.Join(dir, "README.md"), readme, 0o644)
+	b, err := os.ReadFile("render.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, "render.go"), b, 0o644)
 	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v\n%s", err, out)
 	}
