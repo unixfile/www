@@ -56,10 +56,28 @@ type web struct {
 	busy   map[string]bool     // keys being cloned or fetched, which trim leaves
 	kicked time.Time
 
+	// A public server limits what one visitor sets going, so a bot cannot
+	// make it clone without end; a cached repo is never limited. visitors
+	// holds the jobs each address started within visitorWindow, and
+	// clones wait for a place in slots, which is nil elsewhere.
+	visitors map[netip.Prefix][]*webJob
+	swept    time.Time
+	slots    chan struct{}
+
 	// wg counts the goroutines web starts, so a test can wait for them
 	// before it changes the globals they read.
 	wg sync.WaitGroup
 }
+
+// A public server lets one address run one job at a time and start at
+// most visitorJobs within visitorWindow, and runs at most cloneSlots
+// clones at once. A job is a probe, a clone or a listing: whatever a visit
+// to an uncached path sets going.
+const (
+	visitorJobs   = 20
+	visitorWindow = time.Hour
+	cloneSlots    = 4
+)
 
 // webScheme is how web reaches forges. Tests serve repos over http.
 var webScheme = "https"
@@ -122,7 +140,7 @@ func newWeb(ctx context.Context, root string, limit int64) (*web, error) {
 	}
 	cacheRoot = real
 	w := &web{root: real, limit: limit, ctx: ctx, jobs: map[string]*webJob{}, repos: map[string]*webRepo{},
-		lists: map[string]*listing{}, busy: map[string]bool{}}
+		lists: map[string]*listing{}, busy: map[string]bool{}, visitors: map[netip.Prefix][]*webJob{}}
 	w.srv = newServer()
 	w.srv.web = w
 	return w, nil
@@ -254,8 +272,40 @@ func (w *web) serve(rw http.ResponseWriter, r *http.Request, t *tree) {
 	case r.Header.Get("Sec-Fetch-Site") == "cross-site":
 		w.serveConfirm(rw, r, key)
 	default:
-		w.serveJob(rw, w.srv.withLive(r), w.start(key, segs))
+		j, refused, wait := w.start(key, segs, visitor(r))
+		if j == nil {
+			logInfo("refused %s to %s: %s", key, visitor(r), refused)
+			rw.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			w.render(rw, r, http.StatusTooManyRequests, "too many reads", webCrumbs(key), "error",
+				"<pre class=\"error\">"+template.HTMLEscapeString(refused)+"</pre>")
+			return
+		}
+		w.serveJob(rw, w.srv.withLive(r), j)
 	}
+}
+
+// visitor is who asks, for a public server's limits: the peer's address
+// or, from a proxy on loopback such as Caddy, the last address in
+// X-Forwarded-For, which the proxy wrote. An IPv6 address counts by its
+// /64, since one host gets a /64 whole.
+func visitor(r *http.Request) netip.Prefix {
+	ap, err := netip.ParseAddrPort(r.RemoteAddr)
+	if err != nil {
+		return netip.Prefix{}
+	}
+	a := ap.Addr().Unmap()
+	if xs := r.Header.Values("X-Forwarded-For"); a.IsLoopback() && len(xs) > 0 {
+		all := strings.Split(xs[len(xs)-1], ",")
+		if fa, err := netip.ParseAddr(strings.TrimSpace(all[len(all)-1])); err == nil {
+			a = fa.Unmap()
+		}
+	}
+	bits := 32
+	if a.Is6() {
+		bits = 64
+	}
+	p, _ := a.Prefix(bits)
+	return p
 }
 
 // validHost accepts a host name or address, with a port.
@@ -387,17 +437,56 @@ func (w *web) dropTree(r *webRepo, wt string) {
 	}
 }
 
-// start begins the job for the URL path key, whose segments are segs.
-func (w *web) start(key string, segs []string) *webJob {
+// start begins the job for the URL path key, whose segments are segs, for
+// the visitor who. On a public server over who's limits it returns nil,
+// why, and how long until who may start one.
+func (w *web) start(key string, segs []string, who netip.Prefix) (*webJob, string, time.Duration) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if j := w.jobs[key]; j != nil {
-		return j
+		return j, "", 0
 	}
-	j := &webJob{urlPath: "/" + key, started: time.Now()}
+	now := time.Now()
+	if w.public {
+		if now.Sub(w.swept) > time.Minute {
+			for v := range w.visitors {
+				w.recent(v, now)
+			}
+			w.swept = now
+		}
+		mine := w.recent(who, now)
+		for _, o := range mine {
+			if o.ended.IsZero() {
+				return nil, "One read at a time from one address, and " + o.urlPath + " is still being read. Its page shows how far it is; this one can start when it ends.", 5 * time.Second
+			}
+		}
+		if len(mine) >= visitorJobs {
+			wait := mine[0].started.Add(visitorWindow).Sub(now)
+			return nil, fmt.Sprintf("This address has started %d reads within %d minutes, the most a public server allows. The next can start in %d minutes. A repo already read opens at any time.",
+				len(mine), int(visitorWindow.Minutes()), int(wait.Minutes())+1), wait
+		}
+	}
+	j := &webJob{urlPath: "/" + key, started: now}
 	w.jobs[key] = j
+	if w.public {
+		w.visitors[who] = append(w.visitors[who], j)
+	}
 	w.wg.Go(func() { w.run(j, key, segs) })
-	return j
+	return j, "", 0
+}
+
+// recent drops the jobs who started before visitorWindow that have ended,
+// and returns those left, oldest first. w.mu is held.
+func (w *web) recent(who netip.Prefix, now time.Time) []*webJob {
+	mine := slices.DeleteFunc(w.visitors[who], func(j *webJob) bool {
+		return now.Sub(j.started) > visitorWindow && !j.ended.IsZero()
+	})
+	if len(mine) == 0 {
+		delete(w.visitors, who)
+		return nil
+	}
+	w.visitors[who] = mine
+	return mine
 }
 
 // step records what the job does now and wakes its page.
@@ -692,6 +781,20 @@ func (w *web) clone(j *webJob, key, cloneURL string) error {
 	}
 	bare := filepath.Join(dir, ".git")
 	if !exists(filepath.Join(bare, "HEAD")) {
+		if w.slots != nil {
+			select {
+			case w.slots <- struct{}{}:
+			default:
+				w.step(j, fmt.Sprintf("waiting: %d clones run at once", cap(w.slots)))
+				select {
+				case w.slots <- struct{}{}:
+				case <-w.ctx.Done():
+					return w.ctx.Err()
+				}
+			}
+			// The slot covers the worktree's blobs too, the larger fetch.
+			defer func() { <-w.slots }()
+		}
 		tmp := bare + ".tmp"
 		os.RemoveAll(tmp)
 		w.step(j, "git clone --bare --filter=blob:none "+cloneURL+" "+w.where(bare))

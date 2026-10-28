@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cgi"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/exec"
@@ -522,5 +524,95 @@ func TestForgeLink(t *testing.T) {
 	tr.web.key = "git.suckless.org/dwm"
 	if got, _ := tr.forgeLink(httptest.NewRequest("GET", "/a/b.go", nil), "code"); got != "" {
 		t.Errorf("an unknown forge: %q", got)
+	}
+}
+
+// A public server counts a visitor by address, or, behind a proxy on
+// loopback, by the address the proxy appended; IPv6 by its /64.
+func TestVisitor(t *testing.T) {
+	for _, c := range []struct{ remote, xff, want string }{
+		{"198.51.100.7:4000", "", "198.51.100.7/32"},
+		{"198.51.100.7:4000", "203.0.113.9", "198.51.100.7/32"},
+		{"127.0.0.1:4000", "203.0.113.9", "203.0.113.9/32"},
+		{"127.0.0.1:4000", "10.0.0.1, 203.0.113.9", "203.0.113.9/32"},
+		{"127.0.0.1:4000", "", "127.0.0.1/32"},
+		{"[::1]:4000", "2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64"},
+		{"[2001:db8:1:2:3:4:5:6]:4000", "", "2001:db8:1:2::/64"},
+		{"[::ffff:198.51.100.7]:4000", "", "198.51.100.7/32"},
+	} {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = c.remote
+		if c.xff != "" {
+			r.Header.Set("X-Forwarded-For", c.xff)
+		}
+		if got := visitor(r).String(); got != c.want {
+			t.Errorf("%s with %q: %s, want %s", c.remote, c.xff, got, c.want)
+		}
+	}
+}
+
+// A public server lets one address start visitorJobs reads an hour, one
+// at a time; another address and a cached repo are not limited.
+func TestWebPublicLimits(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
+	depths[f.host] = 3
+	t.Cleanup(func() { delete(depths, f.host) })
+	w := testWeb(t, defaultDisk)
+	w.public, w.srv.public = true, true
+	from := func(addr, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", path, nil)
+		req.RemoteAddr = addr
+		rec := httptest.NewRecorder()
+		w.srv.handler().ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := read(t, w, "/"+f.host+"/acct/r/"); rec.Code != http.StatusOK {
+		t.Fatalf("first read: %d\n%s", rec.Code, rec.Body)
+	}
+	for i := 1; i < visitorJobs; i++ {
+		if rec := read(t, w, fmt.Sprintf("/%s/acct/gone%d", f.host, i)); rec.Code != http.StatusBadGateway {
+			t.Fatalf("read %d: %d\n%s", i, rec.Code, rec.Body)
+		}
+	}
+	rec := webGet(w, "/"+f.host+"/acct/one-more")
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" || !strings.Contains(rec.Body.String(), "20 reads") {
+		t.Errorf("read over the limit: %d, Retry-After %q\n%s", rec.Code, rec.Header().Get("Retry-After"), rec.Body)
+	}
+	if rec := webGet(w, "/"+f.host+"/acct/r/README.md"); rec.Code != http.StatusOK {
+		t.Errorf("a cached repo over the limit: %d", rec.Code)
+	}
+	if rec := from("198.51.100.7:4000", "/"+f.host+"/acct/one-more"); rec.Code != http.StatusAccepted {
+		t.Errorf("another address: %d\n%s", rec.Code, rec.Body)
+	}
+	// A read still running holds the address's next.
+	busy, _ := netip.MustParseAddr("203.0.113.9").Prefix(32)
+	w.mu.Lock()
+	w.visitors[busy] = []*webJob{{urlPath: "/" + f.host + "/acct/slow", started: time.Now()}}
+	w.mu.Unlock()
+	if rec := from("203.0.113.9:4000", "/"+f.host+"/acct/other"); rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), "acct/slow is still being read") {
+		t.Errorf("a second read at once: %d\n%s", rec.Code, rec.Body)
+	}
+}
+
+// A clone waits for a slot, and says so on its page.
+func TestWebCloneWaitsForASlot(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
+	w := testWeb(t, defaultDisk)
+	w.slots = make(chan struct{}, 1)
+	w.slots <- struct{}{}
+	path := "/" + f.host + "/acct/r/"
+	rec := webGet(w, path)
+	for end := time.Now().Add(10 * time.Second); !strings.Contains(rec.Body.String(), "waiting: 1 clones run at once") && time.Now().Before(end); {
+		time.Sleep(20 * time.Millisecond)
+		rec = webGet(w, path)
+	}
+	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), "waiting") {
+		t.Fatalf("clone without a slot: %d\n%s", rec.Code, rec.Body)
+	}
+	<-w.slots
+	if rec := read(t, w, path); rec.Code != http.StatusOK {
+		t.Errorf("clone after a slot frees: %d\n%s", rec.Code, rec.Body)
 	}
 }

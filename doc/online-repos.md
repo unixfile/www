@@ -60,7 +60,9 @@ The listing names its source and the sources that failed first, so a partial lis
 
 A visitor learns nothing of the machine or of what others read. `/` says only how to read a repo. A listing that no forge or web frontend gives is a 404, never the cache. Pages write the cache's paths from `cache/`, git's errors included. No page has a stop or bug button, nothing opens a browser, and any Host header is answered, since nothing local is there to protect.
 
-`--disk` is required, since any visitor can make www clone. Visitors are not limited otherwise. One leak remains: a repo already in the cache opens at once, and one that is not shows the reading page first.
+`--disk` is required, since any visitor can make www clone. The limits aim at a bot that makes www clone without end, not at a reader. A repo already in the cache opens at any time. A visit to an uncached path starts a read: a probe, a clone or a listing. One address runs one read at a time and starts at most 20 within an hour; over that it gets a 429 with `Retry-After`, and the log names the address. An IPv6 address counts by its /64. Behind a proxy on loopback, eg Caddy, the visitor is the last address in `X-Forwarded-For`. At most four clones run at once, and a fifth waits on its reading page.
+
+One leak remains: a repo already in the cache opens at once, and one that is not shows the reading page first.
 
 ## What git may do
 
