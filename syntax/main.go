@@ -11,28 +11,33 @@
 // main binary runs it for each tree page and does without it when it is
 // absent. The binary takes its name from the Makefile, eg www-syntax.
 //
+// The parse and the walk run in C, in walk.c, in one call; the Go binding
+// supplies tree-sitter's library and the grammars.
+//
 // Usage: <name>-syntax FILE < source
 package main
 
 /*
 #include <stddef.h>
+#include <stdint.h>
 
 void ts_set_allocator(void *(*)(size_t), void *(*)(size_t, size_t), void *(*)(void *, size_t), void (*)(void *));
+int syntax_tree(const void *lang, const char *src, uint32_t len);
 */
 import "C"
 
 import (
-	"bufio"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"unsafe"
 
-	sitter "github.com/tree-sitter/go-tree-sitter"
+	// The binding builds tree-sitter's C library, which walk.c calls.
+	_ "github.com/tree-sitter/go-tree-sitter"
 	bash "github.com/tree-sitter/tree-sitter-bash/bindings/go"
 	csharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
 	c "github.com/tree-sitter/tree-sitter-c/bindings/go"
@@ -104,84 +109,21 @@ func main() {
 	if err != nil {
 		os.Exit(fail(syscall.EIO, "cannot read the source: "+err.Error()))
 	}
-	p := sitter.NewParser()
-	defer p.Close()
-	if err := p.SetLanguage(sitter.NewLanguage(lang())); err != nil {
-		os.Exit(fail(syscall.EINVAL, "cannot load the grammar: "+err.Error()))
+	if len(src) > math.MaxUint32 {
+		os.Exit(fail(syscall.EFBIG, "the source is over 4 GiB"))
 	}
-	tree := p.Parse(src, nil)
-	if tree == nil {
-		os.Exit(fail(syscall.EIO, "the parser gave no tree"))
-	}
-	defer tree.Close()
-	w := bufio.NewWriter(os.Stdout)
-	write(w, tree)
-	if err := w.Flush(); err != nil {
-		os.Exit(fail(syscall.EIO, "cannot write the tree: "+err.Error()))
-	}
-}
-
-// write prints the named nodes in preorder. Anonymous nodes, eg
-// punctuation and keywords, are left out, but their named descendants
-// keep their place under the nearest named ancestor. Each call into
-// tree-sitter crosses cgo, so a node costs as few as the line needs, and
-// kinds and field names are looked up once per id.
-func write(w *bufio.Writer, tree *sitter.Tree) {
-	lang := tree.Language()
-	kinds := map[uint16]string{}
-	fields := map[uint16]string{}
-	cur := tree.Walk()
-	defer cur.Close()
-	depth := 0
-	named := []int{} // the depths of the named nodes above the cursor
-	for {
-		n := cur.Node()
-		missing := n.IsMissing()
-		shown := missing || n.IsNamed()
-		if shown {
-			id := n.KindId()
-			kind, ok := kinds[id]
-			if !ok {
-				kind = lang.NodeKindForId(id)
-				kinds[id] = kind
-			}
-			if missing {
-				kind = "MISSING " + kind
-			}
-			fid := cur.FieldId()
-			field, ok := fields[fid]
-			if !ok {
-				field = lang.FieldNameForId(fid)
-				fields[fid] = field
-			}
-			s, e := n.StartPosition(), n.EndPosition()
-			w.WriteString(strconv.Itoa(len(named)))
-			for _, f := range []string{kind, field} {
-				w.WriteByte('\t')
-				w.WriteString(f)
-			}
-			for _, v := range []uint{s.Row, s.Column, e.Row, e.Column} {
-				w.WriteByte('\t')
-				w.WriteString(strconv.FormatUint(uint64(v), 10))
-			}
-			w.WriteByte('\n')
-		}
-		if cur.GotoFirstChild() {
-			if shown {
-				named = append(named, depth)
-			}
-			depth++
-			continue
-		}
-		for !cur.GotoNextSibling() {
-			if !cur.GotoParent() {
-				return
-			}
-			depth--
-			if len(named) > 0 && named[len(named)-1] == depth {
-				named = named[:len(named)-1]
-			}
-		}
+	// The NUL gives C a valid pointer for an empty source.
+	buf := append(src, 0)
+	switch code := syscall.Errno(C.syntax_tree(lang(), (*C.char)(unsafe.Pointer(&buf[0])), C.uint32_t(len(src)))); code {
+	case 0:
+	case syscall.EINVAL:
+		os.Exit(fail(code, "cannot load the grammar: its ABI version does not match tree-sitter's"))
+	case syscall.EIO:
+		os.Exit(fail(code, "the parser gave no tree"))
+	case syscall.ENOMEM:
+		os.Exit(fail(code, "out of memory"))
+	default:
+		os.Exit(fail(code, "cannot write the tree: "+code.Error()))
 	}
 }
 
