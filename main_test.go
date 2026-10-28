@@ -56,6 +56,14 @@ func TestParseArgs(t *testing.T) {
 		{"--cache=lots"},
 		{"--cache=-1M"},
 		{"--cache"},
+		{"--public", "-a", "127.0.0.1"},
+		{"--public", "--disk=6G"},
+		{"--public", "--disk=6G", "-a", "127.0.0.1", "docs"},
+		{"--public", "--disk=6G", "-a", "127.0.0.1", "--foreground"},
+		{"--public", "--disk=6G", "-a", "127.0.0.1", "-p"},
+		{"--public", "--disk=6G", "--share", "--secret"},
+		{"--public", "--disk=6G", "--restart", "-a", "127.0.0.1"},
+		{"--commit=HEAD", "--public"},
 	} {
 		if _, err := parseArgs(args); err == nil {
 			t.Errorf("%q: no error", args)
@@ -98,6 +106,8 @@ var parseOK = []struct {
 	{[]string{"--commit=261024.4"}, config{dir: ".", commit: "261024.4"}},
 	{[]string{"--commit", "HEAD", "docs"}, config{dir: "docs", commit: "HEAD"}},
 	{[]string{"--kill", "--share"}, config{sharing: true, kill: true}},
+	{[]string{"--public", "--disk=6G", "-a", "127.0.0.1:8080"}, config{public: true, disk: "6G", addr: "127.0.0.1:8080"}},
+	{[]string{"--public", "--disk=6G", "--share=0.0.0.0", "--debug"}, config{public: true, disk: "6G", sharing: true, share: "0.0.0.0", debug: true}},
 }
 
 // The usage text is docopt, and docopt takes every command line in

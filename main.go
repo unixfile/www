@@ -73,6 +73,7 @@ type config struct {
 	noBug   bool   // hide the bug button and refuse reports
 	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
 	disk    string // the disk for online repos, eg 4G; "" takes defaultDisk
+	public  bool   // serve only online repos, to the open web
 	help    bool
 	version bool
 	restart bool
@@ -96,6 +97,8 @@ var usageText = strings.NewReplacer("@NAME@", progName, "@ENV@", envPrefix).Repl
   @NAME@ -l [-a ADDR | --share[=HOST]] [--] [DIR]
   @NAME@ --kill [-a ADDR | --share[=HOST]]
   @NAME@ --commit=REV [--] [DIR]
+  @NAME@ --public --disk=SIZE (-a ADDR | --share[=HOST]) [--debug]
+      [--cache=SIZE]
   @NAME@ -h | --help
   @NAME@ -V | --version
 
@@ -149,6 +152,10 @@ Options:
                         its full hash, its stardate and its subject; REV is
                         a stardate, eg 261024.4, a hash or any name git
                         takes
+  --public              serve only repos fetched from a forge, never a tree
+                        here, in the foreground, to anyone who reaches the
+                        address, eg through a proxy on -a; it lists no
+                        cache, shows no stop or bug button and opens nothing
   -V, --version         print when the binary was built and its commit
   -h, --help            print this help
 `)
@@ -168,6 +175,7 @@ func (c *config) switches() map[string]*bool {
 		"force":      &c.force,
 		"list":       &c.list,
 		"kill":       &c.kill,
+		"public":     &c.public,
 	}
 }
 
@@ -284,8 +292,20 @@ func parseArgs(args []string) (config, error) {
 		}
 	}
 	if c.commit != "" && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.debug || c.noBug ||
-		c.sharing || c.secret || c.addr != "" || c.cache != "" || c.disk != "") {
+		c.sharing || c.secret || c.addr != "" || c.cache != "" || c.disk != "" || c.public) {
 		return c, &errno{syscall.EINVAL, "--commit takes a directory and no other option"}
+	}
+	// A public server runs under a service manager, so it stays in the
+	// foreground, opens nothing and files no bugs; it serves no tree.
+	if c.public && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.noBug || c.secret || len(dirs) > 0) {
+		return c, &errno{syscall.EINVAL, "--public takes an address, --disk, --cache and --debug, and no directory"}
+	}
+	if c.public && c.disk == "" {
+		return c, &errno{syscall.EINVAL, "--public needs --disk, since any visitor can make it clone"}
+	}
+	// The default address is the user's own, where a reader's server runs.
+	if c.public && c.addr == "" && !c.sharing {
+		return c, &errno{syscall.EINVAL, "--public needs -a or --share"}
 	}
 	if c.force && !c.restart {
 		return c, &errno{syscall.EINVAL, "--force goes with --restart"}
@@ -312,7 +332,7 @@ func parseArgs(args []string) (config, error) {
 	case 0:
 		// --list without a directory lists every tree, and --restart
 		// without one serves no tree beyond those it restarts.
-		if !c.list && !c.kill && !c.restart {
+		if !c.list && !c.kill && !c.restart && !c.public {
 			c.dir = "."
 		}
 	case 1:
@@ -370,6 +390,8 @@ func main() {
 
 	fd := os.Getenv(readyEnv)
 	switch {
+	case c.public:
+		os.Exit(servePublic(c))
 	case c.restart:
 		os.Exit(restart(c))
 	case c.list:

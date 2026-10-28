@@ -72,6 +72,7 @@ type server struct {
 	stop   func([]*tree, string) // withdraws trees for a cause; set by the hub
 	about  about
 	shared bool   // on an address beyond loopback: it shows the trees and nothing of the machine
+	public bool   // the web address of --public, which strangers reach by any name
 	live   *live  // nil in tests that do without live reload
 	web    *web   // set on the web address, whose trees are repos in the cache
 	webURL string // the web address's URL, for the index, or ""
@@ -370,7 +371,7 @@ func (s *server) handler() http.Handler {
 	}
 	mux.HandleFunc("GET "+ownPath+"live", s.handleLive)
 	mux.HandleFunc("GET /", s.handlePath)
-	return s.logged(guard(mux, s.shared))
+	return s.logged(guard(mux, s.shared || s.public))
 }
 
 // logged records each request but those that come with every page: live
@@ -444,7 +445,8 @@ func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 // guard rejects requests for any host but this machine, which defeats DNS
 // rebinding, and sets the headers every response needs. A shared server
 // takes any host, since visitors use whatever name reaches it; a secret
-// path is its guard against rebinding.
+// path is its guard against rebinding. So does a public server, which
+// holds nothing a stranger may not read.
 func guard(next http.Handler, anyHost bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)

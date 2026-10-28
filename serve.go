@@ -404,6 +404,65 @@ func (h *hub) startWeb(c config, ep netip.AddrPort) {
 	logInfo("serves online repos at %s from %s, within %s", origin(ep), w.root, sizeText(limit))
 }
 
+// servePublic serves online repos on c.ep until a signal, for strangers:
+// no tree of the machine, no registry, no lock and no other address. A
+// service manager keeps it running, so it never detaches.
+func servePublic(c config) int {
+	rep := &reporter{noopen: true}
+	logInfo("public server starts on %s: %s", c.ep, build())
+	go warmLexers()
+	debugOn, bugOff = c.debug, true
+	size := int64(defaultCache)
+	if c.cache != "" {
+		size, _ = parseSize(c.cache)
+	}
+	gitCache.reset(size)
+	limit, _ := parseSize(c.disk)
+	root, err := cacheDir()
+	if err != nil {
+		return rep.fail(errnoOf(err), "cannot find the cache: "+err.Error())
+	}
+	ln, err := net.Listen("tcp", c.ep.String())
+	if err != nil {
+		return rep.fail(errnoOf(err), "cannot listen on "+c.ep.String()+": "+err.Error())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w, err := newWeb(ctx, root, limit)
+	if err != nil {
+		ln.Close()
+		return rep.fail(errnoOf(err), "cannot serve online repos from "+root+": "+err.Error())
+	}
+	w.public, w.srv.public = true, true
+	w.srv.live = newLive()
+	httpd := &http.Server{Handler: w.srv.handler(), ReadHeaderTimeout: 10 * time.Second,
+		ErrorLog: log.New(logWriter{}, "", 0)}
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	defer signal.Stop(sigs)
+	why := make(chan string, 1)
+	go func() {
+		why <- signalName(<-sigs)
+		// Live pages hold their streams open; closing them lets
+		// Shutdown finish.
+		w.srv.live.close()
+		cancel()
+		stop, done := context.WithTimeout(context.Background(), 5*time.Second)
+		defer done()
+		httpd.Shutdown(stop)
+	}()
+	logInfo("serves online repos at %s from %s, within %s", origin(c.ep), w.root, sizeText(limit))
+	report(rep, c.ep, origin(c.ep)+"/")
+	if err := httpd.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
+		logErr("E%d: %s", syscall.EIO, err)
+		fmt.Fprintf(os.Stderr, "E%d: %s\n", syscall.EIO, err)
+		return int(syscall.EIO)
+	}
+	w.wg.Wait()
+	logInfo("public server exits: %s", <-why)
+	return 0
+}
+
 // track keeps fresh up to date.
 func (h *hub) track(c net.Conn, state http.ConnState) {
 	h.freshMu.Lock()

@@ -18,6 +18,8 @@ www --restart [-f] [--no-open] [--debug] [--no-bug]
 www -l [-a ADDR | --share[=HOST]] [--] [DIR]
 www --kill [-a ADDR | --share[=HOST]]
 www --commit=REV [--] [DIR]
+www --public --disk=SIZE (-a ADDR | --share[=HOST]) [--debug]
+    [--cache=SIZE]
 www -h | --help
 www -V | --version
 ```
@@ -30,6 +32,8 @@ www -p ~/notes              serve ~/notes, and again after a reboot
 www --share=192.168.1.5     serve this directory to the LAN
 www -l                      list every served tree as keyval
 www --restart               move every server to the current binary
+www --public --disk=6G -a 127.0.0.1:8080
+                            serve online repos to the web, behind a proxy
 ```
 
 Add `?log` to any page's URL for its history. Open `http://127.31.1.2/github.com/junegunn/fzf/` to read a repo from GitHub.
@@ -46,7 +50,7 @@ www needs git. `make install` links `build/www` into `~/.local/bin`, and serves 
 - [Code pages](doc/code-pages.md): highlighting, line links, scope boxes, the syntax tree and gron
 - [Search and controls](doc/search.md): the search box, keys, the copy buttons and when controls fade
 - [History](doc/history.md): histories, commits, stardates, the timeline and old versions of a tree
-- [Online repos](doc/online-repos.md): reading a forge's repos on the second address
+- [Online repos](doc/online-repos.md): reading a forge's repos on the second address, or serving them to the web
 - [Sharing](doc/sharing.md): serving a tree to other machines
 - [Safety](doc/safety.md): what www refuses to serve, follow or run
 - [Speed](doc/speed.md): what www caches and how it is timed

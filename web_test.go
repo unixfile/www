@@ -331,6 +331,49 @@ func TestWebTrimLeavesALockedRepo(t *testing.T) {
 }
 
 // A path that names no repo lists the account's repos: from the forge's
+// A public server shows a stranger nothing of the machine and nothing of
+// what others read: no cache at / or in a listing, no path of the machine,
+// no bug button, and it answers to any name.
+func TestWebPublic(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
+	w := testWeb(t, defaultDisk)
+	w.public, w.srv.public = true, true
+	get := func(path string) *httptest.ResponseRecorder {
+		return get(w.srv.handler(), path, "Host", "visitor.example.org")
+	}
+	rec := get("/" + f.host + "/acct/r/")
+	if rec.Code != http.StatusAccepted || strings.Contains(rec.Body.String(), w.root) ||
+		strings.Contains(rec.Body.String(), tildePath(w.root)) {
+		t.Errorf("reading page on any host: %d\n%s", rec.Code, rec.Body)
+	}
+	read(t, w, "/"+f.host+"/acct/r/")
+	if body := get("/").Body.String(); strings.Contains(body, "acct/r") || strings.Contains(body, "The cache") {
+		t.Errorf("the root shows the cache:\n%s", body)
+	}
+	if rec := read(t, w, "/"+f.host+"/acct"); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "acct/r") {
+		t.Errorf("a listing falls back to the cache: %d\n%s", rec.Code, rec.Body)
+	}
+	if rec := get("/" + f.host + "/acct/r/README.md"); rec.Code != http.StatusOK {
+		t.Errorf("a cached repo: %d\n%s", rec.Code, rec.Body)
+	}
+	if got := w.where(filepath.Join(w.root, "h", "a", "r", ".git")); got != "cache/h/a/r/.git" {
+		t.Errorf("a cache path reads %s", got)
+	}
+	// git's error names the path it was given.
+	depths[f.host] = 3
+	t.Cleanup(func() { delete(depths, f.host) })
+	if rec := read(t, w, "/"+f.host+"/acct/gone"); rec.Code != http.StatusBadGateway || strings.Contains(rec.Body.String(), w.root) {
+		t.Errorf("a failed clone: %d\n%s", rec.Code, rec.Body)
+	}
+	old := bugOff
+	bugOff = true
+	t.Cleanup(func() { bugOff = old })
+	if rec := do(w.srv.handler(), "POST", ownPath+"bug", "Host", "visitor.example.org"); rec.Code == http.StatusOK {
+		t.Errorf("bug report: %d", rec.Code)
+	}
+}
+
 // API where it answers, else from the cache.
 func TestWebLists(t *testing.T) {
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

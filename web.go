@@ -42,6 +42,9 @@ type web struct {
 	limit int64  // the cache's disk limit
 	srv   *server
 	ctx   context.Context // ends with the server, and every fetch with it
+	// public hides the cache from strangers: no listing of it, and no
+	// path of the machine on a page.
+	public bool
 
 	// loadMu makes taking a repo from the disk one step, so two visits,
 	// or a visit and a clone, never serve one repo twice.
@@ -399,6 +402,7 @@ func (w *web) start(key string, segs []string) *webJob {
 
 // step records what the job does now and wakes its page.
 func (w *web) step(j *webJob, s string) {
+	s = w.hide(s)
 	w.mu.Lock()
 	j.steps = append(j.steps, s)
 	j.line = ""
@@ -410,6 +414,7 @@ func (w *web) step(j *webJob, s string) {
 // once a second.
 func (w *web) progress(j *webJob) func(string) {
 	return func(line string) {
+		line = w.hide(line)
 		w.mu.Lock()
 		j.line = line
 		w.mu.Unlock()
@@ -437,7 +442,7 @@ func (w *web) end(j *webJob, err error) {
 		logErr("E%d: %s: %s", errnoOf(err), strings.TrimPrefix(j.urlPath, "/"), failed)
 	}
 	w.mu.Lock()
-	j.err, j.ended = failed, time.Now()
+	j.err, j.ended = w.hide(failed), time.Now()
 	if err == nil {
 		delete(w.jobs, strings.TrimPrefix(j.urlPath, "/"))
 	}
@@ -689,7 +694,7 @@ func (w *web) clone(j *webJob, key, cloneURL string) error {
 	if !exists(filepath.Join(bare, "HEAD")) {
 		tmp := bare + ".tmp"
 		os.RemoveAll(tmp)
-		w.step(j, "git clone --bare --filter=blob:none "+cloneURL+" "+tildePath(bare))
+		w.step(j, "git clone --bare --filter=blob:none "+cloneURL+" "+w.where(bare))
 		start := time.Now()
 		if _, err := gitProgress(w.ctx, dir, w.progress(j), "clone", "--bare", "--filter=blob:none", "--progress", "--", cloneURL, tmp); err != nil {
 			os.RemoveAll(tmp)
@@ -726,7 +731,7 @@ func (w *web) checkout(r *webRepo, progress func(string), step func(string)) (st
 	name := ".wt-" + head[:12]
 	wt := filepath.Join(r.dir, name)
 	if !exists(wt) {
-		step("git worktree add --detach " + tildePath(wt) + " " + head[:12] + ", which fetches its files")
+		step("git worktree add --detach " + w.where(wt) + " " + head[:12] + ", which fetches its files")
 		start := time.Now()
 		if _, err := gitProgress(w.ctx, bare, progress, "worktree", "add", "--detach", "--", wt, head); err != nil {
 			os.RemoveAll(wt)
@@ -997,6 +1002,24 @@ func seconds(d time.Duration) string {
 	return fmt.Sprintf("%.1f s", d.Seconds())
 }
 
+// where writes a path in the cache for a page: with ~, or on a public
+// server from the cache's root, which shows nothing of the machine.
+func (w *web) where(p string) string {
+	if w.public {
+		return w.hide(p)
+	}
+	return tildePath(p)
+}
+
+// hide writes the cache as "cache" in text a public server's page shows,
+// eg git's error, which names the paths it was given.
+func (w *web) hide(s string) string {
+	if !w.public {
+		return s
+	}
+	return strings.ReplaceAll(s, w.root, "cache")
+}
+
 // tildePath writes a path below home with ~.
 func tildePath(p string) string {
 	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home+"/") {
@@ -1041,7 +1064,9 @@ func (w *web) list(j *webJob, key string, probed bool) {
 		l.failed = append(l.failed, src.name+": "+err.Error())
 		w.step(j, src.name+": "+err.Error())
 	}
-	if l.source == "" {
+	// A stranger must not learn what others read, so a public server
+	// never lists the cache.
+	if l.source == "" && !w.public {
 		l.source = "the cache"
 		for _, c := range w.onDisk() {
 			if strings.HasPrefix(c.key, key+"/") {
@@ -1238,7 +1263,8 @@ func (w *web) fail(rw http.ResponseWriter, r *http.Request, status int, msg stri
 		"<pre class=\"error\">"+template.HTMLEscapeString(msg)+"</pre>")
 }
 
-// serveRoot lists the cache: each repo, its size and its last request.
+// serveRoot lists the cache: each repo, its size and its last request. A
+// public server says only how to read a repo.
 func (w *web) serveRoot(rw http.ResponseWriter, r *http.Request) {
 	esc := template.HTMLEscapeString
 	repos := w.onDisk()
@@ -1246,6 +1272,10 @@ func (w *web) serveRoot(rw http.ResponseWriter, r *http.Request) {
 	var total int64
 	var body strings.Builder
 	body.WriteString("<p class=\"own\">Type a forge's host and a path after this address, eg <a href=\"/github.com/junegunn/fzf/\">/github.com/junegunn/fzf</a>, to read that repo, or <a href=\"/git.suckless.org/\">/git.suckless.org</a> to list a host's repos.</p>\n")
+	if w.public {
+		w.render(rw, r, http.StatusOK, "web", []crumb{{Label: "index"}}, "index", body.String())
+		return
+	}
 	if len(repos) > 0 {
 		var sizes []string
 		for _, c := range repos {

@@ -54,6 +54,14 @@ A path that names no repo lists the repos below it, eg `/github.com/junegunn` or
 
 The listing names its source and the sources that failed first, so a partial listing does not pass for a whole one. It is kept for an hour, since GitHub allows 60 calls an hour without a token.
 
+## On the open web
+
+`www --public --disk=SIZE -a ADDR` serves online repos to anyone who reaches the address, eg through Caddy in front of it. It serves no tree from the machine and no other address, and it runs in the foreground for a service manager. `--share=HOST` binds a public address directly instead.
+
+A visitor learns nothing of the machine or of what others read. `/` says only how to read a repo. A listing that no forge or web frontend gives is a 404, never the cache. Pages write the cache's paths from `cache/`, git's errors included. No page has a stop or bug button, nothing opens a browser, and any Host header is answered, since nothing local is there to protect.
+
+`--disk` is required, since any visitor can make www clone. Visitors are not limited otherwise. One leak remains: a repo already in the cache opens at once, and one that is not shows the reading page first.
+
 ## What git may do
 
 Every git call against a forge runs without your credentials, without your git config and without prompts or hooks, and only over HTTPS. A forge that asks for a login gets none, so only public repos open. Loopback is open to every account on the machine, and a private repo fetched here would be open to them too.
