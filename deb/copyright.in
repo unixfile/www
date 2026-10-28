@@ -6,11 +6,17 @@ Files: *
 Copyright: 2026 unixfile
 License: Expat
 
-Files: assets/fonts/*
+Files: assets/fonts/STIXTwoText-*
 Copyright: 2001-2021 The STIX Fonts Project Authors
 License: OFL-1.1
-Comment: STIX Two Text, embedded in the binary and served to the browser
- when the font is not installed.
+Comment: Subsets of STIX Two Text 2.13, embedded in the binary and served
+ to the browser when the font is not installed.
+
+Files: assets/fonts/Iosevka-*
+Copyright: 2015-2026 Renzhi Li
+License: OFL-1.1
+Comment: Subsets of Iosevka 34.9.1, embedded in the binary and served to
+ the browser when the font is not installed.
 
 Files: github.com/yuin/goldmark/*
 Copyright: 2019 Yusuke Inuzuka

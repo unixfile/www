@@ -1,4 +1,4 @@
-.PHONY: all build syntax run test bench clean install uninstall deb deb-syntax install-deb uninstall-deb
+.PHONY: all build syntax fonts run test bench clean install uninstall deb deb-syntax install-deb uninstall-deb
 
 # WORKING_NAME holds the program's name, provisional until a final one is
 # chosen. The binary, the package and the paths below take it.
@@ -16,6 +16,12 @@ build:
 # and a C compiler; the binary runs without it and says so on a tree page.
 syntax:
 	cd syntax && CGO_ENABLED=1 go build -o ../build/$(NAME)-syntax .
+
+# fonts cuts the embedded fonts from their upstream releases into
+# assets/fonts and writes assets/fonts.css. Its output is committed, so a
+# build needs neither the network nor fontTools.
+fonts:
+	uv run --no-project --with 'fonttools[woff]==4.68.0' --with brotli==1.2.1 python3 assets/fonts/subset.py
 
 # run serves this directory from build/ with --debug, on port 8080 beside
 # an installed server on port 80. A server already there is replaced by

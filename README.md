@@ -61,5 +61,5 @@ www needs git. `make install` links `build/www` into `~/.local/bin`, and serves 
 
 ## Licence
 
-MIT, see `LICENSE`. The embedded STIX Two Text fonts are under the SIL Open Font License, in `assets/fonts/STIXTwoText-OFL.txt`.
+MIT, see `LICENSE`. The embedded subsets of STIX Two Text and Iosevka are under the SIL Open Font License, in `assets/fonts/STIXTwoText-OFL.txt` and `assets/fonts/Iosevka-OFL.txt`.
 The binary links in three Go modules, all under the MIT licence: goldmark by Yusuke Inuzuka, chroma by Alec Thomas and regexp2 by Doug Clark, which ports parts of Microsoft's dotnet/corefx. The package's copyright file carries their notices.

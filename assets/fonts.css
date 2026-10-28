@@ -1,0 +1,129 @@
+/* Made by assets/fonts/subset.py; edit that, not this. */
+@font-face {
+  font-family: "STIX Two Text web";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/STIXTwoText-Regular.woff2") format("woff2");
+  unicode-range: U+20-7E, U+A0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-200D, U+2010-2022, U+2025-2026, U+202F-203C, U+203E, U+2040, U+2043-2044, U+2047, U+204B-2052, U+2057, U+205F, U+20AC, U+2122, U+2212, U+2215;
+}
+@font-face {
+  font-family: "STIX Two Text web";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/STIXTwoText-Regular-ext.woff2") format("woff2");
+  unicode-range: U+100-130, U+132-151, U+154-2BA, U+2BD-2C5, U+2C7-2D9, U+2DB, U+2DD-303, U+305-307, U+309-328, U+32A-491, U+1D00-1D1C, U+1D81-1DA3, U+1E00-1EF9, U+2070-20AB, U+20B9-2121, U+2123-215E, U+2423, U+25CC, U+A727, U+A792, U+FB00-FB04;
+}
+@font-face {
+  font-family: "STIX Two Text web";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/STIXTwoText-Italic.woff2") format("woff2");
+  unicode-range: U+20-7E, U+A0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-200D, U+2010-2022, U+2025-2026, U+202F-203C, U+203E, U+2040, U+2043-2044, U+2047, U+204B-2052, U+2057, U+205F, U+20AC, U+2122, U+2212, U+2215;
+}
+@font-face {
+  font-family: "STIX Two Text web";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/STIXTwoText-Italic-ext.woff2") format("woff2");
+  unicode-range: U+100-130, U+132-151, U+154-2BA, U+2BD-2C5, U+2C7-2D9, U+2DB, U+2DD-303, U+305-307, U+309-328, U+32A-491, U+1D00-1D1C, U+1D81-1DA3, U+1E00-1EF9, U+2070-20AB, U+20B9-2121, U+2123-215E, U+2423, U+25CC, U+A727, U+A792, U+FB00-FB04;
+}
+@font-face {
+  font-family: "STIX Two Text web";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/STIXTwoText-Bold.woff2") format("woff2");
+  unicode-range: U+20-7E, U+A0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-200D, U+2010-2022, U+2025-2026, U+202F-203C, U+203E, U+2040, U+2043-2044, U+2047, U+204B-2052, U+2057, U+205F, U+20AC, U+2122, U+2212, U+2215;
+}
+@font-face {
+  font-family: "STIX Two Text web";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/STIXTwoText-Bold-ext.woff2") format("woff2");
+  unicode-range: U+100-130, U+132-151, U+154-2BA, U+2BD-2C5, U+2C7-2D9, U+2DB, U+2DD-303, U+305-307, U+309-328, U+32A-491, U+1D00-1D1C, U+1D81-1DA3, U+1E00-1EF9, U+2070-20AB, U+20B9-2121, U+2123-215E, U+2423, U+25CC, U+A727, U+A792, U+FB00-FB04;
+}
+@font-face {
+  font-family: "STIX Two Text web";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/STIXTwoText-BoldItalic.woff2") format("woff2");
+  unicode-range: U+20-7E, U+A0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-200D, U+2010-2022, U+2025-2026, U+202F-203C, U+203E, U+2040, U+2043-2044, U+2047, U+204B-2052, U+2057, U+205F, U+20AC, U+2122, U+2212, U+2215;
+}
+@font-face {
+  font-family: "STIX Two Text web";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/STIXTwoText-BoldItalic-ext.woff2") format("woff2");
+  unicode-range: U+100-130, U+132-151, U+154-2BA, U+2BD-2C5, U+2C7-2D9, U+2DB, U+2DD-303, U+305-307, U+309-328, U+32A-491, U+1D00-1D1C, U+1D81-1DA3, U+1E00-1EF9, U+2070-20AB, U+20B9-2121, U+2123-215E, U+2423, U+25CC, U+A727, U+A792, U+FB00-FB04;
+}
+@font-face {
+  font-family: "Iosevka web";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/Iosevka-Regular.woff2") format("woff2");
+  unicode-range: U+D, U+20-7E, U+A0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-200D, U+2010-2029, U+202F-2064, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2500-257F, U+25B8, U+25BE, U+2713, U+2717, U+29C9, U+29F5, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Iosevka web";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/Iosevka-Regular-ext.woff2") format("woff2");
+  unicode-range: U+100-130, U+132-151, U+154-2BA, U+2BD-2C5, U+2C7-2D9, U+2DB, U+2DD-303, U+305-307, U+309-328, U+32A-52F, U+1E00-1EFF, U+2070-20AB, U+20AD-2121, U+2124-218B, U+2194-2211, U+2213-2214, U+2216-24FF, U+2580-25B7, U+25B9-25BD, U+25BF-2705, U+2714-2716, U+2718-2933, U+2940-29C8, U+29CA-2BFF;
+}
+@font-face {
+  font-family: "Iosevka web";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/Iosevka-Italic.woff2") format("woff2");
+  unicode-range: U+D, U+20-7E, U+A0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-200D, U+2010-2029, U+202F-2064, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2500-257F, U+25B8, U+25BE, U+2713, U+2717, U+29C9, U+29F5, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Iosevka web";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/Iosevka-Italic-ext.woff2") format("woff2");
+  unicode-range: U+100-130, U+132-151, U+154-2BA, U+2BD-2C5, U+2C7-2D9, U+2DB, U+2DD-303, U+305-307, U+309-328, U+32A-52F, U+1E00-1EFF, U+2070-20AB, U+20AD-2121, U+2124-218B, U+2194-2211, U+2213-2214, U+2216-24FF, U+2580-25B7, U+25B9-25BD, U+25BF-2705, U+2714-2716, U+2718-2933, U+2940-29C8, U+29CA-2BFF;
+}
+@font-face {
+  font-family: "Iosevka web";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/Iosevka-Bold.woff2") format("woff2");
+  unicode-range: U+D, U+20-7E, U+A0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-200D, U+2010-2029, U+202F-2064, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2500-257F, U+25B8, U+25BE, U+2713, U+2717, U+29C9, U+29F5, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Iosevka web";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/Iosevka-Bold-ext.woff2") format("woff2");
+  unicode-range: U+100-130, U+132-151, U+154-2BA, U+2BD-2C5, U+2C7-2D9, U+2DB, U+2DD-303, U+305-307, U+309-328, U+32A-52F, U+1E00-1EFF, U+2070-20AB, U+20AD-2121, U+2124-218B, U+2194-2211, U+2213-2214, U+2216-24FF, U+2580-25B7, U+25B9-25BD, U+25BF-2705, U+2714-2716, U+2718-2933, U+2940-29C8, U+29CA-2BFF;
+}
+@font-face {
+  font-family: "Iosevka web";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/Iosevka-BoldItalic.woff2") format("woff2");
+  unicode-range: U+D, U+20-7E, U+A0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-200D, U+2010-2029, U+202F-2064, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+2500-257F, U+25B8, U+25BE, U+2713, U+2717, U+29C9, U+29F5, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Iosevka web";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/Iosevka-BoldItalic-ext.woff2") format("woff2");
+  unicode-range: U+100-130, U+132-151, U+154-2BA, U+2BD-2C5, U+2C7-2D9, U+2DB, U+2DD-303, U+305-307, U+309-328, U+32A-52F, U+1E00-1EFF, U+2070-20AB, U+20AD-2121, U+2124-218B, U+2194-2211, U+2213-2214, U+2216-24FF, U+2580-25B7, U+25B9-25BD, U+25BF-2705, U+2714-2716, U+2718-2933, U+2940-29C8, U+29CA-2BFF;
+}

@@ -245,15 +245,22 @@ func TestIndexDeleteReturns(t *testing.T) {
 	}
 }
 
-// The fonts come from www, cached for a year; nothing else leaves the
-// font directory.
+// The fonts come from www, cached for a year: every file the stylesheet
+// names, and nothing else from the font directory.
 func TestFonts(t *testing.T) {
 	s, _, _ := serveTree(t)
-	rec := get(s.handler(), ownPath+"fonts/STIXTwoText-Regular.otf")
-	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "font/otf" || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") || rec.Body.Len() < 1000 {
-		t.Errorf("font: status %d type %q cache %q size %d", rec.Code, rec.Header().Get("Content-Type"), rec.Header().Get("Cache-Control"), rec.Body.Len())
+	urls := regexp.MustCompile(`url\("fonts/([^"]+)"\)`).FindAllSubmatch(styleCSS, -1)
+	if len(urls) < 16 {
+		t.Errorf("stylesheet names %d font files, want 16", len(urls))
 	}
-	for _, p := range []string{ownPath + "fonts/STIXTwoText-OFL.txt", ownPath + "fonts/..%2Fstyle.css", ownPath + "fonts/nope.otf"} {
+	var rec *httptest.ResponseRecorder
+	for _, u := range urls {
+		rec = get(s.handler(), ownPath+"fonts/"+string(u[1]))
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "font/woff2" || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") || rec.Body.Len() < 1000 {
+			t.Errorf("%s: status %d type %q cache %q size %d", u[1], rec.Code, rec.Header().Get("Content-Type"), rec.Header().Get("Cache-Control"), rec.Body.Len())
+		}
+	}
+	for _, p := range []string{ownPath + "fonts/OFL.txt", ownPath + "fonts/subset.py", ownPath + "fonts/..%2Fstyle.css", ownPath + "fonts/nope.woff2"} {
 		if rec := get(s.handler(), p); rec.Code == http.StatusOK {
 			t.Errorf("%s: status 200, want 404", p)
 		}

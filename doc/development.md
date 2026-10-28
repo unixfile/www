@@ -5,3 +5,5 @@ To try a change without installing it, `make run` builds `build/www` and the syn
 The program's name lives in the file `WORKING_NAME`, since www is a working name until a final one is chosen. The binary, its paths, environment variables, journal tag and URLs, the Makefile and the Debian package all take it from there, and a test fails on any other copy outside prose and `go.mod`.
 
 The help text is written in docopt notation. `make test` checks it with docopt-ng, run through `uv`, and skips the check where `uv` is missing.
+
+`make fonts` cuts the embedded fonts from STIX Two Text 2.13 and Iosevka 34.9.1, pinned by SHA-256 in `assets/fonts/subset.py`, and writes `assets/fonts.css`. It needs the network and `uv`; its output is committed, so a build needs neither.

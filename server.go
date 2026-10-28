@@ -26,8 +26,15 @@ import (
 	"unicode/utf8"
 )
 
+//go:embed assets/fonts.css
+var fontsCSS []byte
+
 //go:embed assets/style.css
-var styleCSS []byte
+var mainCSS []byte
+
+// styleCSS is the stylesheet pages link: the font faces, which make fonts
+// writes, then the program's own rules.
+var styleCSS = append(append([]byte{}, fontsCSS...), mainCSS...)
 
 // styleURL names the stylesheet by a hash of its content, so the browser
 // keeps it for a year and a binary with a changed stylesheet links a new
@@ -40,11 +47,11 @@ var styleURL = func() string {
 //go:embed assets/layout.html
 var layoutHTML string
 
-// fontFS holds STIX Two Text, which the stylesheet takes from the machine
-// when installed and from here otherwise. A changed font needs a new file
-// name, since browsers keep these for a year.
+// fontFS holds subsets of STIX Two Text and Iosevka, which a page takes
+// when the machine lacks the font. A changed font needs a new file name,
+// since browsers keep these for a year.
 //
-//go:embed assets/fonts/*.otf
+//go:embed assets/fonts/*.woff2
 var fontFS embed.FS
 
 var layout = template.Must(template.New("layout").Funcs(template.FuncMap{
@@ -356,7 +363,7 @@ func (s *server) handler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", "font/otf")
+		w.Header().Set("Content-Type", "font/woff2")
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		w.Write(b)
 	})

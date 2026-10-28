@@ -43,36 +43,10 @@
   }
 }
 
-/* STIX Two Text from the machine, else from the program, never from the
-   network. */
-@font-face {
-  font-family: "STIX Two Text";
-  font-style: normal;
-  font-weight: 400;
-  src: local("STIX Two Text Regular"), local("STIXTwoText-Regular"),
-       url("fonts/STIXTwoText-Regular.otf") format("opentype");
-}
-@font-face {
-  font-family: "STIX Two Text";
-  font-style: italic;
-  font-weight: 400;
-  src: local("STIX Two Text Italic"), local("STIXTwoText-Italic"),
-       url("fonts/STIXTwoText-Italic.otf") format("opentype");
-}
-@font-face {
-  font-family: "STIX Two Text";
-  font-style: normal;
-  font-weight: 700;
-  src: local("STIX Two Text Bold"), local("STIXTwoText-Bold"),
-       url("fonts/STIXTwoText-Bold.otf") format("opentype");
-}
-@font-face {
-  font-family: "STIX Two Text";
-  font-style: italic;
-  font-weight: 700;
-  src: local("STIX Two Text Bold Italic"), local("STIXTwoText-BoldItalic"),
-       url("fonts/STIXTwoText-BoldItalic.otf") format("opentype");
-}
+/* The fonts come from the machine when installed, else from the
+   program's subsets, which assets/fonts.css declares; never from the
+   network. The mono stack leaves out ui-monospace, which is SF Mono on a
+   Mac, so mono looks the same on every system. */
 /* The header holds still from page to page: every page keeps one width,
    and the scrollbar's space is kept on short pages too, so the centred
    column does not shift when a long page brings a scrollbar. */
@@ -84,7 +58,7 @@ body {
   margin: 2em auto;
   background: var(--page);
   color: var(--text);
-  font-family: "STIX Two Text", Georgia, serif;
+  font-family: "STIX Two Text", "STIX Two Text web", Georgia, serif;
   font-size: clamp(16px, 3.0vw, 38px);
   line-height: 1.2;
   text-align: justify;
@@ -96,7 +70,7 @@ body {
 p, ul, ol, table, div.sourceCode { margin: 0.7em 0; }
 li > ul, li > ol { margin: 0; }
 h1, h2, h3, h4, h5, h6 {
-  font-family: "STIX Two Text", Georgia, serif;
+  font-family: "STIX Two Text", "STIX Two Text web", Georgia, serif;
   font-weight: bold;
   text-align: left;
   hyphens: none;
@@ -164,12 +138,12 @@ header button, table.locks button, p.bug button.bug {
 /* The bug button sits at the page's foot, flat as every button is, but
    small, faint and with little padding, so it never draws the eye from
    the page. After a report, a field beside it takes a comment. */
-p.bug { font-family: ui-monospace, "Iosevka", monospace; font-size: 0.45em; color: var(--faint); text-align: right; margin: 3em 0 0; }
+p.bug { font-family: "Iosevka", "Iosevka web", monospace; font-size: 0.45em; color: var(--faint); text-align: right; margin: 3em 0 0; }
 p.bug button.bug { color: inherit; border-color: currentColor; padding: 0 0.4em; }
 p.bug input { font: inherit; color: var(--text); background: var(--page); border: 1px solid var(--faint); border-radius: 0; padding: 0 0.4em; margin-right: 0.6em; width: 30ch; max-width: 60%; }
 /* What the program says, marked own, is mono, file names in a listing included; what the
    document says is serif. */
-pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone { font-family: ui-monospace, "Iosevka", monospace; }
+pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone { font-family: "Iosevka", "Iosevka web", monospace; }
 /* Mono shows each character as typed: Iosevka's ligatures, eg <= drawn
    as one sign, are off wherever mono is set. Serif text keeps its own. */
 pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone,
@@ -199,7 +173,7 @@ div.graph svg { max-width: 100%; height: auto; }
 div.graph svg polygon[fill="white"] { fill: none; }
 div.graph svg [stroke="black"] { stroke: var(--text); }
 div.graph svg [fill="black"] { fill: var(--text); }
-div.graph svg text { fill: var(--text); font-family: "STIX Two Text", Georgia, serif; }
+div.graph svg text { fill: var(--text); font-family: "STIX Two Text", "STIX Two Text web", Georgia, serif; }
 ul.listing { list-style: none; padding: 0; text-align: left; }
 ul.listing li { padding: 0.075em 0; overflow-wrap: anywhere; }
 /* A row is one target: its link covers the whole row, the words beside it
@@ -225,7 +199,7 @@ main a:hover { text-decoration-color: currentColor; }
    underline in the danger colour; its title names the missing path. */
 main a.broken { text-decoration-style: dotted; text-decoration-color: var(--danger); }
 /* The mark after a forge link reads that repo on the web address. */
-main a.web { font-family: ui-monospace, "Iosevka", monospace; font-size: 0.6em; vertical-align: super; line-height: 0; margin-left: 0.2em; color: var(--muted); text-decoration: none; }
+main a.web { font-family: "Iosevka", "Iosevka web", monospace; font-size: 0.6em; vertical-align: super; line-height: 0; margin-left: 0.2em; color: var(--muted); text-decoration: none; }
 main a.web:hover { color: inherit; }
 header a, ul.listing a, table.gone a, table.locks a, .latest a, .own a { color: inherit; text-decoration-color: var(--rule); }
 header a:visited, ul.listing a:visited, table.gone a:visited, table.locks a:visited, .latest a:visited, .own a:visited { color: var(--muted); }
@@ -260,7 +234,7 @@ pre.diff span.del mark { background: var(--removed-strong); }
 /* The declarations a commit changed, one row each under its file. */
 div.semantic { margin-top: 1.5em; }
 div.semantic p.file { margin: 1em 0 0.2em; }
-ul.decls { list-style: none; padding: 0; margin: 0; font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; text-align: left; }
+ul.decls { list-style: none; padding: 0; margin: 0; font-family: "Iosevka", "Iosevka web", monospace; font-size: max(0.5em, 11px); line-height: 1.35; text-align: left; }
 ul.decls span.what { color: var(--muted); display: inline-block; min-width: 9ch; }
 /* A page's top line names its commit and opens the timeline, the menu
    of its versions, which drops over the page and scrolls on its own. The
@@ -293,7 +267,7 @@ table.gone th, table.gone td { border: 0; padding: 0.075em 0; vertical-align: to
 table.gone th { padding-right: 1em; white-space: nowrap; }
 /* A missing path's 404 turns like a coin: the digits go edge-on and back,
    slow down, rock once and stop facing the reader. Each face is text. */
-p.coin { margin: 0.2em 0 0.1em; line-height: 1; text-align: center; perspective: 18em; font-family: ui-monospace, "Iosevka", monospace; font-size: 6em; color: var(--text); }
+p.coin { margin: 0.2em 0 0.1em; line-height: 1; text-align: center; perspective: 18em; font-family: "Iosevka", "Iosevka web", monospace; font-size: 6em; color: var(--text); }
 p.coin > span { display: inline-grid; transform-style: preserve-3d; animation: coin 2.4s cubic-bezier(.12,.62,.25,1) both; }
 p.coin > span > span { grid-area: 1 / 1; backface-visibility: hidden; }
 p.coin > span > span + span { transform: rotateY(180deg); }
@@ -327,7 +301,7 @@ table.locks .since { white-space: nowrap; color: var(--muted); margin-left: 1em;
    leads its row, so it lines up down the list even where the natural
    order would put it last. The server sets the list's --lead to its
    longest label; numbers align right. */
-.lead { display: inline-block; min-width: var(--lead, 0); margin-right: 0.6em; font-family: ui-monospace, "Iosevka", monospace; white-space: nowrap; }
+.lead { display: inline-block; min-width: var(--lead, 0); margin-right: 0.6em; font-family: "Iosevka", "Iosevka web", monospace; white-space: nowrap; }
 table.locks .lead { margin: 0 1em 0 0; }
 .lead.num { text-align: right; }
 table.locks td + td { text-align: right; }
@@ -504,7 +478,7 @@ pre.scopes { isolation: isolate; }
 div.code { margin: 0.7em 0; }
 div.code > div.sourceCode { margin: 0; }
 div.view { position: sticky; top: var(--search-h, 0); z-index: 1; text-align: right; background: var(--page);
-  font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; }
+  font-family: "Iosevka", "Iosevka web", monospace; font-size: max(0.5em, 11px); line-height: 1.35; }
 div.view a, div.view span { padding: 0 0.4em; margin-left: 0.4em; color: var(--muted); text-decoration-color: var(--rule); }
 div.view span { color: inherit; }
 div.view a:hover { text-decoration-color: currentColor; }
@@ -539,7 +513,7 @@ pre.filtering i.scope { display: none; }
    its parent, its kind, its text on one line and a link to its lines.
    Each level indents by two cells beside a rule, so depth reads as on a
    code page with scopes, and the text is code's size. */
-div.syntax { font-family: ui-monospace, "Iosevka", monospace; font-size: max(0.5em, 11px); line-height: 1.35; padding-top: 1.35em; }
+div.syntax { font-family: "Iosevka", "Iosevka web", monospace; font-size: max(0.5em, 11px); line-height: 1.35; padding-top: 1.35em; }
 div.syntax details > :not(summary) { margin-left: 2ch; padding-left: 1ch; border-left: 1px solid var(--rule); }
 div.syntax > div, div.syntax details > div { padding-left: 2ch; }
 div.syntax summary { cursor: pointer; }
