@@ -188,3 +188,28 @@ func TestWebMarks(t *testing.T) {
 		t.Errorf("marks without a web address: %s", h)
 	}
 }
+
+// On the web address a forge link reads its repo there, and its mark
+// leads to the forge; a bare URL keeps its text.
+func TestWebLinksTurnAround(t *testing.T) {
+	base := ""
+	src := "[fzf](https://github.com/junegunn/fzf/blob/master/README.md#usage \"t\"), https://github.com/junegunn/fzf, [MIT](https://raw.githubusercontent.com/rivo/uniseg/master/LICENSE.txt) and [x](https://example.com/a/b)\n"
+	h, err := renderMarkdown([]byte(src), nil, &base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(h)
+	for _, want := range []string{
+		`<a href="/github.com/junegunn/fzf/README.md#usage" title="t">fzf</a><a class="web" href="https://github.com/junegunn/fzf/blob/master/README.md#usage" title="open on github.com">github</a>`,
+		`<a href="/github.com/junegunn/fzf/">https://github.com/junegunn/fzf</a><a class="web" href="https://github.com/junegunn/fzf" title="open on github.com">github</a>`,
+		`<a href="/github.com/rivo/uniseg/LICENSE.txt">MIT</a><a class="web" href="https://raw.githubusercontent.com/rivo/uniseg/master/LICENSE.txt" title="open on raw.githubusercontent.com">github</a>`,
+		`<a href="https://example.com/a/b">x</a></p>`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("no %s in %s", want, s)
+		}
+	}
+	if n := strings.Count(s, `class="web"`); n != 3 {
+		t.Errorf("%d marks, want 3: %s", n, s)
+	}
+}

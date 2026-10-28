@@ -12,7 +12,9 @@ The index at `/` names the web address, but a reader seldom sees the index, so t
 
 A link in a doc to a repo on GitHub, GitLab, Codeberg or Bitbucket, or to a file or directory in one, is followed by a small www, raised like a footnote mark. It opens the same repo or file on the web address, and its title names the repo. The forge's own link stays as it was.
 
-A link to a forge page that is not a file, eg an issue or an account, gets no mark. A file link names a branch or commit, but the web address serves the commit it fetched, so the mark opens the file as it is there. The copy button leaves the mark out.
+On the web address the link turns around. A reader there is already inside an online repo, so a link to another repo opens it in www, and the mark after it names the forge, eg github, and opens the forge's page. A link in your own docs still goes where it says.
+
+A link to a forge page that is not a file, eg an issue or an account, gets no mark. A link to a file's bare bytes counts as a link to the file, eg on raw.githubusercontent.com. A link pinned to a commit by its hash opens that version, eg `fzf@26ff936`. A branch or tag drops, since the web address serves the commit it fetched. The copy button leaves the mark out.
 
 A forge URL typed or pasted into the search box, with or without `https://`, adds a result above the others, under "online". Enter opens it, since it comes first.
 

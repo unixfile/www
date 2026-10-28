@@ -145,10 +145,14 @@ func renderAlertLabel(w util.BufWriter, src []byte, node ast.Node, entering bool
 }
 
 // webMark follows a link to a forge with a link that reads it on the web
-// address.
+// address, or, on the web address, a link that reads it there with one
+// back to the forge.
 type webMark struct {
 	ast.BaseInline
 	href, key string
+	// forge, when set, names the forge the mark leads to, eg github, and
+	// key is the host it opens, eg raw.githubusercontent.com.
+	forge string
 }
 
 var kindWebMark = ast.NewNodeKind("WebMark")
@@ -157,8 +161,17 @@ func (n *webMark) Kind() ast.NodeKind         { return kindWebMark }
 func (n *webMark) Dump(src []byte, level int) { ast.DumpHelper(n, src, level, nil, nil) }
 
 // markWeb puts a webMark after each link, bare URLs included, that names a
-// repo on a forge or a file in one.
+// repo on a forge or a file in one. On the web address itself, base is ""
+// and the link turns around: it reads the repo there, so a reader in an
+// online repo stays in www, and the mark leads to the forge.
 func markWeb(doc ast.Node, src []byte, base string) {
+	type found struct {
+		link ast.Node
+		u    *url.URL
+		key  string
+		href string
+	}
+	var links []found
 	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		var dest string
 		switch l := n.(type) {
@@ -177,19 +190,43 @@ func markWeb(doc ast.Node, src []byte, base string) {
 			return ast.WalkSkipChildren, nil
 		}
 		if key, p := webPath(u); p != "" {
-			href := base + (&url.URL{Path: p, Fragment: u.Fragment}).String()
-			// The walk visits the mark next and passes it by.
-			n.Parent().InsertAfter(n.Parent(), n, &webMark{href: href, key: key})
+			links = append(links, found{n, u, key, base + (&url.URL{Path: p, Fragment: u.Fragment}).String()})
 		}
 		return ast.WalkSkipChildren, nil
 	})
+	// The tree changes after the walk, which would stop at a node that
+	// left it.
+	for _, f := range links {
+		n, parent := f.link, f.link.Parent()
+		if base != "" {
+			parent.InsertAfter(parent, n, &webMark{href: f.href, key: f.key})
+			continue
+		}
+		switch l := n.(type) {
+		case *ast.Link:
+			l.Destination = []byte(f.href)
+		case *ast.AutoLink:
+			link := ast.NewLink()
+			link.Destination = []byte(f.href)
+			link.AppendChild(link, ast.NewString(l.Label(src)))
+			parent.ReplaceChild(parent, n, link)
+			n = link
+		}
+		forge, _, _ := strings.Cut(f.key, ".")
+		parent.InsertAfter(parent, n, &webMark{href: f.u.String(), key: strings.ToLower(f.u.Hostname()), forge: forge})
+	}
 }
 
-// renderWebMark writes the mark, the program's name, after the link.
+// renderWebMark writes the mark after the link: the program's name, or on
+// the web address the forge's, eg github.
 func renderWebMark(w util.BufWriter, src []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
 		m := node.(*webMark)
 		esc := template.HTMLEscapeString
+		if m.forge != "" {
+			w.WriteString(`<a class="web" href="` + esc(m.href) + `" title="open on ` + esc(m.key) + `">` + esc(m.forge) + `</a>`)
+			return ast.WalkContinue, nil
+		}
 		w.WriteString(`<a class="web" href="` + esc(m.href) + `" title="read ` + esc(m.key) + ` in ` + progName + `">` + progName + `</a>`)
 	}
 	return ast.WalkContinue, nil

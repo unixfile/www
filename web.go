@@ -212,7 +212,7 @@ func (w *web) serve(rw http.ResponseWriter, r *http.Request, t *tree) {
 	// /https://github.com/junegunn/fzf/blob/master/README.md, goes where
 	// it is read: the scheme drops, and a forge's view of a file becomes
 	// the file. path.Clean has made its // one /.
-	if s := strings.ToLower(segs[0]); (s == "https:" || s == "http:") && len(segs) > 1 || forgeViews[strings.ToLower(segs[0])] != nil {
+	if s := strings.ToLower(segs[0]); (s == "https:" || s == "http:") && len(segs) > 1 || forgeViews[strings.ToLower(segs[0])] != nil || rawHosts[strings.ToLower(segs[0])] != "" {
 		rest := segs
 		if strings.HasSuffix(segs[0], ":") {
 			rest = segs[1:]
@@ -574,13 +574,23 @@ var minDepths = map[string]int{"gitlab.com": 3}
 
 // forgeViews gives, for each forge a doc's links are read from, the path
 // segments after a repo's key that lead into a file or directory at a
-// ref, eg blob and tree on GitHub. The ref follows them, then the path.
+// ref, eg blob and tree on GitHub, and raw for a file's bare bytes. The
+// ref follows them, then the path.
 var forgeViews = map[string][][]string{
-	"github.com":    {{"blob"}, {"tree"}},
-	"codeberg.org":  {{"src", "branch"}, {"src", "tag"}, {"src", "commit"}},
-	"bitbucket.org": {{"src"}},
-	"gitlab.com":    {{"-", "blob"}, {"-", "tree"}},
+	"github.com":    {{"blob"}, {"tree"}, {"raw"}},
+	"codeberg.org":  {{"src", "branch"}, {"src", "tag"}, {"src", "commit"}, {"raw", "branch"}, {"raw", "tag"}, {"raw", "commit"}},
+	"bitbucket.org": {{"src"}, {"raw"}},
+	"gitlab.com":    {{"-", "blob"}, {"-", "tree"}, {"-", "raw"}},
 }
+
+// rawHosts serve a forge's files bare, at owner/name, then the ref, then
+// the path, eg raw.githubusercontent.com/junegunn/fzf/master/README.md.
+// Each maps to its forge.
+var rawHosts = map[string]string{"raw.githubusercontent.com": "github.com"}
+
+// pinnedRef matches a ref that is a commit's hash, which the web address
+// serves as a version.
+var pinnedRef = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 
 // forgePages are GitHub's first segments that name a page of the site,
 // not an account, eg github.com/sponsors/junegunn.
@@ -594,14 +604,19 @@ var forgePages = map[string]bool{
 // shows, eg /github.com/junegunn/fzf/README.md for
 // https://github.com/junegunn/fzf/blob/master/README.md, and the repo's
 // key, or "" when u is not a repo or a file in one on a forge in
-// forgeViews. The web address serves the commit it fetched, so the ref in
-// u is dropped.
+// forgeViews or rawHosts. A ref that is a commit's hash leads to that
+// version, eg /github.com/junegunn/fzf@26ff936/README.md; any other ref
+// drops, since the web address serves the commit it fetched.
 func webPath(u *url.URL) (key, p string) {
 	if u.Scheme != "https" && u.Scheme != "http" || u.User != nil || u.Port() != "" {
 		return "", ""
 	}
 	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 	views, ok := forgeViews[host]
+	raw := rawHosts[host]
+	if raw != "" {
+		host, views, ok = raw, [][]string{{}}, true
+	}
 	if !ok {
 		return "", ""
 	}
@@ -626,17 +641,30 @@ func webPath(u *url.URL) (key, p string) {
 	key = strings.Join(k, "/")
 	p = "/" + key + "/"
 	rest := segs[n:]
-	if len(rest) == 0 {
+	if len(rest) == 0 && raw == "" {
 		return key, p
 	}
 	for _, v := range views {
-		if len(rest) > len(v) && slices.Equal(rest[:len(v)], v) {
-			file := strings.Join(rest[len(v)+1:], "/")
-			if file != "" && v[len(v)-1] == "tree" {
-				file += "/"
-			}
-			return key, p + file
+		if len(rest) <= len(v) || !slices.Equal(rest[:len(v)], v) {
+			continue
 		}
+		ref, after := rest[len(v)], rest[len(v)+1:]
+		// raw.githubusercontent.com also names a ref in full, eg
+		// refs/heads/main.
+		if raw != "" && ref == "refs" && len(after) > 2 {
+			after = after[2:]
+		}
+		file := strings.Join(after, "/")
+		if raw != "" && file == "" {
+			break
+		}
+		if file != "" && len(v) > 0 && v[len(v)-1] == "tree" {
+			file += "/"
+		}
+		if pinnedRef.MatchString(ref) {
+			p = "/" + key + "@" + ref + "/"
+		}
+		return key, p + file
 	}
 	return "", ""
 }

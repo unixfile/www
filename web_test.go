@@ -431,21 +431,32 @@ func TestWebEndpoint(t *testing.T) {
 // to nothing.
 func TestWebPath(t *testing.T) {
 	for in, want := range map[string]string{
-		"https://github.com/junegunn/fzf":                             "/github.com/junegunn/fzf/",
-		"https://www.github.com/junegunn/fzf.git":                     "/github.com/junegunn/fzf/",
-		"https://github.com/junegunn/fzf/blob/master/README.md":       "/github.com/junegunn/fzf/README.md",
-		"https://github.com/junegunn/fzf/tree/v0.50/shell":            "/github.com/junegunn/fzf/shell/",
-		"https://github.com/junegunn/fzf/tree/master":                 "/github.com/junegunn/fzf/",
-		"https://codeberg.org/forgejo/forgejo/src/branch/main/go.mod": "/codeberg.org/forgejo/forgejo/go.mod",
-		"https://gitlab.com/a/b/c/-/blob/main/x.md":                   "/gitlab.com/a/b/c/x.md",
-		"https://gitlab.com/a/b":                                      "/gitlab.com/a/b/",
-		"https://bitbucket.org/a/b/src/main/x.md":                     "/bitbucket.org/a/b/x.md",
-		"https://github.com/junegunn/fzf/issues/3":                    "",
-		"https://github.com/junegunn":                                 "",
-		"https://github.com/sponsors/junegunn":                        "",
-		"https://example.com/a/b":                                     "",
-		"ftp://github.com/a/b":                                        "",
-		"https://github.com/a/../b":                                   "",
+		"https://github.com/junegunn/fzf":                                               "/github.com/junegunn/fzf/",
+		"https://www.github.com/junegunn/fzf.git":                                       "/github.com/junegunn/fzf/",
+		"https://github.com/junegunn/fzf/blob/master/README.md":                         "/github.com/junegunn/fzf/README.md",
+		"https://github.com/junegunn/fzf/tree/v0.50/shell":                              "/github.com/junegunn/fzf/shell/",
+		"https://github.com/junegunn/fzf/tree/master":                                   "/github.com/junegunn/fzf/",
+		"https://codeberg.org/forgejo/forgejo/src/branch/main/go.mod":                   "/codeberg.org/forgejo/forgejo/go.mod",
+		"https://gitlab.com/a/b/c/-/blob/main/x.md":                                     "/gitlab.com/a/b/c/x.md",
+		"https://gitlab.com/a/b":                                                        "/gitlab.com/a/b/",
+		"https://bitbucket.org/a/b/src/main/x.md":                                       "/bitbucket.org/a/b/x.md",
+		"https://github.com/junegunn/fzf/blob/26ff936/BUILD.md":                         "/github.com/junegunn/fzf@26ff936/BUILD.md",
+		"https://github.com/junegunn/fzf/tree/26ff936df038b6a62ec42cf18db27b2ea2bb8ec3": "/github.com/junegunn/fzf@26ff936df038b6a62ec42cf18db27b2ea2bb8ec3/",
+		"https://github.com/junegunn/fzf/blob/cafe/x.md":                                "/github.com/junegunn/fzf/x.md",
+		"https://github.com/junegunn/fzf/raw/master/x.png":                              "/github.com/junegunn/fzf/x.png",
+		"https://raw.githubusercontent.com/rivo/uniseg/master/LICENSE.txt":              "/github.com/rivo/uniseg/LICENSE.txt",
+		"https://raw.githubusercontent.com/rivo/uniseg/refs/heads/main/a/b.go":          "/github.com/rivo/uniseg/a/b.go",
+		"https://raw.githubusercontent.com/rivo/uniseg/0123abcd/LICENSE":                "/github.com/rivo/uniseg@0123abcd/LICENSE",
+		"https://raw.githubusercontent.com/rivo/uniseg":                                 "",
+		"https://raw.githubusercontent.com/rivo/uniseg/master":                          "",
+		"https://codeberg.org/a/b/raw/branch/main/x.md":                                 "/codeberg.org/a/b/x.md",
+		"https://gitlab.com/a/b/-/raw/main/x.md":                                        "/gitlab.com/a/b/x.md",
+		"https://github.com/junegunn/fzf/issues/3":                                      "",
+		"https://github.com/junegunn":                                                   "",
+		"https://github.com/sponsors/junegunn":                                          "",
+		"https://example.com/a/b":                                                       "",
+		"ftp://github.com/a/b":                                                          "",
+		"https://github.com/a/../b":                                                     "",
 	} {
 		u, err := url.Parse(in)
 		if err != nil {
@@ -468,6 +479,7 @@ func TestWebPastedURL(t *testing.T) {
 		"/http:/github.com/junegunn/fzf":                      "/github.com/junegunn/fzf/",
 		"/https:/github.com/junegunn/fzf/blob/master/main.go": "/github.com/junegunn/fzf/main.go",
 		"/github.com/junegunn/fzf/tree/master/shell":          "/github.com/junegunn/fzf/shell/",
+		"/raw.githubusercontent.com/junegunn/fzf/master/x.md": "/github.com/junegunn/fzf/x.md",
 	} {
 		rec := webGet(w, in)
 		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != want {
