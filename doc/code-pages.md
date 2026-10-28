@@ -42,7 +42,7 @@ Add `?tree`, or follow tree, for the syntax tree: one row per named node, with i
 
 A helper parses it with tree-sitter: `www-syntax`, which the package of that name installs and `make syntax` builds beside www with a C compiler. It knows Go, Python, JavaScript, TypeScript, Rust, C, C++, shell, Java, C#, JSON, HTML, CSS and Ruby. Without the helper, or for another language, the page says so above the plain code.
 
-A first view of a 1,400-line file takes about 30 ms and sends 1.2 MB. The server keeps the tree, so a later view takes a few milliseconds.
+A first view of a 1,400-line file takes about 20 ms and sends 1.2 MB; one of jquery.js, 10,900 lines, takes about 85 ms, most of it in the parse. www renders the rows as the helper prints them. The server keeps the tree, so a later view takes a few milliseconds.
 
 ## Gron
 
