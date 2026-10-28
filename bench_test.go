@@ -102,3 +102,53 @@ func BenchmarkCodePage(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkSyntaxTree times a tree page's first view on jquery.js in its
+// stages: the helper with reading its output, rendering the rows, and
+// the whole page as a request returns it. It skips where the helper or
+// the file is missing.
+func BenchmarkSyntaxTree(b *testing.B) {
+	src, err := os.ReadFile("/usr/share/javascript/jquery/jquery.js")
+	if err != nil {
+		b.Skip(err)
+	}
+	if _, err := syntaxHelper(); err != nil {
+		b.Skip("no helper; make syntax builds it")
+	}
+	nodes, err := parseSyntax(context.Background(), "jquery.js", src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Run("helper", func(b *testing.B) {
+		for b.Loop() {
+			parseSyntax(context.Background(), "jquery.js", src)
+		}
+	})
+	b.Run("rows", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			renderSyntax(nodes, "jquery.js", src)
+		}
+	})
+	b.Run("page", func(b *testing.B) {
+		dir := b.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "jquery.js"), src, 0o644); err != nil {
+			b.Fatal(err)
+		}
+		root, err := os.OpenRoot(dir)
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer root.Close()
+		s := newServer()
+		s.add(newTree(root, dir, "/", "bench"))
+		h := s.handler()
+		b.ReportAllocs()
+		for b.Loop() {
+			syntaxCache = newCache(8 << 20)
+			if rec := get(h, "/jquery.js?tree"); rec.Code != 200 {
+				b.Fatal(rec.Code)
+			}
+		}
+	})
+}

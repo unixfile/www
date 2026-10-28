@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -80,14 +81,28 @@ func parseSyntax(ctx context.Context, name string, src []byte) ([]synNode, error
 		}
 		return nil, err
 	}
-	var nodes []synNode
-	for line := range strings.Lines(out.String()) {
-		f := strings.Split(strings.TrimSuffix(line, "\n"), "\t")
-		if len(f) != 7 {
-			return nil, errors.New("the helper printed a line of " + strconv.Itoa(len(f)) + " fields")
+	return readNodes(out.String())
+}
+
+// readNodes reads the helper's output: a node a line, with its depth,
+// kind, field and range as tab-separated fields. A large file prints tens
+// of thousands of lines, so it cuts fields in place, with no slice per
+// line.
+func readNodes(out string) ([]synNode, error) {
+	nodes := make([]synNode, 0, strings.Count(out, "\n"))
+	for line := range strings.Lines(out) {
+		line = strings.TrimSuffix(line, "\n")
+		if k := strings.Count(line, "\t"); k != 6 {
+			return nil, errors.New("the helper printed a line of " + strconv.Itoa(k+1) + " fields")
 		}
+		var f [7]string
+		for i := range 6 {
+			f[i], line, _ = strings.Cut(line, "\t")
+		}
+		f[6] = line
 		var v [5]int
-		for i, s := range []string{f[0], f[3], f[4], f[5], f[6]} {
+		for i, s := range [5]string{f[0], f[3], f[4], f[5], f[6]} {
+			var err error
 			if v[i], err = strconv.Atoi(s); err != nil {
 				return nil, errors.New("the helper printed a bad number: " + s)
 			}
@@ -116,6 +131,14 @@ func syntaxPage(ctx context.Context, name, href string, src []byte) (string, err
 	if err != nil {
 		return "", err
 	}
+	h := renderSyntax(nodes, href, src)
+	syntaxCache.put(key, h, int64(len(h)))
+	return h, nil
+}
+
+// renderSyntax writes the rows of nodes, parsed from src, with line links
+// to href.
+func renderSyntax(nodes []synNode, href string, src []byte) string {
 	lines := bytes.Split(src, []byte("\n"))
 	var b strings.Builder
 	// About 120 bytes a row, so the builder grows about once.
@@ -146,11 +169,7 @@ func syntaxPage(ctx context.Context, name, href string, src []byte) (string, err
 		b.WriteString("<b>")
 		escapeHTML(&b, n.kind)
 		b.WriteString("</b>")
-		if text := excerpt(lines, n); text != "" {
-			b.WriteString(" <code>")
-			escapeHTML(&b, text)
-			b.WriteString("</code>")
-		}
+		writeExcerpt(&b, lines, n)
 		er := n.er
 		// A node that ends at the start of a row ends on the row before.
 		if n.ec == 0 && er > n.sr {
@@ -187,9 +206,7 @@ func syntaxPage(ctx context.Context, name, href string, src []byte) (string, err
 		b.WriteString("</details>\n")
 	}
 	b.WriteString("</div>\n")
-	h := b.String()
-	syntaxCache.put(key, h, int64(len(h)))
-	return h, nil
+	return b.String()
 }
 
 // excerptLen is how many characters of a node's text a row shows.
@@ -217,6 +234,86 @@ func excerpt(lines [][]byte, n synNode) string {
 		text += " …"
 	}
 	return text
+}
+
+// writeExcerpt writes n's excerpt, escaped, in a code element after a
+// space, and nothing when it is empty. It does excerpt's work in one pass
+// with no allocation, since a large file has tens of thousands of rows. A
+// row that is not valid UTF-8 goes through excerpt, whose cut turns
+// invalid bytes into U+FFFD.
+func writeExcerpt(b *strings.Builder, lines [][]byte, n synNode) {
+	if n.sr >= len(lines) {
+		return
+	}
+	line := lines[n.sr]
+	start, end := min(n.sc, len(line)), len(line)
+	if n.er == n.sr {
+		end = min(n.ec, len(line))
+	}
+	text := line[start:end]
+	if !utf8.Valid(text) {
+		if s := excerpt(lines, n); s != "" {
+			b.WriteString(" <code>")
+			escapeHTML(b, s)
+			b.WriteString("</code>")
+		}
+		return
+	}
+	more := n.er > n.sr && !(n.er == n.sr+1 && n.ec == 0)
+	runes, space := 0, false
+	for i := 0; i < len(text); {
+		r, size := rune(text[i]), 1
+		if r >= utf8.RuneSelf {
+			r, size = utf8.DecodeRune(text[i:])
+		}
+		if unicode.IsSpace(r) {
+			space = runes > 0
+			i += size
+			continue
+		}
+		// The space that joins two words counts toward the cut.
+		if space {
+			if runes == excerptLen {
+				more = true
+				break
+			}
+			b.WriteByte(' ')
+			runes++
+			space = false
+		}
+		if runes == excerptLen {
+			more = true
+			break
+		}
+		if runes == 0 {
+			b.WriteString(" <code>")
+		}
+		switch r {
+		case '"':
+			b.WriteString("&#34;")
+		case '\'':
+			b.WriteString("&#39;")
+		case '&':
+			b.WriteString("&amp;")
+		case '<':
+			b.WriteString("&lt;")
+		case '>':
+			b.WriteString("&gt;")
+		case 0:
+			b.WriteString("\uFFFD")
+		default:
+			b.Write(text[i : i+size])
+		}
+		runes++
+		i += size
+	}
+	if runes == 0 {
+		return
+	}
+	if more {
+		b.WriteString(" …")
+	}
+	b.WriteString("</code>")
 }
 
 // codeViews are the links over a code page's top right corner: every

@@ -75,3 +75,43 @@ func TestExcerpt(t *testing.T) {
 		}
 	}
 }
+
+// writeExcerpt writes what excerpt gives, escaped, wherever a cut lands:
+// on a word, on the space that joins two, inside a multibyte character,
+// and in rows with escapes, a NUL, Unicode spaces or invalid UTF-8.
+func TestWriteExcerpt(t *testing.T) {
+	word := strings.Repeat("z", excerptLen-1)
+	lines := [][]byte{
+		[]byte(word + " a b"),
+		[]byte(word + "  \t\u00a0b"),
+		[]byte(word + "é" + " é"),
+		[]byte(" \t<a href=\"x\">'&'</a>\x00 \u2003end "),
+		[]byte(strings.Repeat("ü", excerptLen) + "\u0085"),
+		[]byte(strings.Repeat("y", 70) + "\xff z"),
+		[]byte("ok \xffbad"),
+		[]byte("   "),
+	}
+	var b strings.Builder
+	for sr, line := range lines {
+		for sc := range len(line) + 1 {
+			for _, n := range []synNode{
+				{sr: sr, sc: sc, er: sr, ec: len(line)},
+				{sr: sr, sc: sc, er: sr + 1, ec: 1},
+				{sr: sr, sc: sc, er: sr + 1, ec: 0},
+				{sr: sr, sc: sc, er: sr, ec: sc + 3},
+			} {
+				var want strings.Builder
+				if s := excerpt(lines, n); s != "" {
+					want.WriteString(" <code>")
+					escapeHTML(&want, s)
+					want.WriteString("</code>")
+				}
+				b.Reset()
+				writeExcerpt(&b, lines, n)
+				if b.String() != want.String() {
+					t.Errorf("%+v: %q, want %q", n, b.String(), want.String())
+				}
+			}
+		}
+	}
+}
