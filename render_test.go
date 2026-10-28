@@ -55,6 +55,25 @@ func TestTaskBoxes(t *testing.T) {
 	}
 }
 
+// A quote that opens with [!KIND] alone on its line is an alert: the marker
+// becomes a label. Any other quote stays a quote.
+func TestAlerts(t *testing.T) {
+	for src, want := range map[string]string{
+		"> [!WARNING]\n> Be `careful`.\n":       "<blockquote class=\"alert warning\"><p class=\"own alert\">warning</p>\n<p>Be <code>careful</code>.</p>\n</blockquote>\n",
+		"> [!tip]\n>\n> ```sh\n> make\n> ```\n": "<blockquote class=\"alert tip\"><p class=\"own alert\">tip</p>\n<div class=\"sourceCode\">",
+		"> [!NOTE] Same line.\n":                "<blockquote>\n<p>[!NOTE] Same line.</p>\n</blockquote>\n",
+		"> [!TODO]\n> Not a kind.\n":            "<blockquote>\n<p>[!TODO]\nNot a kind.</p>\n</blockquote>\n",
+	} {
+		h, err := renderMarkdown([]byte(src), nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(string(h), want) {
+			t.Errorf("%q rendered\n%s\nwant prefix\n%s", src, h, want)
+		}
+	}
+}
+
 // Go is lexed by the standard library's scanner: every byte comes back,
 // and tokens get the classes chroma's Go lexer gives them.
 func TestGoTokens(t *testing.T) {

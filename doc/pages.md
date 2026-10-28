@@ -24,6 +24,8 @@ Docs follow CommonMark with GitHub's extensions, rendered by goldmark: tables, s
 
 Lines join into a paragraph, and a blank line starts the next. A line that starts with a dash begins a list even right after text. Straight quotes and dashes turn typographic.
 
+A quote whose first line is only `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` becomes an alert. The marker gives way to a small mono label that names its kind, and the alert keeps full strength where a plain quote fades. A marker with text after it on the same line stays a plain quote.
+
 Wiki links work as relative links do. `[[name]]` opens `name.md` in the doc's directory and `[[sub/name]]` opens `sub/name.md`. A name with an extension, eg `[[main.go]]`, keeps it. `[[name|label]]` shows the label and `[[name#heading]]` opens at the heading.
 
 A fenced block marked `dot` or `graphviz` becomes a diagram, drawn by Graphviz's `dot` when it is installed and kept by the hash of its source. Without `dot`, or when `dot` rejects the graph, the block shows as code under a line that says why. `dot` may not read image files the graph names.

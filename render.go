@@ -49,6 +49,7 @@ var markdown = goldmark.New(
 // there.
 func renderMarkdown(src []byte, missing func(dest string) bool, web *string) (template.HTML, error) {
 	doc := markdown.Parser().Parse(text.NewReader(src))
+	markAlerts(doc, src)
 	if missing != nil {
 		markBroken(doc, missing)
 	}
@@ -79,6 +80,68 @@ func markBroken(doc ast.Node, missing func(string) bool) {
 		}
 		return ast.WalkContinue, nil
 	})
+}
+
+// alertKinds are the words a quote may open with as [!WORD] to become an
+// alert.
+var alertKinds = map[string]bool{"note": true, "tip": true, "important": true, "warning": true, "caution": true}
+
+// alertLabel names an alert's kind at the top of its quote.
+type alertLabel struct {
+	ast.BaseBlock
+	kind string
+}
+
+var kindAlertLabel = ast.NewNodeKind("AlertLabel")
+
+func (n *alertLabel) Kind() ast.NodeKind         { return kindAlertLabel }
+func (n *alertLabel) IsRaw() bool                { return true }
+func (n *alertLabel) Dump(src []byte, level int) { ast.DumpHelper(n, src, level, nil, nil) }
+
+// markAlerts turns each quote whose first line is only [!NOTE], [!TIP],
+// [!IMPORTANT], [!WARNING] or [!CAUTION], in any case, into an alert: the
+// marker gives way to a label that names the kind.
+func markAlerts(doc ast.Node, src []byte) {
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		q, ok := n.(*ast.Blockquote)
+		if !entering || !ok {
+			return ast.WalkContinue, nil
+		}
+		p, ok := q.FirstChild().(*ast.Paragraph)
+		if !ok || p.Lines().Len() == 0 {
+			return ast.WalkContinue, nil
+		}
+		first := p.Lines().At(0)
+		marker := strings.TrimSpace(string(first.Value(src)))
+		word := strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(marker, "[!"), "]"))
+		if len(marker) != len(word)+3 || !alertKinds[word] {
+			return ast.WalkContinue, nil
+		}
+		// The marker is text on the first line, and nothing else is.
+		for c := p.FirstChild(); c != nil; {
+			t, ok := c.(*ast.Text)
+			if !ok || t.Segment.Start >= first.Stop {
+				break
+			}
+			next := c.NextSibling()
+			p.RemoveChild(p, c)
+			c = next
+		}
+		if p.ChildCount() == 0 {
+			q.RemoveChild(q, p)
+		}
+		q.SetAttributeString("class", []byte("alert "+word))
+		q.InsertBefore(q, q.FirstChild(), &alertLabel{kind: word})
+		return ast.WalkSkipChildren, nil
+	})
+}
+
+// renderAlertLabel writes the label as text of www's own.
+func renderAlertLabel(w util.BufWriter, src []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if entering {
+		w.WriteString(`<p class="own alert">` + node.(*alertLabel).kind + "</p>\n")
+	}
+	return ast.WalkContinue, nil
 }
 
 // webMark follows a link to a forge with a link that reads it on the web
@@ -144,13 +207,14 @@ func relativePath(dest string) string {
 }
 
 // nodeRenderer replaces goldmark's rendering of fenced code and task list
-// checkboxes.
+// checkboxes, and renders the nodes www adds.
 type nodeRenderer struct{}
 
 func (nodeRenderer) RegisterFuncs(r renderer.NodeRendererFuncRegisterer) {
 	r.Register(ast.KindFencedCodeBlock, renderFence)
 	r.Register(east.KindTaskCheckBox, renderCheckBox)
 	r.Register(kindWebMark, renderWebMark)
+	r.Register(kindAlertLabel, renderAlertLabel)
 }
 
 // renderCheckBox leaves out goldmark's disabled attribute, which greys the

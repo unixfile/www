@@ -88,6 +88,11 @@ blockquote {
   border-left: 2px solid currentColor;
   opacity: 0.75;
 }
+/* An alert asks to be read, so it keeps full strength; its label is www's
+   word for the [!KIND] marker. */
+blockquote.alert { opacity: 1; }
+p.own.alert { margin-bottom: 0.2em; }
+p.own.alert + * { margin-top: 0; }
 @media (pointer: coarse), (max-width: 768px) {
   body { max-width: 100%; }
 }
