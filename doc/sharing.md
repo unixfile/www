@@ -8,7 +8,9 @@
 
 The printed URL carries the address's name when its reverse lookup resolves back to it, so a share on a WireGuard address with its own DNS prints `http://mate.peer.home/notes/`. Otherwise it carries the address. The port defaults to 80 where www may bind it, else 8080, as on loopback. `-a` takes only loopback addresses, so a typo there cannot share a tree.
 
-A shared address gets a server of its own, apart from the loopback one. More trees join it with the same `--share` address. The lock is named after the address, such as `192.168.1.5-80.lock`, and deleting it stops the share. `www --kill --share` stops every tree on that address. `www --restart --share` moves the trees to a new binary. `www -l` lists shared trees with the rest.
+A shared address gets a server of its own, apart from the loopback one. More trees join it with the same `--share` address. The lock is named after the address, such as `192.168.1.5-80.lock`, and deleting it stops the share.
+
+`www --kill --share` stops every tree on that address. `www --restart --share` moves the trees to a new binary. `www -l` lists shared trees with the rest.
 
 On `0.0.0.0` the printed URL carries the machine's name, since the server answers on every address. `0.0.0.0` claims its port on every address, so it cannot bind a port that any listener holds, the loopback www included. www then fails with `E98` and names the listeners on that port. Share on one address, or give `0.0.0.0` another port.
 
@@ -16,7 +18,13 @@ On `0.0.0.0` the printed URL carries the machine's name, since the server answer
 
 A shared tree mounts at its base name, eg `http://192.168.1.69/notes/`. The URL does not reveal where the tree lives on the machine.
 
-The server serves only what other users on the machine could read. A file needs the others-read bit, and every directory from the tree's root down to it needs others-read and others-execute. Links out of the tree follow the `.www-follow` rule as on loopback. Names that begin with a dot are neither listed nor served, at any depth, nor are links that lead to them inside the tree: `.git` holds the history and every deleted file. History pages show commit messages alone, without trailers, and only when other users could read the repo. Everything else in the tree is served, so share a directory that holds only what you mean to share.
+The server serves only what other users on the machine could read. A file needs the others-read bit, and every directory from the tree's root down to it needs others-read and others-execute. Links out of the tree follow the `.www-follow` rule as on loopback.
+
+Names that begin with a dot are neither listed nor served, at any depth, nor are links that lead to them inside the tree: `.git` holds the history and every deleted file.
+
+History pages show commit messages alone, without trailers, and only when other users could read the repo.
+
+Everything else in the tree is served, so share a directory that holds only what you mean to share.
 
 A refused entry shows as refused, without the reason, since the reason names paths outside the tree. The index at `/` lists the shared trees by name. It shows no lock paths, no other addresses and no buttons. No page has a Delete lock or Kill server button, so no visitor can stop the server.
 

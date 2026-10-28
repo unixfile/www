@@ -2,7 +2,9 @@
 
 ## Bug reports
 
-A small, faint `www bug` button sits at the foot of every page. It reports a bug in www and the server, not in the tree you are reading. A click files a numbered bug with the page attached, and the button says which, eg `bug 7 filed`. Text selected on the page goes in as the note. A field then opens beside the button for a comment: Enter adds it, Escape or clicking away leaves the bug without one.
+A small, faint `www bug` button sits at the foot of every page. It reports a bug in www and the server, not in the tree you are reading.
+
+A click files a numbered bug with the page attached, and the button says which, eg `bug 7 filed`. Text selected on the page goes in as the note. A field then opens beside the button for a comment: Enter adds it, Escape or clicking away leaves the bug without one.
 
 Each report lands in `csi/bugs/` of the checkout the binary was built from, when `make build` built it there and that checkout has csi, so the bugs sit with www's own project. Otherwise, as for the package, it lands in `~/.local/state/www/bugs/`, or below `$XDG_STATE_HOME` when set:
 
@@ -21,4 +23,6 @@ bug 7 comment: "after a restart"
 
 ## Build stamp
 
-With `--debug`, each page says when its binary was built and how many seconds ago, the commit it was built from and how long the page took to render, eg `built 12:49, 108 s ago, from 1aa282c+modified, rendered in 3.3 ms`. It sits small and faint above the header, so a glance tells which build served the page. `+modified` marks a build from uncommitted code. www's script counts the seconds up while the page is open. Shares leave the stamp out.
+With `--debug`, each page says when its binary was built and how many seconds ago, the commit it was built from and how long the page took to render, eg `built 12:49, 108 s ago, from 1aa282c+modified, rendered in 3.3 ms`. It sits small and faint above the header, so a glance tells which build served the page.
+
+`+modified` marks a build from uncommitted code. www's script counts the seconds up while the page is open. Shares leave the stamp out.

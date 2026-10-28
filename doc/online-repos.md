@@ -1,16 +1,22 @@
 # Online repos
 
-The server on your default address also listens on the address after it, 127.31.N.2, on the same port. There a URL names a repo on a forge by its host and path, eg `http://127.31.1.2/github.com/junegunn/fzf/README.md`. The first visit fetches the repo into a cache, and from then on www serves it as it serves a checkout: docs, code, listings, search and history. Home and the web never collide, since each has an address of its own.
+The server on your default address also listens on the address after it, 127.31.N.2, on the same port. There a URL names a repo on a forge by its host and path, eg `http://127.31.1.2/github.com/junegunn/fzf/README.md`. The first visit fetches the repo into a cache. From then on www serves it as it serves a checkout: docs, code, listings, search and history.
 
-The index at `/` on the default address links the web address. The web address's own `/` lists the repos in the cache, each with its size and when it was last read, and how much of the disk limit they fill, and links back to the trees on the default address.
+Home and the web never collide, since each has an address of its own.
+
+The index at `/` on the default address links the web address. The web address's own `/` lists the repos in the cache, each with its size and when it was last read. It says how much of the disk limit they fill, and links back to the trees on the default address.
 
 ## Ways in
 
 The index at `/` names the web address, but a reader seldom sees the index, so two ways in lie where a reader already is.
 
-A link in a doc to a repo on GitHub, GitLab, Codeberg or Bitbucket, or to a file or directory in one, is followed by a small www, raised like a footnote mark. It opens the same repo or file on the web address, and its title names the repo. The forge's own link stays as it was. A link to a forge page that is not a file, eg an issue or an account, gets no mark. A file link names a branch or commit, but the web address serves the commit it fetched, so the mark opens the file as it is there. The copy button leaves the mark out.
+A link in a doc to a repo on GitHub, GitLab, Codeberg or Bitbucket, or to a file or directory in one, is followed by a small www, raised like a footnote mark. It opens the same repo or file on the web address, and its title names the repo. The forge's own link stays as it was.
 
-A forge URL typed or pasted into the search box, with or without `https://`, adds a result above the others, under "online". Enter opens it, since it comes first. A URL to any other host, eg `https://git.suckless.org/dwm`, gets no result there; paste it after the web address instead, scheme and all, eg `http://127.31.1.2/https://git.suckless.org/dwm`. The web address drops the scheme, and turns a forge's view of a file, eg `/blob/master/README.md`, into the file.
+A link to a forge page that is not a file, eg an issue or an account, gets no mark. A file link names a branch or commit, but the web address serves the commit it fetched, so the mark opens the file as it is there. The copy button leaves the mark out.
+
+A forge URL typed or pasted into the search box, with or without `https://`, adds a result above the others, under "online". Enter opens it, since it comes first.
+
+A URL to any other host, eg `https://git.suckless.org/dwm`, gets no result there; paste it after the web address instead, scheme and all, eg `http://127.31.1.2/https://git.suckless.org/dwm`. The web address drops the scheme, and turns a forge's view of a file, eg `/blob/master/README.md`, into the file.
 
 Both appear wherever a server serves the web address: on its default address and on the web address itself. A share offers neither.
 
@@ -26,7 +32,9 @@ When another website links to a repo not yet cached, the browser marks the reque
 
 ## The cache
 
-The cache lives in `~/.cache/www/`, or `$XDG_CACHE_HOME/www/`, one directory per repo named by its host and path. Each holds a bare clone without file contents, in `.git`, and one worktree of the commit served, such as `.wt-b412a450538e`, which the link `.tree` names. The worktree's checkout fetches every file of that commit in one request. Older file versions arrive when a page needs them: a commit's diff fetches the blobs it shows, which takes about half a second on GitHub. A version fetches a directory's files in one request, the first time its listing or one of its files opens, so its first page takes about the same.
+The cache lives in `~/.cache/www/`, or `$XDG_CACHE_HOME/www/`, one directory per repo named by its host and path. Each holds a bare clone without file contents, in `.git`, and one worktree of the commit served, such as `.wt-b412a450538e`, which the link `.tree` names.
+
+The worktree's checkout fetches every file of that commit in one request. Older file versions arrive when a page needs them: a commit's diff fetches the blobs it shows, which takes about half a second on GitHub. A version fetches a directory's files in one request, the first time its listing or one of its files opens, so its first page takes about the same.
 
 `--disk=SIZE` sets the cache's limit, 2G by default. When a fetch takes it over, www deletes the repos read longest ago until it fits. A repo larger than the limit on its own goes too, and its page says so.
 
@@ -34,7 +42,9 @@ Delete the directory any time; www fetches what it needs again.
 
 ## Staying current
 
-A visit to a repo fetched over five minutes ago serves the cached commit at once and fetches in the background. When the branch moved, www builds the new commit's worktree beside the old one and swaps the link, so no page sees a half-updated tree, and open pages reload onto the new commit. The header of every page in the repo names the commit shown and when it was fetched, eg `@ 52502e6 · fetched 23:40`, as a version's crumbs name a commit; the hash links the page in that commit's version, which stays put after the next fetch. When a fetch fails, the page keeps the commit it has and says the fetch failed.
+A visit to a repo fetched over five minutes ago serves the cached commit at once and fetches in the background. When the branch moved, www builds the new commit's worktree beside the old one and swaps the link, so no page sees a half-updated tree. Open pages reload onto the new commit.
+
+The header of every page in the repo names the commit shown and when it was fetched, eg `@ 52502e6 · fetched 23:40`, as a version's crumbs name a commit; the hash links the page in that commit's version, which stays put after the next fetch. When a fetch fails, the page keeps the commit it has and says the fetch failed.
 
 A fetch takes the branches and tags. It leaves out GitHub's pull request refs, which would fill a large repo's cache with commits nobody asked for.
 
@@ -58,9 +68,17 @@ The listing names its source and the sources that failed first, so a partial lis
 
 `www --public --disk=SIZE -a ADDR` serves online repos to anyone who reaches the address, eg through Caddy in front of it. It serves no tree from the machine and no other address, and it runs in the foreground for a service manager. `--share=HOST` binds a public address directly instead.
 
-A visitor learns nothing of the machine or of what others read. `/` says only how to read a repo. A listing that no forge or web frontend gives is a 404, never the cache. Pages write the cache's paths from `cache/`, git's errors included. No page has a stop or bug button, nothing opens a browser, and any Host header is answered, since nothing local is there to protect.
+A visitor learns nothing of the machine or of what others read. `/` says only how to read a repo. A listing that no forge or web frontend gives is a 404, never the cache. Pages write the cache's paths from `cache/`, git's errors included. 
 
-`--disk` is required, since any visitor can make www clone. The limits aim at a bot that makes www clone without end, not at a reader. A repo already in the cache opens at any time. A visit to an uncached path starts a read: a probe, a clone or a listing. One address runs one read at a time and starts at most 20 within an hour; over that it gets a 429 with `Retry-After`, and the log names the address. An IPv6 address counts by its /64. Behind a proxy on loopback, eg Caddy, the visitor is the last address in `X-Forwarded-For`. At most four clones run at once, and a fifth waits on its reading page.
+No page has a stop or bug button, nothing opens a browser, and any Host header is answered, since nothing local is there to protect.
+
+`--disk` is required, since any visitor can make www clone.
+
+The limits aim at a bot that makes www clone without end, not at a reader. A repo already in the cache opens at any time. A visit to an uncached path starts a read: a probe, a clone or a listing.
+
+One address runs one read at a time and starts at most 20 within an hour. Over that it gets a 429 with `Retry-After`, and the log names the address. An IPv6 address counts by its /64. Behind a proxy on loopback, eg Caddy, the visitor is the last address in `X-Forwarded-For`.
+
+At most four clones run at once, and a fifth waits on its reading page.
 
 One leak remains: a repo already in the cache opens at once, and one that is not shows the reading page first.
 

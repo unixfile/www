@@ -1,10 +1,12 @@
 # www
 
-www reads a directory in the browser: Markdown as pages, code as highlighted source, a repo with its history. It runs on your machine and needs no build step.
+www reads directories and repos in the browser: Markdown as pages, code as code, history beside both.
 
-It is for anyone who keeps notes, docs and code in plain files and wants to read them as linked pages, without pushing them anywhere first. A repo on GitHub, GitLab or Codeberg reads the same way once www has fetched it.
+It is for anyone who keeps notes, docs and code in plain files and wants to read them as linked pages. It runs on your machine. Nothing needs a build step, and nothing needs a push first.
 
-It is fast. A page from a running server takes one to three milliseconds, a server starts in about 40 ms, and a test in `make test` fails any page that takes over five.
+A repo on GitHub, GitLab or Codeberg reads the same way, once www has fetched it.
+
+It is fast. A page takes one to three milliseconds and a server starts in about 40 ms. `make test` fails any page that takes over 5 ms.
 
 ## Usage
 
@@ -24,7 +26,9 @@ www -h | --help
 www -V | --version
 ```
 
-Run `www` in a directory. It prints the tree's URL, opens the browser and writes a lockfile named after the endpoint, such as `127.31.1.1-8080.lock`. Delete the lockfile to stop serving the tree. Trees on one address share one server, which exits when its last lock is gone.
+Run `www` in a directory. It prints the tree's URL and opens the browser.
+
+It also writes a lockfile named after the endpoint, eg `127.31.1.1-8080.lock`. Delete the lockfile to stop serving the tree. Trees on one address share one server, which exits when its last lock is gone.
 
 ```
 www                         serve this directory and open it
@@ -36,11 +40,17 @@ www --public --disk=6G -a 127.0.0.1:8080
                             serve online repos to the web, behind a proxy
 ```
 
-Add `?log` to any page's URL for its history. Open `http://127.31.1.2/github.com/junegunn/fzf/` to read a repo from GitHub.
+Add `?log` to any page's URL for its history.
+
+To read a repo from GitHub, open `http://127.31.1.2/github.com/junegunn/fzf/`.
 
 ## Install
 
-www needs git. `make install` links `build/www` into `~/.local/bin`, and serves on port 8080. `make install-deb` builds and installs the Debian packages, www and its syntax tree helper. The package's binary may bind port 80, so URLs carry no port.
+www needs git.
+
+`make install` links `build/www` into `~/.local/bin` and serves on port 8080.
+
+`make install-deb` builds and installs two Debian packages: www and its syntax tree helper. The package's binary may bind port 80, so URLs carry no port.
 
 ## Documentation
 
@@ -61,5 +71,8 @@ www needs git. `make install` links `build/www` into `~/.local/bin`, and serves 
 
 ## Licence
 
-MIT, see `LICENSE`. The embedded subsets of STIX Two Text and Iosevka are under the SIL Open Font License, in `assets/fonts/STIXTwoText-OFL.txt` and `assets/fonts/Iosevka-OFL.txt`.
-The binary links in three Go modules, all under the MIT licence: goldmark by Yusuke Inuzuka, chroma by Alec Thomas and regexp2 by Doug Clark, which ports parts of Microsoft's dotnet/corefx. The package's copyright file carries their notices.
+MIT, see `LICENSE`.
+
+The embedded fonts are subsets of STIX Two Text and Iosevka, under the SIL Open Font License: see `assets/fonts/STIXTwoText-OFL.txt` and `assets/fonts/Iosevka-OFL.txt`.
+
+The binary links in three Go modules under the MIT licence: goldmark by Yusuke Inuzuka, chroma by Alec Thomas and regexp2 by Doug Clark. regexp2 ports parts of Microsoft's dotnet/corefx. The package's copyright file carries their notices.

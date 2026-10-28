@@ -1,13 +1,51 @@
 # Code pages
 
-Code in a fenced block with a known language is highlighted by chroma, as are code pages, whose language follows the file name. Go is lexed by Go's own scanner from the standard library instead, about 150 times faster, with the same colours. Python, JavaScript and shell have lexers of www's own, which follow chroma's rules and give every byte the class chroma gives it; chroma took 180 ms to lex argparse.py, 2,633 lines, and they take under 2 ms. A whole page of it renders in about 3 ms, and jquery.js, 10,907 lines, in about 20 ms instead of 400. A Go page of 1,400 lines takes 2 ms. Other languages go through chroma, at about 70 µs a line. The server keeps each coloured page by its content's hash, within 16 MB, so a later view takes a few milliseconds.
+Code in a fenced block with a known language is highlighted by chroma, as are code pages, whose language follows the file name.
 
-A code page anchors lines as GitHub does, so `main.go#L42` lands on line 42 and highlights it. Clicking a line's number highlights it and puts its address in the address bar; clicking the number again clears both. A range such as `main.go#L10-L20` highlights those lines.
+## Highlighting speed
 
-A code page's views, flat, scopes and tree, and raw sit in a row of their own above the code's top right corner and follow the page down as it scrolls. Each keeps its place; the view shown is plain text, not a link.
+Go is lexed by Go's own scanner from the standard library instead, about 150 times faster, with the same colours. A Go page of 1,400 lines takes 2 ms.
 
-Add `?scopes` to a code page, or follow scopes, and it draws each block of code that spans lines as a sunken box behind its text, nested as deep as the code goes, with deeper boxes fainter. A block is a bracket pair whose ends sit on different lines, or in Python the lines indented under a line that ends with a colon. Brackets and strings within a line, around something, are smaller boxes inside it, down to the innermost, much as vim's `ci(` and `ci"` see them; a string that spans lines is a block. Fills alternate inward between a light shade and the page's colour, so depth shows without the page darkening. The boxes lie on a layer of their own, so no character moves and copied text is unchanged. A box is a link to its lines. The box under the pointer is tinted, and a click marks it and the boxes in it and puts its lines in the address, eg `#L482-L520`; a click on the marked box clears both. When the file is committed and unchanged since, the address also names that commit's version, eg `@261024.22/server.go?scopes#L3-L26`, so the link keeps pointing at the same lines after the file changes. Only the address moves: the page's links, eg raw and tree, still open the current file, and a live reload goes back to it. In the same corner, flat goes back to the plain page.
+Python, JavaScript and shell have lexers of www's own. They follow chroma's rules and give every byte the class chroma gives it. chroma took 180 ms to lex argparse.py, 2,633 lines, and they take under 2 ms. A whole page of it renders in about 3 ms, and jquery.js, 10,907 lines, in about 20 ms instead of 400.
 
-Add `?tree`, or follow tree, for the syntax tree: one row per named node, with its field in its parent, its kind, its text on one line and a link to its lines, folded so the file's top-level declarations show first. A helper parses it with tree-sitter: `www-syntax`, which the package of that name installs and `make syntax` builds beside www with a C compiler. It knows Go, Python, JavaScript, TypeScript, Rust, C, C++, shell, Java, C#, JSON, HTML, CSS and Ruby. Without the helper, or for another language, the page says so above the plain code. A first view of a 1,400-line file takes about 30 ms and sends 1.2 MB; the server keeps the tree, so a later view takes a few milliseconds.
+Other languages go through chroma, at about 70 µs a line.
 
-A JSON file has one more view, gron, at the left end of that row. `?gron` shows the file as one line per node, each a JavaScript assignment such as `json.tags[0] = "a";`, so every value reads and searches with its full path. Keys keep the file's order and values show as written. A file that is not valid JSON shows the plain code under a line that names where parsing stopped.
+The server keeps each coloured page by its content's hash, within 16 MB, so a later view takes a few milliseconds.
+
+## Line links
+
+A code page anchors lines as GitHub does, so `main.go#L42` lands on line 42 and highlights it. A range such as `main.go#L10-L20` highlights those lines.
+
+Clicking a line's number highlights it and puts its address in the address bar. Clicking the number again clears both.
+
+## Views
+
+A code page's views, flat, scopes and tree, and raw sit in a row of their own above the code's top right corner. The row follows the page down as it scrolls. Each view keeps its place; the view shown is plain text, not a link.
+
+## Scopes
+
+Add `?scopes` to a code page, or follow scopes, and it draws each block of code that spans lines as a sunken box behind its text. Boxes nest as deep as the code goes, and deeper boxes are fainter.
+
+A block is a bracket pair whose ends sit on different lines, or in Python the lines indented under a line that ends with a colon. Brackets and strings within a line, around something, are smaller boxes inside it, down to the innermost, much as vim's `ci(` and `ci"` see them. A string that spans lines is a block.
+
+Fills alternate inward between a light shade and the page's colour, so depth shows without the page darkening. The boxes lie on a layer of their own, so no character moves and copied text is unchanged.
+
+A box is a link to its lines. The box under the pointer is tinted. A click marks it and the boxes in it and puts its lines in the address, eg `#L482-L520`; a click on the marked box clears both.
+
+When the file is committed and unchanged since, the address also names that commit's version, eg `@261024.22/server.go?scopes#L3-L26`. The link then keeps pointing at the same lines after the file changes. Only the address moves: the page's links, eg raw and tree, still open the current file, and a live reload goes back to it.
+
+In the same corner, flat goes back to the plain page.
+
+## Syntax tree
+
+Add `?tree`, or follow tree, for the syntax tree: one row per named node, with its field in its parent, its kind, its text on one line and a link to its lines. It is folded so the file's top-level declarations show first.
+
+A helper parses it with tree-sitter: `www-syntax`, which the package of that name installs and `make syntax` builds beside www with a C compiler. It knows Go, Python, JavaScript, TypeScript, Rust, C, C++, shell, Java, C#, JSON, HTML, CSS and Ruby. Without the helper, or for another language, the page says so above the plain code.
+
+A first view of a 1,400-line file takes about 30 ms and sends 1.2 MB. The server keeps the tree, so a later view takes a few milliseconds.
+
+## Gron
+
+A JSON file has one more view, gron, at the left end of that row. `?gron` shows the file as one line per node, each a JavaScript assignment such as `json.tags[0] = "a";`, so every value reads and searches with its full path.
+
+Keys keep the file's order and values show as written. A file that is not valid JSON shows the plain code under a line that names where parsing stopped.
