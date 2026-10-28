@@ -1098,7 +1098,12 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 	if _, ok := q["tree"]; ok {
 		tree, err := syntaxPage(r.Context(), name, pageHref(r.URL.Path), b)
 		if err == nil {
-			body.WriteString(`<div class="code">` + codeViews(name, "tree") + tree + `</div>`)
+			// A large file's tree is megabytes, so it is written once,
+			// into room made for it.
+			body.Grow(len(tree) + 1024)
+			body.WriteString(`<div class="code">` + codeViews(name, "tree"))
+			body.WriteString(tree)
+			body.WriteString(`</div>`)
 			t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "tree", Body: template.HTML(body.String())})
 			return
 		}
@@ -1322,6 +1327,8 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 			Commit: buildCommit, Rendered: rendered(r)}
 	}
 	var b bytes.Buffer
+	// The body is most of the page, and can be megabytes.
+	b.Grow(len(p.Body) + 16<<10)
 	if err := layout.ExecuteTemplate(&b, "page", p); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

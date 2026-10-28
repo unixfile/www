@@ -97,7 +97,7 @@ func scopeKind(kind string) bool {
 // helper's syntax tree. Locals, such as a function's variables, are left
 // out; a member is qualified by its container, eg Parser.parse.
 func declarations(ctx context.Context, name string, src []byte) ([]decl, error) {
-	nodes, err := parseSyntax(ctx, name, src)
+	nodes, err := syntaxNodes(ctx, name, src)
 	if err != nil {
 		return nil, err
 	}

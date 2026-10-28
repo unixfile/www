@@ -47,12 +47,32 @@ func TestSyntaxPage(t *testing.T) {
 // Without the helper, or without a grammar, a tree page says so.
 func TestSyntaxMissing(t *testing.T) {
 	fakeSyntax(t)
-	if _, err := parseSyntax(context.Background(), "x.txt", nil); !errors.Is(err, errNoGrammar) {
+	if _, err := syntaxNodes(context.Background(), "x.txt", nil); !errors.Is(err, errNoGrammar) {
 		t.Errorf("no grammar: %v", err)
 	}
 	t.Setenv("PATH", t.TempDir())
-	if _, err := parseSyntax(context.Background(), "b.go", nil); !errors.Is(err, errNoHelper) {
+	if _, err := syntaxNodes(context.Background(), "b.go", nil); !errors.Is(err, errNoHelper) {
 		t.Errorf("no helper: %v", err)
+	}
+}
+
+// Output the helper should never print fails the page with what was
+// wrong, and so does a helper that dies after its first rows.
+func TestSyntaxBadOutput(t *testing.T) {
+	for _, tc := range []struct{ script, want string }{
+		{`printf '0\tsource_file\t\t0\t0\n'`, "a line of 5 fields"},
+		{`printf '0\tsource_file\t\t0\t-1\t3\t0\n'`, "a bad number: -1"},
+		{`printf '0\tsource_file\t\t0\t0\t3\t0\n'; echo 'E5: broke' >&2; exit 5`, "E5: broke"},
+	} {
+		dir := t.TempDir()
+		script := "#!/bin/sh\ncat >/dev/null\n" + tc.script + "\n"
+		if err := os.WriteFile(filepath.Join(dir, progName+"-syntax"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PATH", dir)
+		if _, err := syntaxPage(context.Background(), "a.go", "a.go", []byte("x\n")); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", tc.script, err, tc.want)
+		}
 	}
 }
 

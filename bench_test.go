@@ -105,7 +105,7 @@ func BenchmarkCodePage(b *testing.B) {
 
 // BenchmarkSyntaxTree times a tree page's first view on jquery.js in its
 // stages: the helper with reading its output, rendering the rows, and
-// the whole page as a request returns it. It skips where the helper or
+// the whole page as a request returns it, where the two overlap. It skips where the helper or
 // the file is missing.
 func BenchmarkSyntaxTree(b *testing.B) {
 	src, err := os.ReadFile("/usr/share/javascript/jquery/jquery.js")
@@ -115,19 +115,23 @@ func BenchmarkSyntaxTree(b *testing.B) {
 	if _, err := syntaxHelper(); err != nil {
 		b.Skip("no helper; make syntax builds it")
 	}
-	nodes, err := parseSyntax(context.Background(), "jquery.js", src)
+	nodes, err := syntaxNodes(context.Background(), "jquery.js", src)
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.Run("helper", func(b *testing.B) {
 		for b.Loop() {
-			parseSyntax(context.Background(), "jquery.js", src)
+			parseSyntax(context.Background(), "jquery.js", src, func(synNode) {})
 		}
 	})
 	b.Run("rows", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			renderSyntax(nodes, "jquery.js", src)
+			w := newSynRows("jquery.js", src)
+			for _, n := range nodes {
+				w.add(n)
+			}
+			w.done()
 		}
 	})
 	b.Run("page", func(b *testing.B) {
