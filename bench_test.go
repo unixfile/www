@@ -105,8 +105,8 @@ func BenchmarkCodePage(b *testing.B) {
 
 // BenchmarkSyntaxTree times a tree page's first view on jquery.js in its
 // stages: the helper with reading its output, rendering the rows, and
-// the whole page as a request returns it, where the two overlap. It skips where the helper or
-// the file is missing.
+// the whole page as a request returns it, where the two overlap. It
+// skips where the helper or the file is missing.
 func BenchmarkSyntaxTree(b *testing.B) {
 	src, err := os.ReadFile("/usr/share/javascript/jquery/jquery.js")
 	if err != nil {

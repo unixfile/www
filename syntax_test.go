@@ -63,13 +63,14 @@ func TestSyntaxBadOutput(t *testing.T) {
 		{`printf '0\tsource_file\t\t0\t0\n'`, "a line of 5 fields"},
 		{`printf '0\tsource_file\t\t0\t-1\t3\t0\n'`, "a bad number: -1"},
 		{`printf '0\tsource_file\t\t0\t0\t3\t0\n'; echo 'E5: broke' >&2; exit 5`, "E5: broke"},
+		{`printf '0\tsource_file\t\t0'; echo 'E5: broke' >&2; exit 5`, "E5: broke"},
 	} {
 		dir := t.TempDir()
 		script := "#!/bin/sh\ncat >/dev/null\n" + tc.script + "\n"
 		if err := os.WriteFile(filepath.Join(dir, progName+"-syntax"), []byte(script), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		t.Setenv("PATH", dir)
+		t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 		if _, err := syntaxPage(context.Background(), "a.go", "a.go", []byte("x\n")); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", tc.script, err, tc.want)
 		}

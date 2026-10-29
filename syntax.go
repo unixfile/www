@@ -82,9 +82,18 @@ func parseSyntax(ctx context.Context, name string, src []byte, row func(synNode)
 		return err
 	}
 	if err := readNodes(out, row); err != nil {
+		// A helper that crashed or ran out of time leaves a cut line, so
+		// its own message or the timeout says more than the cut does.
+		timedOut := ctx.Err() != nil
 		// Cancelling kills the helper, so Wait returns.
 		cancel()
 		cmd.Wait()
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return errors.New(msg)
+		}
+		if timedOut {
+			return context.DeadlineExceeded
+		}
 		return err
 	}
 	if err := cmd.Wait(); err != nil {
@@ -192,8 +201,14 @@ func syntaxPage(ctx context.Context, name, href string, src []byte) (string, err
 	}
 	h := rows.done()
 	// The rows keep the builder's whole buffer, which the guess in
-	// newSynRows may make larger than h.
-	syntaxCache.put(key, h, int64(rows.b.Cap()))
+	// newSynRows may make larger than h. Well past it, h keeps a copy of
+	// its own, so the cache holds no more than it counts.
+	size := rows.b.Cap()
+	if size > len(h)+len(h)/4 {
+		h = strings.Clone(h)
+		size = len(h)
+	}
+	syntaxCache.put(key, h, int64(size))
 	return h, nil
 }
 
@@ -203,6 +218,7 @@ type synRows struct {
 	b     strings.Builder
 	lines [][]byte
 	href  string
+	size  int // bytes of source
 	open  int // folds left open
 	held  synNode
 	any   bool // whether a node is held
@@ -210,10 +226,7 @@ type synRows struct {
 
 // newSynRows starts the rows of src's tree, with line links to href.
 func newSynRows(href string, src []byte) *synRows {
-	w := &synRows{lines: bytes.Split(src, []byte("\n")), href: href}
-	// A row is about 120 bytes, and a line of a large file gives about
-	// four, so the builder seldom grows where it would cost the most.
-	w.b.Grow(len(w.lines) * 512)
+	w := &synRows{lines: bytes.Split(src, []byte("\n")), href: href, size: len(src)}
 	w.b.WriteString("<div class=\"syntax\">\n")
 	return w
 }
@@ -221,6 +234,13 @@ func newSynRows(href string, src []byte) *synRows {
 func (w *synRows) add(n synNode) {
 	if w.any {
 		w.row(w.held, n.depth > w.held.depth)
+	} else {
+		// A row is about 120 bytes, and a line of a large file gives about
+		// four, so the builder seldom grows where it would cost the most.
+		// A file of short or blank lines gives fewer, and its rows come to
+		// about 17 bytes a byte of it, so the guess keeps to 20. It waits
+		// for the first node, so a file with no tree costs nothing.
+		w.b.Grow(min(len(w.lines)*512, w.size*20))
 	}
 	w.held, w.any = n, true
 }
