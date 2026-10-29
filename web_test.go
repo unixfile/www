@@ -148,9 +148,26 @@ func TestWebReadsARepoOnTheVisit(t *testing.T) {
 	if n := len(w.srv.list()); n != 1 {
 		t.Errorf("%d trees serve one repo", n)
 	}
-	if !strings.Contains(rec.Body.String(), `@ <a href="/`+f.host+`/acct/docs@`+head[:12]+`/guide/a.md">`+head[:7]+"</a> · fetched ") {
-		t.Errorf("no commit and fetch time in the header:\n%s", rec.Body)
+	// The header names the commit by its stardate, and says nothing of
+	// the fetch until one fails.
+	r := w.repos[f.host+"/acct/docs"]
+	star := stardatesIn(context.Background(), r.tree.dir).byHash[head]
+	if star == "" {
+		t.Fatal("the repo's head has no stardate")
 	}
+	if body := rec.Body.String(); !strings.Contains(body, `@ <a href="/`+f.host+`/acct/docs@`+star+`/guide/a.md" title="`+head[:7]+` `) || !strings.Contains(body, `">`+star+"</a></span>") {
+		t.Errorf("no stardate in the header:\n%s", body)
+	}
+	r.mu.Lock()
+	fetched := r.fetched
+	r.fetched, r.tried, r.failed = time.Now(), time.Now(), "no route"
+	r.mu.Unlock()
+	if body := webGet(w, path).Body.String(); !strings.Contains(body, star+"</a> · fetched "+clock(time.Now())+" · fetch at ") {
+		t.Errorf("a failed fetch hides when the copy was fetched:\n%s", body)
+	}
+	r.mu.Lock()
+	r.fetched, r.failed = fetched, ""
+	r.mu.Unlock()
 	if strings.Contains(rec.Body.String(), "Delete lock") {
 		t.Error("a repo on the web address has a Delete lock button")
 	}
@@ -244,7 +261,10 @@ func TestWebRefreshes(t *testing.T) {
 			break
 		}
 	}
-	if !strings.Contains(body, "two") || !strings.Contains(body, ">"+head[:7]+"</a> · fetched") {
+	r.mu.Lock()
+	dir := r.tree.dir
+	r.mu.Unlock()
+	if !strings.Contains(body, "two") || !strings.Contains(body, ">"+stardatesIn(context.Background(), dir).byHash[head]+"</a>") {
 		t.Fatalf("not refreshed:\n%s", body)
 	}
 	if exists(old) {

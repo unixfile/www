@@ -1356,7 +1356,7 @@ func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page
 		p.Recents = t.base.prefixURL()
 	}
 	if t.web != nil {
-		p.NoStop, p.Status = true, t.web.status(t.prefix, r.URL.Path)
+		p.NoStop, p.Status = true, t.web.status(r.Context(), t.prefix, r.URL.Path)
 	}
 	// A version never changes and has no lock: no live reload and no stop
 	// button. Its page still runs the script, for the keys, the search box,

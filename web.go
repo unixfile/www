@@ -156,24 +156,43 @@ type webRepo struct {
 	fetching bool
 	failed   string // why the last fetch failed, or ""
 	used     time.Time
+	named    shownCommit // the worktree's commit as the header names it, read once per worktree
 }
 
-// status is what a page of the repo says in its header: the commit shown
-// and when it was fetched.
-func (r *webRepo) status(prefix, urlPath string) template.HTML {
+// shownCommit is how a repo's header names the commit its worktree holds.
+type shownCommit struct {
+	dir, label, addr, title string
+}
+
+// status is what a page of the repo says in its header: the commit shown,
+// and a fetch under way or failed. The commit is named as the crumbs of a
+// version name it, by its stardate with its hash and time on hover, and
+// links this page in that version, so the address keeps naming it after
+// the next fetch. When the copy was fetched shows only once a fetch has
+// failed: a visit fetches a copy over five minutes old, so a page without
+// a failure always shows a current copy.
+func (r *webRepo) status(ctx context.Context, prefix, urlPath string) template.HTML {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	// The commit is written as the crumbs of a version write it, @ and
-	// the hash, and links this page in that version, so the address
-	// keeps naming it after the next fetch.
-	hash := strings.TrimPrefix(filepath.Base(r.tree.dir), ".wt-")
-	href := (&url.URL{Path: versionPrefix(prefix, "@"+hash) + strings.TrimPrefix(urlPath, prefix)}).String()
-	s := "@ <a href=\"" + template.HTMLEscapeString(href) + "\">" + hash[:7] + "</a> · fetched " + clock(r.fetched)
+	dir, named, fetched, tried, fetching, failed := r.tree.dir, r.named, r.fetched, r.tried, r.fetching, r.failed
+	r.mu.Unlock()
+	if named.dir != dir {
+		hash := strings.TrimPrefix(filepath.Base(dir), ".wt-")
+		named = shownCommit{dir: dir, label: hash[:7], addr: hash, title: hash[:7]}
+		if c, stars, err := findCommit(ctx, dir, hash); err == nil {
+			named.label, named.addr, named.title = stars.label(&c), stars.addr(&c), c.short+" "+exact(c.date)
+			r.mu.Lock()
+			r.named = named
+			r.mu.Unlock()
+		}
+	}
+	esc := template.HTMLEscapeString
+	href := (&url.URL{Path: versionPrefix(prefix, "@"+named.addr) + strings.TrimPrefix(urlPath, prefix)}).String()
+	s := "@ <a href=\"" + esc(href) + "\" title=\"" + esc(named.title) + "\">" + esc(named.label) + "</a>"
 	switch {
-	case r.fetching:
+	case fetching:
 		s += " · fetching"
-	case r.failed != "":
-		s += " · fetch at " + clock(r.tried) + " failed"
+	case failed != "":
+		s += " · fetched " + clock(fetched) + " · fetch at " + clock(tried) + " failed"
 	}
 	return template.HTML(s)
 }
