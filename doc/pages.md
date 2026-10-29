@@ -40,7 +40,7 @@ The list arrives after the page, since the server walks the tree for it: a few m
 
 ## Recent pages
 
-The browser remembers the pages you open; the server keeps no such list. A search shows the best five that match its words first, under recent, from any tree on the address.
+The browser remembers the pages you open; the server keeps no such list. A search shows the best five that match its words first, under recent. They come from the tree you are in, so one repo's reading never shows in another's. A version counts as its tree.
 
 Each visit counts and recent visits weigh more, as in zoxide. A reload is no visit.
 

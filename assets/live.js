@@ -578,12 +578,19 @@
 	// origin, never on the server, so each viewer of a share sees only
 	// what that viewer opened. Each entry counts its visits and keeps the
 	// last; the score weighs both, as zoxide does. A reload is no visit.
+	// Each entry names its tree, and a search lists only the page's own
+	// tree, so one repo's reading never shows in another's. An entry
+	// without a tree predates that and is dropped.
 	const recentKey = "recent";
 	const maxRecent = 300;
+	const recentTree = () => {
+		const b = box();
+		return b ? b.dataset.recents : undefined;
+	};
 	const readRecent = () => {
 		try {
 			const list = JSON.parse(localStorage.getItem(recentKey));
-			return Array.isArray(list) ? list : [];
+			return Array.isArray(list) ? list.filter((e) => typeof e.r === "string") : [];
 		} catch {
 			return [];
 		}
@@ -594,7 +601,9 @@
 	};
 	const recentPaths = () => {
 		const now = Date.now();
+		const tree = recentTree();
 		return readRecent()
+			.filter((e) => e.r === tree)
 			.sort((a, b) => score(b, now) - score(a, now))
 			.map((e) => e.p);
 	};
@@ -617,13 +626,16 @@
 		if (!["doc", "code", "dir"].includes(document.body.className)) return;
 		const nav = performance.getEntriesByType("navigation")[0];
 		if (nav && nav.type === "reload") return;
+		const tree = recentTree();
+		if (tree === undefined) return;
 		const now = Date.now();
 		const list = readRecent();
 		const e = list.find((e) => e.p === location.pathname);
 		if (e) {
 			e.n++;
 			e.t = now;
-		} else list.push({ p: location.pathname, n: 1, t: now });
+			e.r = tree;
+		} else list.push({ p: location.pathname, r: tree, n: 1, t: now });
 		list.sort((a, b) => score(b, now) - score(a, now));
 		try {
 			localStorage.setItem(recentKey, JSON.stringify(list.slice(0, maxRecent)));

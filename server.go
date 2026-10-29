@@ -1251,6 +1251,7 @@ type page struct {
 	Raw     bool
 	Tree    string        // prefix the stop button withdraws, or "" for every tree
 	Search  string        // the tree's URL, which answers ?search=, or "" off a tree
+	Recents string        // the tree whose pages a search lists as recent; a version's is its tree's
 	Status  template.HTML // the server's age, on the index, or a repo's commit on the web address
 	Style   template.CSS  // the stylesheet inline, for a page the server may not outlive
 	Stopped bool
@@ -1346,8 +1347,14 @@ func render(w http.ResponseWriter, r *http.Request, status int, p page) {
 // shared, and a search box for the directory the page is in, with a button
 // that copies the page's path on disk. A failed page searches the whole
 // tree, since its directory may not exist, and has no path to copy.
+// Recent pages stay within the tree, so one repo's reading never shows in
+// another's search.
 func (t *tree) render(w http.ResponseWriter, r *http.Request, status int, p page) {
 	p.Tree, p.Shared, p.Search = t.prefix, t.shared, t.prefixURL()
+	p.Recents = t.prefixURL()
+	if t.base != nil {
+		p.Recents = t.base.prefixURL()
+	}
 	if t.web != nil {
 		p.NoStop, p.Status = true, t.web.status(t.prefix, r.URL.Path)
 	}

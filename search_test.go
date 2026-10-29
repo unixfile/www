@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
 	"os"
@@ -55,6 +56,31 @@ func TestSearchBoxScope(t *testing.T) {
 		w := get(s.handler(), c.url)
 		if !strings.Contains(w.Body.String(), `data-search="`+c.want+`"`) {
 			t.Errorf("%s: want data-search=%q, status %d", c.url, c.want, w.Code)
+		}
+	}
+}
+
+// Recent pages stay within their tree: each page names its tree for the
+// script, a version names the tree it is a version of, and a tree at /
+// names itself, not the trees whose paths lie below it.
+func TestRecentsStayInTheirTree(t *testing.T) {
+	s, dir := repoTree(t)
+	tr := s.list()[0]
+	tr.prefix, tr.label = "/notes/", "~/notes"
+	other := t.TempDir()
+	os.WriteFile(filepath.Join(other, "x.md"), []byte("# x\n"), 0o644)
+	addTree(t, s, other, "/", "~")
+	h := s.handler()
+	star := stardatesIn(context.Background(), dir).byHash[head(t, dir, "HEAD~1")]
+	for _, c := range []struct{ url, want string }{
+		{"/notes/", "/notes/"},
+		{"/notes/a/b.go", "/notes/"},
+		{"/notes@" + star + "/a/b.go", "/notes/"},
+		{"/x.md", "/"},
+	} {
+		w := get(h, c.url)
+		if !strings.Contains(w.Body.String(), `data-recents="`+c.want+`"`) {
+			t.Errorf("%s: want data-recents=%q, status %d", c.url, c.want, w.Code)
 		}
 	}
 }
