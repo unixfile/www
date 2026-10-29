@@ -343,6 +343,11 @@ func TestWebPublic(t *testing.T) {
 	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
 	w := testWeb(t, defaultDisk)
 	w.public, w.srv.public = true, true
+	// The forge listens on loopback, which a public server's listings
+	// refuse; here it stands for the open internet.
+	open := reachable
+	reachable = func(netip.Addr) bool { return true }
+	t.Cleanup(func() { reachable = open })
 	get := func(path string) *httptest.ResponseRecorder {
 		return get(w.srv.handler(), path, "Host", "visitor.example.org")
 	}
@@ -355,7 +360,7 @@ func TestWebPublic(t *testing.T) {
 	if body := get("/").Body.String(); strings.Contains(body, "acct/r") || strings.Contains(body, "The cache") {
 		t.Errorf("the root shows the cache:\n%s", body)
 	}
-	if rec := read(t, w, "/"+f.host+"/acct"); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "acct/r/\"") {
+	if rec := read(t, w, "/"+f.host+"/acct"); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "acct/r") {
 		t.Errorf("a listing falls back to the cache: %d\n%s", rec.Code, rec.Body)
 	}
 	if rec := get("/" + f.host + "/acct/r/README.md"); rec.Code != http.StatusOK {

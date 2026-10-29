@@ -313,10 +313,14 @@ func (t *tree) warm() {
 	logInfo("warmed git answers for %s in %d ms: %s", t.dir, time.Since(start).Milliseconds(), strings.Join(names, ", "))
 }
 
-// gitErr is err, or on a share errNoHistory.
+// gitErr is err, or on a share errNoHistory. On a public tree it names
+// the cache as "cache", since git's errors name the paths it was given.
 func (t *tree) gitErr(err error) error {
 	if t.shared {
 		return errNoHistory
+	}
+	if t.public && err != nil && cacheRoot != "" && strings.Contains(err.Error(), cacheRoot) {
+		return errors.New(strings.ReplaceAll(err.Error(), cacheRoot, "cache"))
 	}
 	return err
 }

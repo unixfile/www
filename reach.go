@@ -78,7 +78,8 @@ func reach(ctx context.Context, host string) ([]string, error) {
 		return a.args, a.err
 	}
 	args, err := lookupReach(ctx, host)
-	if ctx.Err() != nil {
+	// A lookup cut short says nothing of the host, so it is not kept.
+	if err != nil && ctx.Err() != nil {
 		return nil, err
 	}
 	reachMu.Lock()
