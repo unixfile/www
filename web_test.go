@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cgi"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -353,7 +355,7 @@ func TestWebPublic(t *testing.T) {
 	if body := get("/").Body.String(); strings.Contains(body, "acct/r") || strings.Contains(body, "The cache") {
 		t.Errorf("the root shows the cache:\n%s", body)
 	}
-	if rec := read(t, w, "/"+f.host+"/acct"); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "acct/r") {
+	if rec := read(t, w, "/"+f.host+"/acct"); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "acct/r/\"") {
 		t.Errorf("a listing falls back to the cache: %d\n%s", rec.Code, rec.Body)
 	}
 	if rec := get("/" + f.host + "/acct/r/README.md"); rec.Code != http.StatusOK {
@@ -626,5 +628,76 @@ func TestWebCloneWaitsForASlot(t *testing.T) {
 	<-w.slots
 	if rec := read(t, w, path); rec.Code != http.StatusOK {
 		t.Errorf("clone after a slot frees: %d\n%s", rec.Code, rec.Body)
+	}
+}
+
+// A public server reaches no address of the machine or its network, by
+// an address or by a name, and holds git to the addresses it checked.
+func TestWebPublicReach(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
+	w := testWeb(t, defaultDisk)
+	w.public, w.srv.public = true, true
+	publicNet.Store(true)
+	t.Cleanup(func() { publicNet.Store(false) })
+	clear(reachCache)
+	_, port, _ := net.SplitHostPort(f.host)
+	for _, p := range []string{"/" + f.host + "/acct/r/", "/localhost:" + port + "/acct/r/", "/169.254.169.254/latest/meta-data", "/[::1]:" + port + "/acct/r/"} {
+		if rec := read(t, w, p); rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "not on the open internet") {
+			t.Errorf("%s: %d\n%s", p, rec.Code, rec.Body)
+		}
+	}
+	if _, err := publicClient.Get("http://" + f.host + "/"); err == nil || !strings.Contains(err.Error(), "not on the open internet") {
+		t.Errorf("listing client reached loopback: %v", err)
+	}
+	// Where loopback counts as the open internet, git reaches the forge
+	// by its name at the address checked.
+	old := reachable
+	reachable = func(netip.Addr) bool { return true }
+	t.Cleanup(func() { reachable = old })
+	clear(reachCache)
+	w2 := testWeb(t, defaultDisk)
+	w2.public, w2.srv.public = true, true
+	depths["localhost:"+port] = 3
+	t.Cleanup(func() { delete(depths, "localhost:"+port) })
+	if rec := read(t, w2, "/localhost:"+port+"/acct/r/README.md"); rec.Code != http.StatusOK {
+		t.Errorf("a forge by name: %d\n%s", rec.Code, rec.Body)
+	}
+	if args, _ := reach(context.Background(), "localhost:"+port); !slices.Contains(args, "http.followRedirects=false") ||
+		!slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "http.curloptResolve=localhost:"+port+":") }) {
+		t.Errorf("git's options: %q", args)
+	}
+}
+
+// A public repo shows nothing of the machine: not its .git, which names
+// the cache, nor where a link out leads, which it never follows.
+func TestWebPublicHidesTheMachine(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
+	work := f.work["acct/r"]
+	for name, to := range map[string]string{"up": "../../../../../..", "etc": "/etc", "g": ".git", "gc": ".git/../.git"} {
+		if err := os.Symlink(to, filepath.Join(work, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	commitAll(t, work, "links")
+	if out, err := exec.Command("git", "-C", work, "push", "-q", "origin", "main").CombinedOutput(); err != nil {
+		t.Fatalf("git push: %v\n%s", err, out)
+	}
+	w := testWeb(t, defaultDisk)
+	w.public, w.srv.public = true, true
+	// A marker above the cache would open a link out on a reader's
+	// server, but not on a public one.
+	touch(filepath.Join(filepath.Dir(w.root), followMarker))
+	read(t, w, "/"+f.host+"/acct/r/")
+	for _, p := range []string{"", ".git", "g", "gc", "up/", "etc/", "etc/passwd", "up/?log"} {
+		rec := get(w.srv.handler(), "/"+f.host+"/acct/r/"+p, "Host", "visitor.example.org")
+		body := rec.Body.String()
+		if strings.Contains(body, filepath.Dir(w.root)) || strings.Contains(body, "gitdir") || strings.Contains(body, "root:") {
+			t.Errorf("%s shows the machine: %d\n%s", p, rec.Code, body)
+		}
+		if p == "" && strings.Contains(body, ">.git<") {
+			t.Errorf("the listing shows .git:\n%s", body)
+		}
 	}
 }

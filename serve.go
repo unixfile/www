@@ -434,6 +434,7 @@ func servePublic(c config) int {
 		return rep.fail(errnoOf(err), "cannot serve online repos from "+root+": "+err.Error())
 	}
 	w.public, w.srv.public = true, true
+	publicNet.Store(true)
 	w.slots = make(chan struct{}, cloneSlots)
 	w.srv.live = newLive()
 	httpd := &http.Server{Handler: w.srv.handler(), ReadHeaderTimeout: 10 * time.Second,

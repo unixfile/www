@@ -410,7 +410,7 @@ func (w *web) show(r *webRepo, wt string) error {
 		return err
 	}
 	t := newTree(root, wt, "/"+r.key+"/", r.key)
-	t.web = r
+	t.web, t.public = r, w.public
 	r.mu.Lock()
 	old := r.tree
 	r.tree = t
@@ -542,6 +542,12 @@ func (w *web) end(j *webJob, err error) {
 // run finds the repo the path lies in and clones it, or lists the path
 // when it names no repo.
 func (w *web) run(j *webJob, key string, segs []string) {
+	if publicNet.Load() {
+		if _, err := reach(w.ctx, segs[0]); err != nil {
+			w.end(j, err)
+			return
+		}
+	}
 	repoKey, cloneURL, probed := w.probe(j, segs)
 	if repoKey == "" {
 		w.list(j, key, probed)
@@ -827,7 +833,11 @@ func (w *web) clone(j *webJob, key, cloneURL string) error {
 		os.RemoveAll(tmp)
 		w.step(j, "git clone --bare --filter=blob:none "+cloneURL+" "+w.where(bare))
 		start := time.Now()
-		if _, err := gitProgress(w.ctx, dir, w.progress(j), "clone", "--bare", "--filter=blob:none", "--progress", "--", cloneURL, tmp); err != nil {
+		ctx, stop := w.bounded(dir)
+		_, err := gitProgress(ctx, dir, w.progress(j), "clone", "--bare", "--filter=blob:none", "--progress", "--", cloneURL, tmp)
+		err = boundErr(ctx, err)
+		stop()
+		if err != nil {
 			os.RemoveAll(tmp)
 			return err
 		}
@@ -864,7 +874,11 @@ func (w *web) checkout(r *webRepo, progress func(string), step func(string)) (st
 	if !exists(wt) {
 		step("git worktree add --detach " + w.where(wt) + " " + head[:12] + ", which fetches its files")
 		start := time.Now()
-		if _, err := gitProgress(w.ctx, bare, progress, "worktree", "add", "--detach", "--", wt, head); err != nil {
+		ctx, stop := w.bounded(r.dir)
+		_, err := gitProgress(ctx, bare, progress, "worktree", "add", "--detach", "--", wt, head)
+		err = boundErr(ctx, err)
+		stop()
+		if err != nil {
 			os.RemoveAll(wt)
 			git(w.ctx, bare, "worktree", "prune")
 			return "", err
@@ -901,8 +915,12 @@ func (w *web) refresh(r *webRepo) {
 	defer unlock()
 	bare := filepath.Join(r.dir, ".git")
 	start := time.Now()
-	if _, err := git(w.ctx, bare, "fetch", "--prune", "--no-write-fetch-head", "origin",
-		"+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"); err != nil {
+	ctx, stop := w.bounded(r.dir)
+	_, err = git(ctx, bare, "fetch", "--prune", "--no-write-fetch-head", "origin",
+		"+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
+	err = boundErr(ctx, err)
+	stop()
+	if err != nil {
 		failed = err.Error()
 		logErr("E%d: cannot fetch %s: %s", syscall.EHOSTUNREACH, r.key, failed)
 		return
@@ -928,6 +946,58 @@ func (w *web) refresh(r *webRepo) {
 	if err := w.trim(r.key); err != nil {
 		failed = err.Error()
 	}
+}
+
+// fetchWait bounds a public server's clone, fetch or checkout, so a forge
+// that sends slowly cannot hold a clone's place for good.
+const fetchWait = 10 * time.Minute
+
+// bounded is the context for git fetching into the repo directory dir.
+// On a public server it ends after fetchWait, or once dir outgrows the
+// cache's limit: trim runs only after a fetch, and a stranger's forge may
+// send without end.
+func (w *web) bounded(dir string) (context.Context, func()) {
+	if !w.public {
+		return w.ctx, func() {}
+	}
+	ctx, cancel := context.WithCancelCause(w.ctx)
+	ctx, cancelWait := context.WithTimeoutCause(ctx, fetchWait,
+		&errno{syscall.ETIMEDOUT, fmt.Sprintf("the forge took over %d minutes, the most a public server waits", int(fetchWait.Minutes()))})
+	done := make(chan struct{})
+	w.wg.Go(func() {
+		tick := time.NewTicker(2 * time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+				if n := diskUse(dir); n > w.limit {
+					cancel(&errno{syscall.EFBIG, fmt.Sprintf("the repo grew past %s, the cache's limit, so the fetch stopped; --disk sets the limit", sizeText(w.limit))})
+					return
+				}
+			}
+		}
+	})
+	return ctx, func() {
+		close(done)
+		cancelWait()
+		cancel(nil)
+	}
+}
+
+// boundErr is why git failed in a context from bounded: the limit it hit,
+// or err.
+func boundErr(ctx context.Context, err error) error {
+	if err != nil && ctx.Err() != nil {
+		if cause := context.Cause(ctx); cause != nil {
+			var e *errno
+			if errors.As(cause, &e) {
+				return cause
+			}
+		}
+	}
+	return err
 }
 
 // lockRepo marks the repo key busy and takes its lock.
@@ -1322,7 +1392,11 @@ func (w *web) ask(src listSource) ([]listed, error) {
 			return nil, err
 		}
 		req.Header.Set("User-Agent", progName)
-		resp, err := webClient.Do(req)
+		client := webClient
+		if w.public {
+			client = publicClient
+		}
+		resp, err := client.Do(req)
 		if err != nil {
 			return nil, err
 		}

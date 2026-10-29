@@ -83,6 +83,17 @@ func gitRun(ctx context.Context, dir string, stdin io.Reader, progress func(stri
 	if remote {
 		pre = append(pre, "-c", "protocol."+webScheme+".allow=always", "-c", "credential.helper=", "-c", "core.askPass=",
 			"-c", "core.hooksPath="+os.DevNull)
+		// git may fetch here, even for a page's blob, so a public server
+		// checks where it would connect first.
+		if publicNet.Load() {
+			if host := gitHost(dir, args); host != "" {
+				pin, err := reach(ctx, host)
+				if err != nil {
+					return nil, err
+				}
+				pre = append(pre, pin...)
+			}
+		}
 	}
 	args = append(append(pre, "-c", "core.fsmonitor=false", "-c", "core.quotePath=false", "--no-pager", "--literal-pathspecs"), args...)
 	cmd := exec.CommandContext(ctx, "git", args...)

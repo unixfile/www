@@ -74,7 +74,9 @@ A visitor learns nothing of the machine or of what others read. `/` says only ho
 
 No page has a stop or bug button, nothing opens a browser, and any Host header is answered, since nothing local is there to protect.
 
-`--disk` is required, since any visitor can make www clone.
+`--disk` is required, since any visitor can make www clone. A clone, fetch or checkout stops once the repo outgrows it or after 10 minutes, so a forge that sends without end cannot fill the disk or hold a clone's place.
+
+A visitor can name any host, so www fetches only from hosts whose every address is on the open internet: never loopback, a private or link-local range, or carrier-grade NAT. git connects only to the addresses checked and follows no redirect, and listings check each address they connect to. A repo's `.git` is hidden, and a link out of a repo is refused without saying where it leads, whatever marker lies there.
 
 The limits aim at a bot that makes www clone without end, not at a reader. A repo already in the cache opens at any time. A visit to an uncached path starts a read: a probe, a clone or a listing.
 

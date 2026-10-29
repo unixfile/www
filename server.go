@@ -245,6 +245,7 @@ type tree struct {
 	shared   bool        // served beyond loopback: only what other users could read
 	secret   bool        // mounted under a token, and left off the index
 	web      *webRepo    // the cached repo this tree is a worktree of, on the web address
+	public   bool        // a stranger's repo on a public server: no link out, no path of the machine
 	srv      *server     // the server that serves it, set when it joins
 	linked   linkIndex   // the relative links of each doc, for ?backlinks
 	at       *commit     // for a version, the commit it shows
@@ -1211,7 +1212,7 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 			label += "/"
 		}
 		href := (&url.URL{Path: label}).String()
-		if it.ref != nil && t.shared {
+		if it.ref != nil && (t.shared || t.public) {
 			fmt.Fprintf(&body, "<li class=\"refused\">%s <span class=\"own\">refused</span></li>\n", template.HTMLEscapeString(label))
 			continue
 		}
@@ -1369,10 +1370,11 @@ func searchURL(urlPath string) string {
 	return (&url.URL{Path: urlPath[:strings.LastIndex(urlPath, "/")+1]}).String()
 }
 
-// why is what a refusal page says: the reason in full, or on a shared tree
-// only that the name is refused, since the reason names paths outside it.
+// why is what a refusal page says: the reason in full, or on a shared or
+// public tree only that the name is refused, since the reason names paths
+// outside it.
 func (t *tree) why(ref *refusal) string {
-	if t.shared {
+	if t.shared || t.public {
 		return "Refused: " + ref.link
 	}
 	return ref.Error()

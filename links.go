@@ -29,6 +29,11 @@ func (f treeFS) Open(name string) (fs.File, error) {
 	if f.t.shared && (isLockName(path.Base(name)) || f.t.dotted(name)) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 	}
+	// A public tree hides the worktree's .git, which names the cache's
+	// path.
+	if f.t.public && f.t.inGit(name) {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+	}
 	file, err := f.open(name)
 	if err != nil || !f.t.shared {
 		return file, err
@@ -44,7 +49,7 @@ func (f treeFS) Open(name string) (fs.File, error) {
 // lock, or on a share a dot entry. The listing and its version agree, so
 // a hidden file never reloads the page.
 func (t *tree) unlisted(dir, n string) bool {
-	return isLockName(n) || t.shared && t.dotted(path.Join(dir, n))
+	return isLockName(n) || t.shared && t.dotted(path.Join(dir, n)) || t.public && dir == "." && n == ".git"
 }
 
 // dotted reports whether name, or where it resolves inside the tree,
@@ -59,6 +64,21 @@ func (t *tree) dotted(name string) bool {
 	}
 	rel, err := filepath.Rel(t.realDir, real)
 	return err == nil && hasDotName(filepath.ToSlash(rel))
+}
+
+// inGit reports whether name, or where it resolves inside the tree, is
+// the worktree's .git or below it.
+func (t *tree) inGit(name string) bool {
+	isGit := func(n string) bool { return n == ".git" || strings.HasPrefix(n, ".git/") }
+	if isGit(name) {
+		return true
+	}
+	real, err := filepath.EvalSymlinks(filepath.Join(t.dir, filepath.FromSlash(name)))
+	if err != nil || !within(real, t.realDir) {
+		return false
+	}
+	rel, err := filepath.Rel(t.realDir, real)
+	return err == nil && isGit(filepath.ToSlash(rel))
 }
 
 // hasDotName reports whether a name on the way to name begins with a dot.
@@ -89,6 +109,13 @@ func (f treeFS) open(name string) (fs.File, error) {
 			return nil, err
 		}
 		return f.t.root.FS().Open(filepath.ToSlash(rel))
+	}
+	// A stranger's repo never links out: a marker on the machine is
+	// the owner's, not the repo's, to grant.
+	if f.t.public {
+		ref := &refusal{}
+		ref.link, ref.target = f.t.outLink(name)
+		return nil, ref
 	}
 	marker, ref := f.t.follow(name, real)
 	if ref != nil {

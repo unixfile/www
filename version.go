@@ -106,7 +106,7 @@ func (t *tree) atVersion(ctx context.Context, seg string) (*tree, string, error)
 	if v, ok := t.versions.Load(best); ok {
 		return v.(*tree), best, nil
 	}
-	v := &tree{dir: t.dir, realDir: t.realDir, prefix: versionPrefix(t.prefix, best), label: t.label, wd: -1, at: &c, atLabel: stars.label(&c), base: t}
+	v := &tree{dir: t.dir, realDir: t.realDir, prefix: versionPrefix(t.prefix, best), label: t.label, wd: -1, at: &c, atLabel: stars.label(&c), base: t, public: t.public}
 	v.fsys = commitFS{dir: t.dir, rev: c.hash, when: c.date}
 	got, _ := t.versions.LoadOrStore(best, v)
 	return got.(*tree), best, nil
