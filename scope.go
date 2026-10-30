@@ -10,8 +10,8 @@ import (
 
 // A scope is a block of code that spans lines, drawn as a sunken box
 // behind its text. Monospace text is a grid, so a box is a rectangle of
-// cells: from its first row to its last, from the first row's indent to
-// past its widest line. A leaf is a bracket pair within one line, eg
+// cells: from its first row to its last, from the least indent among its
+// rows to past its widest line. A leaf is a bracket pair within one line, eg
 // (x, y), whose box spans its brackets' cells. Boxes nest without limit.
 type scope struct {
 	first, last int // rows, counted from 0
@@ -179,13 +179,18 @@ func findScopes(lines [][]chroma.Token, python bool) []scope {
 			in = in[:len(in)-1]
 		}
 		parent[i] = -1
-		s.left = max(indent[s.first], 0)
 		if len(in) > 0 {
 			parent[i] = in[len(in)-1]
-			s.left = max(s.left, found[parent[i]].left)
 		}
 		s.depth = len(in) + 1
+		// A box starts at the least indent among its rows, so no text
+		// lies left of it, eg a raw string's lines at the margin. A box
+		// thus never starts left of the box around it.
+		s.left = indent[s.first]
 		for r := s.first; r <= s.last; r++ {
+			if indent[r] >= 0 {
+				s.left = min(s.left, indent[r])
+			}
 			s.right = max(s.right, width[r])
 		}
 		in = append(in, i)

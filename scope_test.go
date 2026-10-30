@@ -85,6 +85,23 @@ func TestScopeStrings(t *testing.T) {
 	}
 }
 
+// A box starts at the least indent among its rows, so a raw string's
+// lines at the margin stay inside it and the boxes around it.
+func TestScopeLeftmostRow(t *testing.T) {
+	src := "func f() {\n" + // 0
+		"\tx := `a\n" + // 1
+		"b`\n" + // 2
+		"}\n" // 3
+	got := scopesOf("a.go", src)
+	want := []scope{
+		{first: 0, last: 3, left: 0, right: 16, depth: 1},
+		{first: 1, last: 2, left: 0, right: 15, depth: 2},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("scopes\n%+v, want\n%+v", got, want)
+	}
+}
+
 // A code page draws each scope as an empty box in its first line, after
 // the line number; a flat page and fences draw none.
 func TestScopeBoxes(t *testing.T) {

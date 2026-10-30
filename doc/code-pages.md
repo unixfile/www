@@ -26,7 +26,7 @@ A code page's views, flat, scopes and tree, and raw sit in a row of their own ab
 
 Add `?scopes` to a code page, or follow scopes, and it draws each block of code that spans lines as a sunken box behind its text. Boxes nest as deep as the code goes, and deeper boxes are fainter.
 
-A block is a bracket pair whose ends sit on different lines, or in Python the lines indented under a line that ends with a colon. Brackets and strings within a line, around something, are smaller boxes inside it, down to the innermost, much as vim's `ci(` and `ci"` see them. A string that spans lines is a block.
+A block is a bracket pair whose ends sit on different lines, or in Python the lines indented under a line that ends with a colon. Brackets and strings within a line, around something, are smaller boxes inside it, down to the innermost, much as vim's `ci(` and `ci"` see them. A string that spans lines is a block. A box starts at its least indented line, so a raw string's lines at the margin stay inside it.
 
 Fills alternate inward between a light shade and the page's colour, so depth shows without the page darkening. The boxes lie on a layer of their own, so no character moves and copied text is unchanged.
 
