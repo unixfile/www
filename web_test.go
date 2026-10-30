@@ -726,3 +726,20 @@ func TestWebPublicHidesTheMachine(t *testing.T) {
 		}
 	}
 }
+
+// A missing path in a public repo gets the 404 coin, not a word about
+// the cache.
+func TestWebPublicMissingPathShowsTheCoin(t *testing.T) {
+	f := newForge(t, nil)
+	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
+	w := testWeb(t, defaultDisk)
+	w.public, w.srv.public = true, true
+	read(t, w, "/"+f.host+"/acct/r/")
+	for _, p := range []string{"nope.md", "dir/nope.go", "nope/", "nope.md?log", "nope.md?raw", "nope.md?diff", "nope.md?tree", "README.md/nope"} {
+		rec := get(w.srv.handler(), "/"+f.host+"/acct/r/"+p, "Host", "visitor.example.org")
+		body := rec.Body.String()
+		if rec.Code != http.StatusNotFound || !strings.Contains(body, `class="coin"`) || strings.Contains(strings.ToLower(body), "cache") {
+			t.Errorf("%s: %d, want the 404 coin and no cache\n%s", p, rec.Code, body)
+		}
+	}
+}
