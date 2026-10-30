@@ -1,0 +1,38 @@
+# A path a served repo lacks shows the coin, on either form of server.
+servers = ["public", "default"]
+
+[[request]]
+path = "/forge.invalid/acct/r/nope.md"
+status = 404
+contains = ['class="coin"', "not found"]
+absent = ["cache"]
+
+[[request]]
+path = "/forge.invalid/acct/r/dir/nope.go"
+status = 404
+contains = ['class="coin"']
+absent = ["cache"]
+
+[[request]]
+path = "/forge.invalid/acct/r/nope/"
+status = 404
+contains = ['class="coin"']
+absent = ["cache"]
+
+[[request]]
+path = "/forge.invalid/acct/r/README.md/nope"
+status = 404
+contains = ['class="coin"']
+absent = ["cache"]
+
+[[request]]
+path = "/forge.invalid/acct/r/nope.md?log"
+status = 404
+contains = ['class="coin"']
+absent = ["cache"]
+
+[[request]]
+path = "/forge.invalid/acct/r/nope.md?raw"
+status = 404
+contains = ['class="coin"']
+absent = ["cache"]

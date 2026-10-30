@@ -1,4 +1,4 @@
-.PHONY: all build syntax fonts run test bench clean install uninstall deb deb-syntax install-deb uninstall-deb
+.PHONY: all build syntax fonts run test blackbox bench clean install uninstall deb deb-syntax install-deb uninstall-deb
 
 # WORKING_NAME holds the program's name, provisional until a final one is
 # chosen. The binary, the package and the paths below take it.
@@ -36,6 +36,10 @@ run: build syntax
 test:
 	go vet ./...
 	go test ./...
+
+# blackbox runs tests/ against the built binary. See doc/testing.md.
+blackbox: build
+	cd tests && TEST_BIN=$(CURDIR)/build/$(NAME) uv run pytest
 
 # bench runs the benchmarks in bench_test.go. BENCH picks them by pattern
 # and COUNT repeats each, eg COUNT=10 for benchstat.

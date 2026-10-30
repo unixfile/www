@@ -1,0 +1,13 @@
+# A stranger learns nothing of the cache: no word of it, and no repo that
+# another visitor read.
+servers = ["public"]
+
+[[request]]
+path = "/forge.invalid"
+status = 502
+absent = ["cache", "acct/r"]
+
+[[request]]
+path = "/forge.invalid/acct/nope"
+status = 502
+absent = ["cache"]

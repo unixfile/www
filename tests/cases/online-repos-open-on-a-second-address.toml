@@ -1,0 +1,14 @@
+# Without --public a path outside any repo falls back to the cache's own
+# listing. This is the message wwwvm's unit shows, since it runs this form.
+servers = ["default"]
+
+[[request]]
+path = "/forge.invalid/acct/nope"
+status = 404
+contains = ["No repo answers at", "listed by the cache", "The cache holds only what was read here"]
+absent = ['class="coin"']
+
+[[request]]
+path = "/forge.invalid/acct"
+status = 200
+contains = ["r/", "listed by the cache"]
