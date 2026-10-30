@@ -68,6 +68,7 @@ www needs git.
 - [Debugging](doc/debugging.md): the bug button and the build stamp
 - [Install](doc/install.md): the Debian package, port 80 and locks in git
 - [Development](doc/development.md): `make run`, the working name and the usage check
+- [Testing](doc/testing.md): Go tests, the black-box suite and the heavy runs
 
 ## Licence
 
