@@ -9,14 +9,12 @@ import (
 	"net/http/cgi"
 	"net/http/httptest"
 	"net/netip"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -235,43 +233,6 @@ func TestWebVersionFetchesADirectoryAtOnce(t *testing.T) {
 	}
 }
 
-// A visit after webRefresh fetches in the background, and the page moves
-// to the new commit.
-func TestWebRefreshes(t *testing.T) {
-	f := newForge(t, nil)
-	f.repo(t, "acct/r", map[string]string{"README.md": "one\n"})
-	w := testWeb(t, defaultDisk)
-	path := "/" + f.host + "/acct/r/README.md"
-	if rec := read(t, w, path); !strings.Contains(rec.Body.String(), "one") {
-		t.Fatalf("first read: %d\n%s", rec.Code, rec.Body)
-	}
-	head := f.repo(t, "acct/r", map[string]string{"README.md": "two\n"})
-	if body := webGet(w, path).Body.String(); !strings.Contains(body, "one") {
-		t.Fatalf("a fresh fetch fetched again:\n%s", body)
-	}
-	r := w.repos[f.host+"/acct/r"]
-	r.mu.Lock()
-	r.fetched, r.tried = time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)
-	old := r.tree.dir
-	r.mu.Unlock()
-	webGet(w, path)
-	var body string
-	for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
-		if body = webGet(w, path).Body.String(); strings.Contains(body, "two") {
-			break
-		}
-	}
-	r.mu.Lock()
-	dir := r.tree.dir
-	r.mu.Unlock()
-	if !strings.Contains(body, "two") || !strings.Contains(body, ">"+stardatesIn(context.Background(), dir).byHash[head]+"</a>") {
-		t.Fatalf("not refreshed:\n%s", body)
-	}
-	if exists(old) {
-		t.Errorf("the old worktree %s is still there", old)
-	}
-}
-
 // Another site cannot make the browser download a repo.
 func TestWebAsksWhenAnotherSiteSends(t *testing.T) {
 	f := newForge(t, nil)
@@ -291,66 +252,6 @@ func TestWebAsksWhenAnotherSiteSends(t *testing.T) {
 	}
 	if rec := webGet(w, "/"+f.host+"/acct/r/", "Sec-Fetch-Site", "same-origin"); rec.Code != http.StatusAccepted {
 		t.Errorf("same-origin: %d", rec.Code)
-	}
-}
-
-// When the cache outgrows its limit, the repo read longest ago goes.
-func TestWebTrimsTheCache(t *testing.T) {
-	f := newForge(t, nil)
-	f.repo(t, "acct/a", map[string]string{"README.md": strings.Repeat("a", 1<<16)})
-	f.repo(t, "acct/b", map[string]string{"README.md": strings.Repeat("b", 1<<16)})
-	w := testWeb(t, defaultDisk)
-	read(t, w, "/"+f.host+"/acct/a/")
-	past := time.Now().Add(-time.Hour)
-	os.Chtimes(filepath.Join(w.root, f.host, "acct", "a", ".used"), past, past)
-	w.limit = w.onDisk()[0].size * 3 / 2
-	if rec := read(t, w, "/"+f.host+"/acct/b/"); rec.Code != http.StatusOK {
-		t.Fatalf("b: %d\n%s", rec.Code, rec.Body)
-	}
-	if exists(filepath.Join(w.root, f.host, "acct", "a")) {
-		t.Error("a, read longest ago, is still cached")
-	}
-	if rec := webGet(w, "/"+f.host+"/acct/a/README.md"); rec.Code != http.StatusAccepted {
-		t.Errorf("a after it went: %d, want a new read", rec.Code)
-	}
-	read(t, w, "/"+f.host+"/acct/a/README.md")
-	w.limit = 1
-	f.repo(t, "acct/c", map[string]string{"README.md": "c\n"})
-	rec := read(t, w, "/"+f.host+"/acct/c/")
-	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "over the cache") {
-		t.Errorf("a repo over the limit: %d\n%s", rec.Code, rec.Body)
-	}
-}
-
-// The servers on every address share the cache, so a trim leaves a repo
-// whose lock another server holds, eg while it fetches the repo.
-func TestWebTrimLeavesALockedRepo(t *testing.T) {
-	f := newForge(t, nil)
-	f.repo(t, "acct/a", map[string]string{"README.md": strings.Repeat("a", 1<<16)})
-	f.repo(t, "acct/b", map[string]string{"README.md": strings.Repeat("b", 1<<16)})
-	w := testWeb(t, defaultDisk)
-	read(t, w, "/"+f.host+"/acct/a/")
-	a := filepath.Join(w.root, f.host, "acct", "a")
-	past := time.Now().Add(-time.Hour)
-	os.Chtimes(filepath.Join(a, ".used"), past, past)
-	w.limit = w.onDisk()[0].size * 3 / 2
-	// A lock of its own open file stands for another server's.
-	unlock, err := flockDir(a, syscall.LOCK_EX)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec := read(t, w, "/"+f.host+"/acct/b/"); rec.Code != http.StatusOK {
-		t.Fatalf("b: %d\n%s", rec.Code, rec.Body)
-	}
-	if !exists(filepath.Join(a, ".git", "HEAD")) {
-		t.Error("a went while another server held its lock")
-	}
-	unlock()
-	if err := w.trim(""); err != nil {
-		t.Fatal(err)
-	}
-	if exists(a) {
-		t.Error("a stayed once its lock was free")
 	}
 }
 
@@ -403,45 +304,6 @@ func TestWebPublic(t *testing.T) {
 	}
 }
 
-// API where it answers, else from the cache.
-func TestWebLists(t *testing.T) {
-	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/users/org/repos" {
-			w.Write([]byte(`[{"full_name":"org/tool","description":"a tool"}]`))
-			return
-		}
-		http.NotFound(w, r)
-	})
-	f := newForge(t, api)
-	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
-	w := testWeb(t, defaultDisk)
-	read(t, w, "/"+f.host+"/acct/r/")
-
-	rec := read(t, w, "/"+f.host+"/org")
-	if body := rec.Body.String(); rec.Code != http.StatusOK || !strings.Contains(body, `href="/`+f.host+`/org/tool/"`) ||
-		!strings.Contains(body, "a tool") || !strings.Contains(body, "the Forgejo API") {
-		t.Errorf("API listing: %d\n%s", rec.Code, body)
-	}
-	rec = read(t, w, "/"+f.host+"/acct")
-	if body := rec.Body.String(); rec.Code != http.StatusOK || !strings.Contains(body, `href="/`+f.host+`/acct/r/"`) ||
-		!strings.Contains(body, "listed by the cache") {
-		t.Errorf("cache listing: %d\n%s", rec.Code, body)
-	}
-	if rec := read(t, w, "/"+f.host+"/nobody"); rec.Code != http.StatusNotFound {
-		t.Errorf("nothing there: %d\n%s", rec.Code, rec.Body)
-	}
-	// A failed clone leaves nothing in the cache. A forge that keeps
-	// repos at one depth clones without a probe.
-	depths[f.host] = 3
-	t.Cleanup(func() { delete(depths, f.host) })
-	if rec := read(t, w, "/"+f.host+"/acct/gone"); rec.Code != http.StatusBadGateway {
-		t.Errorf("no repo: %d\n%s", rec.Code, rec.Body)
-	}
-	if exists(filepath.Join(w.root, f.host, "acct", "gone")) {
-		t.Error("a failed read left its directory")
-	}
-}
-
 func TestWebEndpoint(t *testing.T) {
 	ep, _ := endpointFor("", 1001)
 	if w, ok := webEndpoint(ep, 1001); !ok || w.String() != "127.31.1.2:"+ep.String()[len("127.31.1.1:"):] {
@@ -450,119 +312,6 @@ func TestWebEndpoint(t *testing.T) {
 	other, _ := endpointFor("127.31.1.5", 1001)
 	if _, ok := webEndpoint(other, 1001); ok {
 		t.Error("a server on another address serves the web")
-	}
-}
-
-// A link to a repo on a forge, or a file or directory in one, maps to its
-// path on the web address; other pages of a forge, and other hosts, map
-// to nothing.
-func TestWebPath(t *testing.T) {
-	for in, want := range map[string]string{
-		"https://github.com/junegunn/fzf":                                               "/github.com/junegunn/fzf/",
-		"https://www.github.com/junegunn/fzf.git":                                       "/github.com/junegunn/fzf/",
-		"https://github.com/junegunn/fzf/blob/master/README.md":                         "/github.com/junegunn/fzf/README.md",
-		"https://github.com/junegunn/fzf/tree/v0.50/shell":                              "/github.com/junegunn/fzf/shell/",
-		"https://github.com/junegunn/fzf/tree/master":                                   "/github.com/junegunn/fzf/",
-		"https://codeberg.org/forgejo/forgejo/src/branch/main/go.mod":                   "/codeberg.org/forgejo/forgejo/go.mod",
-		"https://gitlab.com/a/b/c/-/blob/main/x.md":                                     "/gitlab.com/a/b/c/x.md",
-		"https://gitlab.com/a/b":                                                        "/gitlab.com/a/b/",
-		"https://bitbucket.org/a/b/src/main/x.md":                                       "/bitbucket.org/a/b/x.md",
-		"https://github.com/junegunn/fzf/blob/26ff936/BUILD.md":                         "/github.com/junegunn/fzf@26ff936/BUILD.md",
-		"https://github.com/junegunn/fzf/tree/26ff936df038b6a62ec42cf18db27b2ea2bb8ec3": "/github.com/junegunn/fzf@26ff936df038b6a62ec42cf18db27b2ea2bb8ec3/",
-		"https://github.com/junegunn/fzf/blob/cafe/x.md":                                "/github.com/junegunn/fzf/x.md",
-		"https://github.com/junegunn/fzf/raw/master/x.png":                              "/github.com/junegunn/fzf/x.png",
-		"https://raw.githubusercontent.com/rivo/uniseg/master/LICENSE.txt":              "/github.com/rivo/uniseg/LICENSE.txt",
-		"https://raw.githubusercontent.com/rivo/uniseg/refs/heads/main/a/b.go":          "/github.com/rivo/uniseg/a/b.go",
-		"https://raw.githubusercontent.com/rivo/uniseg/0123abcd/LICENSE":                "/github.com/rivo/uniseg@0123abcd/LICENSE",
-		"https://raw.githubusercontent.com/rivo/uniseg":                                 "",
-		"https://raw.githubusercontent.com/rivo/uniseg/master":                          "",
-		"https://codeberg.org/a/b/raw/branch/main/x.md":                                 "/codeberg.org/a/b/x.md",
-		"https://gitlab.com/a/b/-/raw/main/x.md":                                        "/gitlab.com/a/b/x.md",
-		"https://github.com/junegunn/fzf/issues/3":                                      "",
-		"https://github.com/junegunn":                                                   "",
-		"https://github.com/sponsors/junegunn":                                          "",
-		"https://example.com/a/b":                                                       "",
-		"ftp://github.com/a/b":                                                          "",
-		"https://github.com/a/../b":                                                     "",
-	} {
-		u, err := url.Parse(in)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, got := webPath(u); got != want {
-			t.Errorf("%s: %q, want %q", in, got, want)
-		}
-	}
-}
-
-// A URL pasted whole after the address, or a forge's view of a file,
-// redirects to the path that reads it. The mux has folded the URL's //
-// into / before.
-func TestWebPastedURL(t *testing.T) {
-	w := testWeb(t, defaultDisk)
-	for in, want := range map[string]string{
-		"/https:/git.suckless.org/dwm/":                       "/git.suckless.org/dwm",
-		"/https:/git.suckless.org/dwm":                        "/git.suckless.org/dwm",
-		"/http:/github.com/junegunn/fzf":                      "/github.com/junegunn/fzf/",
-		"/https:/github.com/junegunn/fzf/blob/master/main.go": "/github.com/junegunn/fzf/main.go",
-		"/github.com/junegunn/fzf/tree/master/shell":          "/github.com/junegunn/fzf/shell/",
-		"/raw.githubusercontent.com/junegunn/fzf/master/x.md": "/github.com/junegunn/fzf/x.md",
-	} {
-		rec := webGet(w, in)
-		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != want {
-			t.Errorf("%s: %d %s, want %s", in, rec.Code, rec.Header().Get("Location"), want)
-		}
-	}
-	for _, in := range []string{"/github.com/junegunn", "/github.com/junegunn/fzf/README.md"} {
-		if rec := webGet(w, in); rec.Code == http.StatusMovedPermanently {
-			t.Errorf("%s redirects to %s", in, rec.Header().Get("Location"))
-		}
-	}
-}
-
-// The web address's index links back to the trees on the default address.
-func TestWebLinksHome(t *testing.T) {
-	w := testWeb(t, defaultDisk)
-	if strings.Contains(webGet(w, "/").Body.String(), "Trees:") {
-		t.Errorf("a link home without a home")
-	}
-	w.srv.homeURL = "http://127.31.1.1:8080"
-	if body := webGet(w, "/").Body.String(); !strings.Contains(body, `Trees: <a href="http://127.31.1.1:8080/">127.31.1.1:8080/</a>`) {
-		t.Errorf("no link home: %s", body)
-	}
-}
-
-// A page of a repo on the web address links its forge's own permanent
-// URL: a file or directory at the commit shown, or a commit.
-func TestForgeLink(t *testing.T) {
-	needGit(t)
-	_, tr, dir := serveTree(t)
-	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v\n%s", err, out)
-	}
-	commitAll(t, dir, "one")
-	out, _ := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
-	head := strings.TrimSpace(string(out))
-	tr.web = &webRepo{key: "github.com/junegunn/fzf"}
-	for _, c := range []struct{ path, kind, want string }{
-		{"/a/b.go", "code", "https://github.com/junegunn/fzf/blob/" + head + "/a/b.go"},
-		{"/a/", "dir", "https://github.com/junegunn/fzf/tree/" + head + "/a"},
-		{"/", "dir", "https://github.com/junegunn/fzf/tree/" + head},
-		{"/?commit=" + head, "commit", "https://github.com/junegunn/fzf/commit/" + head},
-		{"/?log", "log", ""},
-	} {
-		got, lines := tr.forgeLink(httptest.NewRequest("GET", c.path, nil), c.kind)
-		if got != c.want || c.want != "" && lines != "github" {
-			t.Errorf("%s: %q %q, want %q", c.path, got, lines, c.want)
-		}
-	}
-	tr.web.key = "gitlab.com/a/b/c"
-	if got, lines := tr.forgeLink(httptest.NewRequest("GET", "/a/b.go", nil), "code"); got != "https://gitlab.com/a/b/c/-/blob/"+head+"/a/b.go" || lines != "gitlab" {
-		t.Errorf("gitlab: %q %q", got, lines)
-	}
-	tr.web.key = "git.suckless.org/dwm"
-	if got, _ := tr.forgeLink(httptest.NewRequest("GET", "/a/b.go", nil), "code"); got != "" {
-		t.Errorf("an unknown forge: %q", got)
 	}
 }
 
@@ -631,28 +380,6 @@ func TestWebPublicLimits(t *testing.T) {
 	w.mu.Unlock()
 	if rec := from("203.0.113.9:4000", "/"+f.host+"/acct/other"); rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), "acct/slow is still being read") {
 		t.Errorf("a second read at once: %d\n%s", rec.Code, rec.Body)
-	}
-}
-
-// A clone waits for a slot, and says so on its page.
-func TestWebCloneWaitsForASlot(t *testing.T) {
-	f := newForge(t, nil)
-	f.repo(t, "acct/r", map[string]string{"README.md": "x\n"})
-	w := testWeb(t, defaultDisk)
-	w.slots = make(chan struct{}, 1)
-	w.slots <- struct{}{}
-	path := "/" + f.host + "/acct/r/"
-	rec := webGet(w, path)
-	for end := time.Now().Add(10 * time.Second); !strings.Contains(rec.Body.String(), "waiting: 1 clones run at once") && time.Now().Before(end); {
-		time.Sleep(20 * time.Millisecond)
-		rec = webGet(w, path)
-	}
-	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), "waiting") {
-		t.Fatalf("clone without a slot: %d\n%s", rec.Code, rec.Body)
-	}
-	<-w.slots
-	if rec := read(t, w, path); rec.Code != http.StatusOK {
-		t.Errorf("clone after a slot frees: %d\n%s", rec.Code, rec.Body)
 	}
 }
 

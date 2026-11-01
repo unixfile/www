@@ -213,3 +213,24 @@ func TestWebLinksTurnAround(t *testing.T) {
 		t.Errorf("%d marks, want 3: %s", n, s)
 	}
 }
+
+// Lines of a doc join into one paragraph, as standard Markdown has them,
+// and a dash after a line starts a list.
+func TestLinesJoin(t *testing.T) {
+	s, _, _ := serveTree(t)
+	body := get(s.handler(), "/index.md").Body.String()
+	if !strings.Contains(body, "<p>line one\nline two</p>") {
+		t.Errorf("lines not joined into one paragraph: %s", body)
+	}
+	if !strings.Contains(body, "<ul>\n<li>item</li>") {
+		t.Errorf("a dash after a line does not start a list: %s", body)
+	}
+}
+
+func TestBareURLIsLink(t *testing.T) {
+	s, _, _ := serveTree(t)
+	body := get(s.handler(), "/index.md").Body.String()
+	if !strings.Contains(body, `<a href="https://example.com/x"`) {
+		t.Errorf("bare URL not linked: %s", body)
+	}
+}

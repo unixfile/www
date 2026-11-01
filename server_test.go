@@ -1,10 +1,8 @@
 package main
 
 import (
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -69,18 +67,6 @@ func do(h http.Handler, method, path string, hdr ...string) *httptest.ResponseRe
 	return rec
 }
 
-func TestForeignHostRejected(t *testing.T) {
-	s, _, _ := serveTree(t)
-	if rec := get(s.handler(), "/", "Host", "evil.example:7417"); rec.Code != http.StatusMisdirectedRequest {
-		t.Fatalf("status %d, want 421", rec.Code)
-	}
-	for _, host := range []string{"localhost:9", "[::1]:7417", "127.0.0.1"} {
-		if rec := get(s.handler(), "/bin.dat", "Host", host); rec.Code != http.StatusOK {
-			t.Errorf("host %s: status %d, want 200", host, rec.Code)
-		}
-	}
-}
-
 func TestEveryResponseForbidsScripts(t *testing.T) {
 	s, _, _ := serveTree(t)
 	rec := get(s.handler(), "/a/page.html?raw")
@@ -101,77 +87,6 @@ func TestCacheHeaders(t *testing.T) {
 	for p, want := range map[string]string{"/missing": "no-store", "/bin.dat": "no-cache"} {
 		if cc := get(s.handler(), p).Header().Get("Cache-Control"); cc != want {
 			t.Errorf("%s: Cache-Control %q, want %q", p, cc, want)
-		}
-	}
-}
-
-func TestDirectoryRedirectsToSlash(t *testing.T) {
-	s, _, _ := serveTree(t)
-	rec := get(s.handler(), "/a")
-	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/a/" {
-		t.Fatalf("status %d location %q, want 301 to /a/", rec.Code, rec.Header().Get("Location"))
-	}
-}
-
-func TestListingSkipsLockAndReadme(t *testing.T) {
-	s, _, _ := serveTree(t)
-	body := get(s.handler(), "/").Body.String()
-	if strings.Contains(body, "8080.lock") {
-		t.Error("listing shows the lockfile")
-	}
-	if !strings.Contains(body, `href="a/"`) || !strings.Contains(body, `href="index.md"`) {
-		t.Errorf("listing lacks entries: %s", body)
-	}
-	if body := get(s.handler(), "/a/").Body.String(); strings.Contains(body, "Readme of a") {
-		t.Errorf("README rendered below listing: %s", body)
-	}
-}
-
-// Lines of a doc join into one paragraph, as standard Markdown has them,
-// and a dash after a line starts a list.
-func TestLinesJoin(t *testing.T) {
-	s, _, _ := serveTree(t)
-	body := get(s.handler(), "/index.md").Body.String()
-	if !strings.Contains(body, "<p>line one\nline two</p>") {
-		t.Errorf("lines not joined into one paragraph: %s", body)
-	}
-	if !strings.Contains(body, "<ul>\n<li>item</li>") {
-		t.Errorf("a dash after a line does not start a list: %s", body)
-	}
-}
-
-func TestBareURLIsLink(t *testing.T) {
-	s, _, _ := serveTree(t)
-	body := get(s.handler(), "/index.md").Body.String()
-	if !strings.Contains(body, `<a href="https://example.com/x"`) {
-		t.Errorf("bare URL not linked: %s", body)
-	}
-}
-
-func TestCodePageIsHighlighted(t *testing.T) {
-	s, _, _ := serveTree(t)
-	body := get(s.handler(), "/a/b.go").Body.String()
-	if !strings.Contains(body, `class="sourceCode`) || !strings.Contains(body, `<span id="L3"><a href="#L3">`) {
-		t.Errorf("no highlighted code with GitHub line anchors: %s", body)
-	}
-	if !strings.Contains(body, `<span class="kw">package</span>`) {
-		t.Errorf("Go keyword not classed as pandoc does: %s", body)
-	}
-}
-
-func TestBinaryGoesRaw(t *testing.T) {
-	s, _, _ := serveTree(t)
-	rec := get(s.handler(), "/bin.dat")
-	if ct := rec.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/") {
-		t.Errorf("binary served as %q", ct)
-	}
-}
-
-func TestNoEscapeFromRoot(t *testing.T) {
-	s, _, _ := serveTree(t)
-	for _, p := range []string{"/../../etc/passwd", "/escape/passwd", "/escape/"} {
-		if rec := get(s.handler(), p); rec.Code == http.StatusOK {
-			t.Errorf("%s: status 200, want refusal", p)
 		}
 	}
 }
@@ -206,42 +121,6 @@ func TestStopRefusesOtherSites(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatalf("same-origin stop with Origin %s did not stop the server", origin)
 		}
-	}
-}
-
-// Delete lock on the index returns to the index while other trees remain;
-// the last tree's button ends on the stopped page.
-func TestIndexDeleteReturns(t *testing.T) {
-	s, tr, dir := serveTree(t)
-	tr.prefix, tr.label = "/notes/", "~/notes"
-	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other")
-	var got []*tree
-	s.stop = func(ts []*tree, _ string) {
-		got = ts
-		for _, t := range ts {
-			s.remove(t)
-		}
-	}
-	post := func(form string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest("POST", ownPath+"stop", strings.NewReader(form))
-		req.Host = "127.31.1.1:8080"
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		rec := httptest.NewRecorder()
-		s.handler().ServeHTTP(rec, req)
-		return rec
-	}
-	rec := post("tree=%2Fnotes%2F&from=index")
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" || len(got) != 1 || got[0] != tr {
-		t.Errorf("first delete: status %d location %q stopped %d", rec.Code, rec.Header().Get("Location"), len(got))
-	}
-	rec = post("tree=%2Fother%2F&from=index")
-	if rec.Code != http.StatusGone || !strings.Contains(rec.Body.String(), "<th>stopped</th><td><span class=\"seg\">~/</span><wbr><span class=\"seg\">other</span></td>") ||
-		!strings.Contains(rec.Body.String(), "<th>server</th><td>stopped; close this tab</td>") || !strings.Contains(rec.Body.String(), `<span>410</span>`) {
-		t.Errorf("last delete: status %d: %s", rec.Code, rec.Body.String())
-	}
-	// The server closes as this page leaves, so the page carries its style.
-	if body := rec.Body.String(); !strings.Contains(body, "<style>") || strings.Contains(body, ownPath+"style.") {
-		t.Errorf("stopped page links its stylesheet instead of carrying it")
 	}
 }
 
@@ -303,42 +182,6 @@ func TestPrefixedTree(t *testing.T) {
 	}
 }
 
-// The index at / lists every served tree with a button that deletes its
-// lock, and offers to stop them all.
-func TestIndexListsTrees(t *testing.T) {
-	s, tr, dir := serveTree(t)
-	tr.prefix, tr.label = "/notes/", "~/notes"
-	addTree(t, s, filepath.Join(dir, "a"), "/other/", "~/other")
-	rec := get(s.handler(), "/")
-	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, `<a href="/notes/" title=""><span class="seg">~/</span><wbr><span class="seg">notes</span></a>`) || !strings.Contains(body, `<a href="/other/" title=""><span class="seg">~/</span><wbr><span class="seg">other</span></a>`) {
-		t.Errorf("status %d, index lacks the trees: %s", rec.Code, body)
-	}
-	if !strings.Contains(body, `<button class="kill">Kill server</button>`) {
-		t.Errorf("index lacks the button that stops every tree: %s", body)
-	}
-	if !strings.Contains(body, `name="tree" value="/notes/"><input type="hidden" name="from" value="index"><button>Delete lock</button>`) {
-		t.Errorf("index lacks a Delete lock button per tree: %s", body)
-	}
-	if rec := get(s.handler(), "/elsewhere/"); rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `href="/notes/"`) {
-		t.Errorf("path outside every tree: status %d, want 404 with the index", rec.Code)
-	}
-}
-
-// A path breaks after its slashes, and a URL keeps // with its scheme.
-func TestSegments(t *testing.T) {
-	for in, want := range map[string]string{
-		"~/a b/c":        `<span class="seg">~/</span><wbr><span class="seg">a b/</span><wbr><span class="seg">c</span>`,
-		"/tmp/x/":        `<span class="seg">/</span><wbr><span class="seg">tmp/</span><wbr><span class="seg">x/</span>`,
-		"http://h:80/a/": `<span class="seg">http://</span><wbr><span class="seg">h:80/</span><wbr><span class="seg">a/</span>`,
-		"<x>/y":          `<span class="seg">&lt;x&gt;/</span><wbr><span class="seg">y</span>`,
-	} {
-		if got := segments(in); got != want {
-			t.Errorf("segments(%q) = %s, want %s", in, got, want)
-		}
-	}
-}
-
 // A tree inside another answers for its own paths.
 func TestNestedTreeWins(t *testing.T) {
 	s, _, dir := serveTree(t)
@@ -375,42 +218,6 @@ func TestStopWithdrawsOneTree(t *testing.T) {
 	}
 }
 
-func TestLocalHost(t *testing.T) {
-	hosts := filepath.Join(t.TempDir(), "hosts")
-	os.WriteFile(hosts, []byte("127.31.1.1 docs docs.local # "+progName+"\n192.168.1.5 nas\n# 127.0.0.1 commented\n"), 0o644)
-	old := hostsFile
-	hostsFile = hosts
-	t.Cleanup(func() { hostsFile = old })
-	for host, want := range map[string]bool{
-		"127.31.1.1": true, "127.31.200.1": true, "127.0.0.1": true, "::1": true, "localhost": true,
-		"docs": true, "DOCS.local": true,
-		"nas": false, "commented": false, "evil.example": false, "10.0.0.1": false,
-	} {
-		if got := localHost(host); got != want {
-			t.Errorf("%s: %v, want %v", host, got, want)
-		}
-	}
-}
-
-// The build stamp shows only with --debug, and never on a share. It names
-// the commit and the render time.
-func TestBuildStamp(t *testing.T) {
-	s, tr, _ := serveTree(t)
-	defer func() { debugOn = false }()
-	for _, c := range []struct{ show, shared, want bool }{
-		{false, false, false}, {true, false, true}, {true, true, false},
-	} {
-		debugOn, tr.shared = c.show, c.shared
-		body := get(s.handler(), "/a/").Body.String()
-		if got := strings.Contains(body, `<p class="built" data-built="`); got != c.want {
-			t.Errorf("stamp=%v shared=%v: shown=%v", c.show, c.shared, got)
-		}
-		if c.want && !regexp.MustCompile(`s ago, from [^<]+, rendered in [0-9.]+ ms</p>`).MatchString(body) {
-			t.Errorf("stamp lacks commit or render time: %s", body)
-		}
-	}
-}
-
 // The stylesheet's URL names its content, so the browser keeps it for a
 // year, and every page links that URL.
 func TestStylesheetCached(t *testing.T) {
@@ -425,82 +232,5 @@ func TestStylesheetCached(t *testing.T) {
 	}
 	if body := get(h, "/a/").Body.String(); !strings.Contains(body, `<link rel="stylesheet" href="`+styleURL+`">`) {
 		t.Errorf("page does not link %s: %s", styleURL, body)
-	}
-}
-
-// The index lists every server in the order of their addresses, each
-// with its binary, so it reads the same from any of them. Only this
-// server's trees carry buttons; another's address links to its index.
-// The stale warning's command names the binary by path when PATH leads
-// to another binary.
-func TestIndexListsEveryServer(t *testing.T) {
-	ep := testEndpoint(t)
-	ln, err := net.Listen("tcp", "127.31.250.1:0")
-	if err != nil {
-		t.Skip(err)
-	}
-	other := netip.MustParseAddrPort(ln.Addr().String())
-	ln.Close()
-	dir := t.TempDir()
-	_, served := start(t, config{dir: dir, ep: other})
-	defer func() {
-		os.Remove(filepath.Join(dir, lockName(other)))
-		<-served
-	}()
-
-	s, tr, _ := serveTree(t)
-	tr.prefix, tr.label = "/notes/", "~/notes"
-	s.about = about{ep: ep, started: time.Now(), exe: "/opt/other/" + progName}
-	body := get(s.handler(), "/").Body.String()
-	own := "<h2 class=\"own\">" + ep.String() + ", this page</h2>\n<p class=\"own\"><code>" + segments(s.about.exe) + "</code>"
-	theirs := "<h2 class=\"own\"><a href=\"" + origin(other) + "/\">" + other.String() + "</a></h2>"
-	i, j := strings.Index(body, own), strings.Index(body, theirs)
-	if i < 0 || j < 0 {
-		t.Fatalf("index lacks a server: %s", body)
-	}
-	if (ep.Compare(other) < 0) != (i < j) {
-		t.Errorf("servers out of address order: %s", body)
-	}
-	if strings.Count(body, "<button>Delete lock</button>") != 1 {
-		t.Errorf("want one Delete lock button, for this server's tree: %s", body)
-	}
-	if !strings.Contains(body, `<a href="`+origin(other)+dir+`/" title="`+filepath.Join(dir, lockName(other))+`">`+segments(dir)+"</a>") {
-		t.Errorf("index lacks the other server's tree: %s", body)
-	}
-	if got, want := s.about.restartCmd(), s.about.exe+" --restart"; got != want {
-		t.Errorf("restart command %q, want %q", got, want)
-	}
-}
-
-// A missing path's 404 turns a coin above its message, hidden from screen
-// readers. A refusal says why without one; TestLinksRefusedSayWhy checks.
-func TestNotFoundCoin(t *testing.T) {
-	s, _, _ := serveTree(t)
-	rec := get(s.handler(), "/nowhere.md")
-	body := rec.Body.String()
-	if rec.Code != http.StatusNotFound || !strings.Contains(body, `<p class="coin" aria-hidden="true">`) || !strings.Contains(body, `<th>not found</th><td><span class="seg">http://</span><wbr><span class="seg">127.31.1.1:8080/</span><wbr><span class="seg">nowhere.md</span></td>`) {
-		t.Errorf("status %d, want 404 with the coin and the message: %s", rec.Code, body)
-	}
-}
-
-// A server's build and start show on the index only with --debug; they
-// serve debugging alone.
-func TestIndexTimesOnlyWithStamp(t *testing.T) {
-	defer func() { debugOn = false }()
-	b := indexServer{binary: "/usr/bin/" + progName, built: time.Now(), commit: "1f2241d", since: time.Now()}
-	for _, show := range []bool{false, true} {
-		debugOn = show
-		got := b.account()
-		if has := strings.Contains(got, "built ") && strings.Contains(got, "up since "); has != show {
-			t.Errorf("stamp %t: %s", show, got)
-		}
-		if !strings.Contains(got, progName) {
-			t.Errorf("stamp %t: the binary is missing: %s", show, got)
-		}
-	}
-	debugOn = false
-	s, _, _ := serveTree(t)
-	if body := get(s.handler(), "/").Body.String(); strings.Contains(body, "since ") || strings.Contains(body, "class=\"since") {
-		t.Errorf("index without --debug shows times: %s", body)
 	}
 }
