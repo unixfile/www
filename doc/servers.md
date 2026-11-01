@@ -14,7 +14,7 @@ When something other than your www on that address holds the port, `www` fails a
 
 The server exits when its last lock is gone. SIGTERM stops it at once and removes every lock but a persistent `.LOCK`, as does the Kill server button on the index at `/`.
 
-Delete lock and Kill server answer 410 Gone. The page names each tree stopped, its lock removed or kept, and whether the server serves on.
+Delete lock and Kill server answer 410 Gone. The page shows the code and "Gone" on the line below it, then names each tree stopped, its lock removed or kept, and whether the server serves on.
 
 ## Restarts
 

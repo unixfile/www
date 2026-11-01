@@ -4,7 +4,7 @@ servers = ["public", "default"]
 [[request]]
 path = "/forge.invalid/acct/r/nope.md"
 status = 404
-contains = ['class="coin"', "not found"]
+contains = ['class="coin"', '<p class="reason">Not Found</p>', "not found"]
 absent = ["cache"]
 
 [[request]]

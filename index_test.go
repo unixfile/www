@@ -39,7 +39,7 @@ func TestIndexDeleteReturns(t *testing.T) {
 	}
 	rec = post("tree=%2Fother%2F&from=index")
 	if rec.Code != http.StatusGone || !strings.Contains(rec.Body.String(), "<th>stopped</th><td><span class=\"seg\">~/</span><wbr><span class=\"seg\">other</span></td>") ||
-		!strings.Contains(rec.Body.String(), "<th>server</th><td>stopped; close this tab</td>") || !strings.Contains(rec.Body.String(), `<span>410</span>`) {
+		!strings.Contains(rec.Body.String(), "<th>server</th><td>stopped; close this tab</td>") || !strings.Contains(rec.Body.String(), `<span>410</span>`) || !strings.Contains(rec.Body.String(), `<p class="reason">Gone</p>`) {
 		t.Errorf("last delete: status %d: %s", rec.Code, rec.Body.String())
 	}
 	// The server closes as this page leaves, so the page carries its style.

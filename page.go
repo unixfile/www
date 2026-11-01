@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -203,9 +204,12 @@ func (t *tree) why(ref *refusal) string {
 }
 
 // coin is a status code that turns like a coin above a 404's table, or a
-// stop's 410.
-func coin(code string) string {
-	return `<p class="coin" aria-hidden="true"><span><span>` + code + `</span><span>` + code + `</span></span></p>`
+// stop's 410, with its reason on the line below, since the digits alone
+// do not say what happened.
+func coin(status int) string {
+	code := strconv.Itoa(status)
+	return `<p class="coin" aria-hidden="true"><span><span>` + code + `</span><span>` + code + `</span></span></p>` + "\n" +
+		`<p class="reason">` + http.StatusText(status) + `</p>` + "\n"
 }
 
 // fullURL is the URL r asked for, without its query, so "not found"
@@ -223,7 +227,7 @@ func (t *tree) notFound(w http.ResponseWriter, r *http.Request, name string) {
 		Title:  t.title(name),
 		Crumbs: t.crumbs(name),
 		Kind:   "error",
-		Body:   template.HTML(coin("404") + `<table class="gone">` + "\n" + notFoundRow(r) + t.goneRows(r.Context(), name) + "</table>\n"),
+		Body:   template.HTML(coin(http.StatusNotFound) + `<table class="gone">` + "\n" + notFoundRow(r) + t.goneRows(r.Context(), name) + "</table>\n"),
 	})
 }
 

@@ -10,7 +10,7 @@ A `.md` file renders as a page, a directory as a listing of its names, a text fi
 
 An absolute link such as `/x.md` points outside the prefix and gives 404. Its page names the trees nearest it, or every tree when none is near.
 
-A path the tree lacks gives 404 and names the whole URL; the digits turn like a coin before they stop. Below, the page says where git saw the path go: the commit that deleted or moved it, with a link to its last version. It also names the files with names close to it in the nearest directory that exists.
+A path the tree lacks gives 404 and names the whole URL; the digits turn like a coin before they stop, with "Not Found" on the line below them. Below that, the page says where git saw the path go: the commit that deleted or moved it, with a link to its last version. It also names the files with names close to it in the nearest directory that exists.
 
 ## Links
 

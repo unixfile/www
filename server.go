@@ -268,7 +268,7 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 		// The server may close its listener before the browser asks for
 		// the stylesheet, so the page carries it.
 		Style:   template.CSS(styleCSS),
-		Body:    template.HTML(coin("410") + `<table class="gone">` + "\n" + stoppedRows(trees, kill, len(s.list())-len(trees)) + "</table>\n"),
+		Body:    template.HTML(coin(http.StatusGone) + `<table class="gone">` + "\n" + stoppedRows(trees, kill, len(s.list())-len(trees)) + "</table>\n"),
 		Stopped: true,
 	})
 	// stop only withdraws; the hub shuts down on its own goroutine, since
