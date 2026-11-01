@@ -274,3 +274,26 @@ func TestStopButtonEndsLastTree(t *testing.T) {
 		t.Error("lock left behind")
 	}
 }
+
+func TestOrigin(t *testing.T) {
+	for ep, want := range map[string]string{
+		"127.31.1.1:80":   "http://127.31.1.1",
+		"127.31.1.1:8080": "http://127.31.1.1:8080",
+		"10.0.0.1:80":     "http://10.0.0.1",
+	} {
+		if got := origin(netip.MustParseAddrPort(ep)); got != want {
+			t.Errorf("%s: %s, want %s", ep, got, want)
+		}
+	}
+}
+
+// A server on 0.0.0.0 hands out the machine's name.
+func TestOriginUnspecified(t *testing.T) {
+	name, err := os.Hostname()
+	if err != nil {
+		t.Skip("no hostname")
+	}
+	if got, want := origin(netip.MustParseAddrPort("0.0.0.0:8080")), "http://"+name+":8080"; got != want {
+		t.Errorf("0.0.0.0:8080: %s, want %s", got, want)
+	}
+}

@@ -63,3 +63,22 @@ func TestKvValue(t *testing.T) {
 		}
 	}
 }
+
+// A tree is within a directory at or above it, never beside it.
+func TestWithin(t *testing.T) {
+	for _, tc := range []struct {
+		dir, root string
+		want      bool
+	}{
+		{"/a/b", "/a/b", true},
+		{"/a/b/c", "/a", true},
+		{"/a/b", "/", true},
+		{"/a/bc", "/a/b", false},
+		{"/a", "/a/b", false},
+		{"/x/..y", "/x", true},
+	} {
+		if got := within(tc.dir, tc.root); got != tc.want {
+			t.Errorf("within(%q, %q) = %v, want %v", tc.dir, tc.root, got, tc.want)
+		}
+	}
+}
