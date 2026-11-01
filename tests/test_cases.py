@@ -1,14 +1,10 @@
 """Each file in cases/ names the decision it checks and the pages that hold it."""
 
 import re
-import shutil
-import tempfile
 import tomllib
 from pathlib import Path
 
 import pytest
-
-import harness
 
 CASES = Path(__file__).parent / "cases"
 
@@ -19,29 +15,6 @@ def requests():
         for req in case["request"]:
             for form in req.get("servers", case["servers"]):
                 yield pytest.param(form, req, id=f"{file.stem}-{form}-{req['path']}")
-
-
-@pytest.fixture(scope="session")
-def servers():
-    """One server of each form, started when a case first asks for it."""
-    running = {}
-    homes = []
-
-    def get(form):
-        if form not in running:
-            home = Path(tempfile.mkdtemp(prefix="blackbox-"))
-            homes.append(home)
-            try:
-                running[form] = harness.start(form, home)
-            except OSError as err:
-                pytest.skip(f"{form}: {err}")
-        return running[form]
-
-    yield get
-    for server in running.values():
-        server.stop()
-    for home in homes:
-        shutil.rmtree(home, ignore_errors=True)
 
 
 def visible(html):

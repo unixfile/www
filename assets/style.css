@@ -50,9 +50,10 @@
 /* The header holds still from page to page: every page keeps one width,
    and the scrollbar's space is kept on short pages too, so the centred
    column does not shift when a long page brings a scrollbar. */
-/* A jump to a line or heading stops below the search row, which the
-   script measures into --search-h. */
-html { background: var(--page); scrollbar-gutter: stable; scroll-padding-top: var(--search-h, 0); }
+/* A jump to a line or heading stops below the search row and a code
+   page's view links, which the script measures into --search-h and
+   --view-h. */
+html { background: var(--page); scrollbar-gutter: stable; scroll-padding-top: calc(var(--search-h, 0px) + var(--view-h, 0px)); }
 body {
   max-width: 58ch;
   margin: 2em auto;

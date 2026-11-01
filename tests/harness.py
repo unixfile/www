@@ -13,7 +13,12 @@ GIT_DATE = "2026-01-02T03:04:05Z"
 
 # Every repo the seeded cache holds. The host never resolves, so no case
 # reaches a network.
-SEEDED = {"forge.invalid/acct/r": {"README.md": "# r\n"}}
+SEEDED = {
+    "forge.invalid/acct/r": {
+        "README.md": "# r\n",
+        "long.go": "package long\n" + "// a line\n" * 300,
+    }
+}
 
 
 def binary():

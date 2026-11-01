@@ -152,7 +152,7 @@
 				sel = null;
 				if (held) hold();
 				backlinks();
-				measureSearch();
+				measureBars();
 				url = live.dataset.live;
 				seeServer();
 				if (es) es.close();
@@ -838,6 +838,22 @@
 		e.preventDefault();
 	});
 
+	// The search row sticks to the window's top, and a code page's view
+	// links stick below it. The search row's height, in --search-h, keeps
+	// the links below it; both heights together, through --view-h, stop a
+	// jump to a line or heading below them rather than under them. A doc's
+	// live update brings a new body, so this runs again after it. It comes
+	// before the jump to a range below, which must find the heights set.
+	const measureBars = () => {
+		const row = document.querySelector("div.search");
+		const view = document.querySelector("div.view");
+		const root = document.documentElement.style;
+		root.setProperty("--search-h", (row ? row.offsetHeight : 0) + "px");
+		root.setProperty("--view-h", (view ? view.offsetHeight : 0) + "px");
+	};
+	addEventListener("resize", measureBars);
+	document.addEventListener("DOMContentLoaded", measureBars);
+
 	// A line's number marks the line and puts it in the address, eg #L42;
 	// clicking the marked line's number again clears both. An empty
 	// fragment unmarks the line, since replaceState alone leaves :target
@@ -1224,17 +1240,6 @@
 			})
 			.catch(() => delete d.dataset.loaded);
 	}, true);
-
-	// The search row sticks to the window's top. Its height, in
-	// --search-h, keeps a code page's view links below it and stops a
-	// jump to a line or heading below it rather than under it. A doc's
-	// live update brings a new body, so this runs again after it.
-	const measureSearch = () => {
-		const row = document.querySelector("div.search");
-		document.documentElement.style.setProperty("--search-h", (row ? row.offsetHeight : 0) + "px");
-	};
-	addEventListener("resize", measureSearch);
-	document.addEventListener("DOMContentLoaded", measureSearch);
 
 	// A link another site sent to a repo not yet read lands on a page
 	// that asks first; its read link keeps the link's fragment, eg the

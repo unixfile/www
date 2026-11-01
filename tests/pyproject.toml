@@ -3,7 +3,7 @@ name = "blackbox-tests"
 version = "0"
 description = "Black-box tests of the binary; see doc/testing.md"
 requires-python = ">=3.11"
-dependencies = ["httpx==0.28.1", "pytest==8.4.2"]
+dependencies = ["httpx==0.28.1", "playwright==1.55.0", "pytest==8.4.2"]
 
 [tool.uv]
 package = false

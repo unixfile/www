@@ -49,7 +49,7 @@ The link carries the page's own address, so a share's link opens on other machin
 
 ## When controls show
 
-The search row, box and buttons alike, sticks to the top of the window as the page scrolls. All three stay at hand while reading, and a jump to a line stops below the row.
+The search row, box and buttons alike, sticks to the top of the window as the page scrolls. All three stay at hand while reading, and a jump to a line stops below the row and a code page's views.
 
 The box, its buttons, raw, the stop button and a code page's views fade while nothing needs them, and keep their space. The search row then lets the text scroll through it. The crumbs, the header's status and the bug button stay.
 
