@@ -302,3 +302,17 @@ func TestPagesRecord(t *testing.T) {
 		t.Errorf("record %q", b)
 	}
 }
+
+// A commit reloads an open history page.
+func TestLiveReloadsOnCommit(t *testing.T) {
+	needGit(t)
+	s, _, dir, ts := liveTree(t)
+	exec.Command("git", "init", "-q", dir).Run()
+	commitAll(t, dir, "First")
+	lines := stream(t, s, ts, "/a/")
+	time.Sleep(50 * time.Millisecond)
+	exec.Command("git", "-C", dir, "-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "--allow-empty", "-m", "Second").Run()
+	if !reloads(lines, 2*time.Second) {
+		t.Fatal("no reload after a commit")
+	}
+}
