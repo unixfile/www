@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,9 +17,19 @@ import (
 )
 
 const (
-	// maxNameHits and maxLineHits bound what one search returns.
-	maxNameHits = 30
-	maxLineHits = 100
+	// maxNameHits and maxLineHits bound each level of a search, so one
+	// level cannot use up the answer; maxSearchRows bounds the whole.
+	maxNameHits   = 30
+	maxLineHits   = 100
+	maxSearchRows = 300
+	// maxFileLines is how many lines of one file a search shows; the rest
+	// are counted.
+	maxFileLines = 3
+	// rowLead is how far along a result's row, path included, a match may
+	// start before the line is cut; leadBefore is how much of the line
+	// stays before a match once it is.
+	rowLead    = 50
+	leadBefore = 16
 	// maxSearchFile skips larger files for content, as a code page does.
 	maxSearchFile = maxCode
 	// searchBudget bounds one search, since a tree may hold many files; the
@@ -47,7 +58,10 @@ type hit struct {
 	Path string `json:"path"`
 	Line int    `json:"line,omitempty"`
 	Text string `json:"text,omitempty"`
-	Here bool   `json:"here,omitempty"` // in the searched directory itself, not below it
+	More int    `json:"more,omitempty"` // this file's further matching lines, on its last row
+
+	Depth   int  `json:"depth,omitempty"`   // levels below the searched directory
+	Ignored bool `json:"ignored,omitempty"` // git ignores it
 }
 
 type found struct {
@@ -59,8 +73,9 @@ type found struct {
 	Web *hit `json:"web,omitempty"`
 }
 
-// serveSearch answers ?search=q below name: names that hold q first, then
-// lines that hold it, both ignoring case. It reads the tree through its
+// serveSearch answers ?search=q below name: names that hold q, and lines
+// that hold it, ignoring case, nearest first. Each hit's Path is relative
+// to name. It reads the tree through its
 // own file system, so a share searches only what it would serve. The
 // directories in unsearched are skipped.
 func (t *tree) serveSearch(w http.ResponseWriter, r *http.Request, name, q string) {
@@ -96,106 +111,180 @@ func (t *tree) webHit(q string) *hit {
 	return &hit{Href: *base + (&url.URL{Path: p, Fragment: u.Fragment}).String(), Path: strings.TrimPrefix(p, "/")}
 }
 
+// search answers q below dir, level by level: dir's own entries, then what
+// lies one directory down, and so on, so a deep tree cannot crowd out a
+// shallow one. What git ignores waits until every other entry is done.
 func (t *tree) search(ctx context.Context, dir, q string) found {
-	res := found{Names: []hit{}, Lines: []hit{}}
 	lq := strings.ToLower(strings.TrimSpace(q))
+	s := searcher{t: t, ctx: ctx, dir: dir, lq: lq, needle: []byte(lq), contents: len(lq) >= minContentQuery,
+		ignored: map[string]bool{}, res: found{Names: []hit{}, Lines: []hit{}}}
 	if lq == "" {
-		return res
+		return s.res
 	}
-	needle := []byte(lq)
-	contents := len(lq) >= minContentQuery
-	visit := func(p string, d fs.DirEntry) {
-		here := path.Dir(p) == dir
-		if strings.Contains(strings.ToLower(d.Name()), lq) {
-			if len(res.Names) == maxNameHits {
-				res.Cut = true
-			} else {
-				label := p
-				if d.IsDir() {
-					label += "/"
-				}
-				res.Names = append(res.Names, hit{Href: t.href(label, 0), Path: label, Here: here})
-			}
-		}
-		if d.IsDir() || !contents || len(res.Lines) == maxLineHits {
-			return
-		}
-		if info, err := d.Info(); err != nil || !info.Mode().IsRegular() || info.Size() > maxSearchFile {
-			return
-		}
-		b, err := fs.ReadFile(t.fsys, p)
-		if err != nil || !isText(b) {
-			return
-		}
-		res.Files++
-		lower := bytes.ToLower(b)
-		if !bytes.Contains(lower, needle) {
-			return
-		}
-		for i, line := range bytes.Split(lower, []byte("\n")) {
-			if !bytes.Contains(line, needle) {
-				continue
-			}
-			if len(res.Lines) == maxLineHits {
-				res.Cut = true
-				break
-			}
-			// Lowering may change a line's length outside ASCII but keeps
-			// its newlines, so the line is cut from the original by number.
-			res.Lines = append(res.Lines, hit{Href: t.href(p, i+1), Path: p, Line: i + 1, Text: lineAt(b, i), Here: here})
-		}
-	}
-	// What a listing leaves out, search leaves out too: a share hides dot
-	// entries, though its file system lists them.
-	skip := func(p string, d fs.DirEntry) bool {
-		return t.unlisted(path.Dir(p), d.Name()) || d.IsDir() && unsearched[d.Name()]
-	}
-	// The directory's own entries come first, so the hit limits cannot
-	// crowd them out with deeper ones; then each subdirectory in turn.
 	entries, err := fs.ReadDir(t.fsys, dir)
 	if err != nil {
-		res.Cut = true
-		return res
+		s.res.Cut = true
+		return s.res
 	}
+	s.gitIgnored(dir)
+	s.walk(s.listed(dir, entries))
+	if !s.done() {
+		first := s.deferred
+		s.deferred, s.ignored, s.ignoring = nil, nil, true
+		s.walk(first)
+	}
+	return s.res
+}
+
+// searcher holds one search's state as it walks.
+type searcher struct {
+	t        *tree
+	ctx      context.Context
+	dir      string
+	lq       string
+	needle   []byte
+	contents bool
+	res      found
+	ignored  map[string]bool // paths git ignores, by their path in the tree
+	deferred []searchEntry   // ignored entries met so far
+	ignoring bool            // walking the deferred entries
+	depth    int
+	names    int // name hits at this level
+	lines    int // line hits at this level
+}
+
+type searchEntry struct {
+	path string
+	d    fs.DirEntry
+}
+
+// done reports whether the search must stop, and says so in its answer.
+func (s *searcher) done() bool {
+	if s.ctx.Err() != nil || len(s.res.Names)+len(s.res.Lines) >= maxSearchRows {
+		s.res.Cut = true
+		return true
+	}
+	return false
+}
+
+// walk visits entries, then the entries of the directories among them,
+// and so on down. An entry git ignores goes to deferred.
+func (s *searcher) walk(level []searchEntry) {
+	for s.depth = 0; len(level) > 0; s.depth++ {
+		s.names, s.lines = 0, 0
+		var next []searchEntry
+		for _, e := range level {
+			if s.done() {
+				return
+			}
+			if s.ignored[e.path] {
+				s.deferred = append(s.deferred, e)
+				continue
+			}
+			s.visit(e.path, e.d)
+			if e.d.IsDir() {
+				if entries, err := fs.ReadDir(s.t.fsys, e.path); err == nil {
+					// A repo inside the tree has its own ignores.
+					if !s.ignoring && slices.ContainsFunc(entries, func(d fs.DirEntry) bool { return d.Name() == ".git" }) {
+						s.gitIgnored(e.path)
+					}
+					next = append(next, s.listed(e.path, entries)...)
+				}
+			}
+		}
+		level = next
+	}
+}
+
+// listed keeps what a search covers. What a listing leaves out, search
+// leaves out too: a share hides dot entries, though its file system lists
+// them.
+func (s *searcher) listed(dir string, entries []fs.DirEntry) []searchEntry {
+	var out []searchEntry
 	for _, d := range entries {
-		if ctx.Err() != nil {
-			res.Cut = true
-			return res
-		}
-		if p := path.Join(dir, d.Name()); !skip(p, d) {
-			visit(p, d)
-		}
-	}
-	errStop := errors.New("stop")
-	for _, e := range entries {
-		sub := path.Join(dir, e.Name())
-		if !e.IsDir() || skip(sub, e) {
+		if s.t.unlisted(dir, d.Name()) || d.IsDir() && unsearched[d.Name()] {
 			continue
 		}
-		err := fs.WalkDir(t.fsys, sub, func(p string, d fs.DirEntry, err error) error {
-			if ctx.Err() != nil {
-				res.Cut = true
-				return errStop
-			}
-			if err != nil || (p != sub && skip(p, d)) {
-				if d != nil && d.IsDir() {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if p != sub {
-				visit(p, d)
-			}
-			return nil
-		})
-		if err == errStop {
-			break
-		}
-		if err != nil {
-			res.Cut = true
+		out = append(out, searchEntry{path.Join(dir, d.Name()), d})
+	}
+	return out
+}
+
+// gitIgnored adds what git ignores below dir. A directory that is itself
+// ignored comes back as "./": the reader searching there asked for it, so
+// nothing in it counts as ignored. A version has no ignored files, and a
+// clean clone on the web address none worth a process, so neither asks.
+func (s *searcher) gitIgnored(dir string) {
+	if s.t.at != nil || s.t.web != nil {
+		return
+	}
+	out, err := git(s.ctx, filepath.Join(s.t.dir, filepath.FromSlash(dir)), "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory")
+	if err != nil {
+		return
+	}
+	for _, p := range strings.Split(string(out), "\x00") {
+		if p = strings.TrimSuffix(p, "/"); p != "" && p != "." {
+			s.ignored[path.Join(dir, p)] = true
 		}
 	}
-	return res
+}
+
+func (s *searcher) visit(p string, d fs.DirEntry) {
+	t := s.t
+	rel := p
+	if s.dir != "." {
+		rel = strings.TrimPrefix(p, s.dir+"/")
+	}
+	if strings.Contains(strings.ToLower(d.Name()), s.lq) {
+		if s.names == maxNameHits {
+			s.res.Cut = true
+		} else {
+			s.names++
+			label, full := rel, p
+			if d.IsDir() {
+				label += "/"
+				full += "/"
+			}
+			s.res.Names = append(s.res.Names, hit{Href: t.href(full, 0), Path: label, Depth: s.depth, Ignored: s.ignoring})
+		}
+	}
+	if d.IsDir() || !s.contents {
+		return
+	}
+	if s.lines == maxLineHits {
+		s.res.Cut = true
+		return
+	}
+	if info, err := d.Info(); err != nil || !info.Mode().IsRegular() || info.Size() > maxSearchFile {
+		return
+	}
+	b, err := fs.ReadFile(t.fsys, p)
+	if err != nil || !isText(b) {
+		return
+	}
+	s.res.Files++
+	lower := bytes.ToLower(b)
+	if !bytes.Contains(lower, s.needle) {
+		return
+	}
+	shown, more := 0, 0
+	for i, line := range bytes.Split(lower, []byte("\n")) {
+		if !bytes.Contains(line, s.needle) {
+			continue
+		}
+		if shown == maxFileLines || s.lines == maxLineHits {
+			more++
+			continue
+		}
+		shown++
+		s.lines++
+		// Lowering may change a line's length outside ASCII but keeps
+		// its newlines, so the line is cut from the original by number.
+		s.res.Lines = append(s.res.Lines, hit{Href: t.href(p, i+1), Path: rel, Line: i + 1, Text: around(lineAt(b, i), s.lq, len(rel)), Depth: s.depth, Ignored: s.ignoring})
+	}
+	if shown > 0 {
+		s.res.Lines[len(s.res.Lines)-1].More = more
+	}
 }
 
 // href links a result: a line of a code page by its anchor, anything
@@ -208,8 +297,7 @@ func (t *tree) href(p string, line int) string {
 	return u
 }
 
-// lineAt returns line i of b, trimmed and cut to 200 bytes at a rune
-// boundary.
+// lineAt returns line i of b, trimmed.
 func lineAt(b []byte, i int) string {
 	for ; i > 0; i-- {
 		n := bytes.IndexByte(b, '\n')
@@ -221,7 +309,25 @@ func lineAt(b []byte, i int) string {
 	if n := bytes.IndexByte(b, '\n'); n >= 0 {
 		b = b[:n]
 	}
-	s := strings.TrimSpace(string(b))
+	return strings.TrimSpace(string(b))
+}
+
+// around cuts a line so its match shows on a result's one row: from the
+// line's start when the match falls early enough beside a path of pathLen
+// bytes, or else from shortly before the match. A line whose length
+// changes when lowered shows from its start, since the match's offset does
+// not carry over. The result is at most 200 bytes, cut at a rune boundary.
+func around(s, lq string, pathLen int) string {
+	lower := strings.ToLower(s)
+	at := strings.Index(lower, lq)
+	if len(lower) == len(s) && at > max(rowLead-pathLen, leadBefore) {
+		start := at
+		for n := 0; n < leadBefore && start > 0; n++ {
+			_, size := utf8.DecodeLastRuneInString(s[:start])
+			start -= size
+		}
+		s = "…" + s[start:]
+	}
 	if len(s) > 200 {
 		cut := 200
 		for cut > 0 && !utf8.RuneStart(s[cut]) {

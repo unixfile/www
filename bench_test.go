@@ -18,7 +18,7 @@ import (
 
 // BenchmarkSearch scans a generated tree of 4,000 text files and 24 MB,
 // about the size of ~/scratch. A rare word reads every file; a common one
-// stops at maxLineHits.
+// stops at maxSearchRows.
 func BenchmarkSearch(b *testing.B) {
 	dir := b.TempDir()
 	words := strings.Fields("the a of to and in is it that for on with as by this be not are from or at an " +

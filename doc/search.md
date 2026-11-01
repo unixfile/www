@@ -4,7 +4,11 @@ The box under the header searches what is below it as you type, ignoring case. I
 
 ## What a search finds
 
-On a listing it searches the directory: names that hold the query first, then lines in text files. The directory's own entries show at full strength, and what lies in its subdirectories follows after a gap, dimmed. A line result opens a code page at its line.
+On a listing it searches the directory, nearest first. The directory's own names lead, then its own lines, at full strength. Each level below follows, dimmed, with names before lines. Pages you opened rise to the top of their level, and one outside the directory comes after every level, as `../other/x.md`. Paths are relative to the directory searched.
+
+A line result takes one row, cut so the match shows, and opens a code page at its line. A file shows its first three matching lines, then `+N more`, which opens the file filtered by the query.
+
+What git ignores comes last, behind one link: `1 hit in 1 ignored file`. Following it shows the hits. A repo inside the tree counts its own ignores. A search started inside an ignored directory treats its contents as ordinary. Limits apply per level, so a deep directory full of hits cannot crowd out a shallower one.
 
 Any other page filters itself, and each match is marked:
 

@@ -165,9 +165,9 @@
 	sync();
 
 	// The box under the header searches what is below it. A listing
-	// searches its directory, names first, then lines, and the results
-	// stand in for the page: its own entries first, then what lies deeper,
-	// dimmed. Any other page filters itself in place: lines
+	// searches its directory and the results stand in for the page: its
+	// own names, then its own lines, then what lies deeper, nearest first
+	// and dimmed. Any other page filters itself in place: lines
 	// of code, blocks of a doc, commits of a history, rows of a syntax
 	// tree, each match marked.
 	// The directory's results follow, dimmed, without this file. Escape or
@@ -373,29 +373,57 @@
 					ul.className = "listing" + (wider ? " wider" : "");
 					return ul;
 				};
-				// A listing shows its own entries at full strength and what
-				// lies deeper dimmed below; a filtered page dims all of it.
+				// A listing shows its own names and then its own lines at
+				// full strength, and what lies deeper dimmed below; a
+				// filtered page dims all of it. What git ignores waits behind
+				// one link.
 				const near = inPlace ? null : list(false);
+				const nearLines = inPlace ? null : list(false);
 				const far = list(true);
+				const ignored = list(true);
+				ignored.hidden = true;
 				const recents = recentMatching(q);
 				const shown = new Set(recents);
-				const add = (h, label, text) => {
-					if (own(h) || (!h.line && shown.has(new URL(h.href, location.href).pathname))) return;
+				const row = (href, label) => {
 					const li = document.createElement("li");
 					const a = document.createElement("a");
-					a.href = h.href;
+					a.href = href;
 					a.textContent = label;
 					li.append(a);
-					if (text) {
-						const span = document.createElement("span");
-						span.className = "line";
-						span.textContent = text;
-						li.append(" ", span);
-					}
-					(near && h.here ? near : far).append(li);
+					return li;
 				};
-				for (const h of res.names) add(h, h.path);
-				for (const h of res.lines) add(h, h.path + ":" + h.line, h.text);
+				const add = (h, label, text) => {
+					if (own(h) || (!h.line && shown.has(new URL(h.href, location.href).pathname))) return;
+					const li = row(h.href, label);
+					const to = h.ignored ? ignored : !near || h.depth ? far : text === undefined ? near : nearLines;
+					to.append(li);
+					if (text === undefined) return;
+					li.className = "hit";
+					const span = document.createElement("span");
+					span.className = "line";
+					span.textContent = text;
+					li.append(span);
+					if (!h.more) return;
+					const u = new URL(h.href, location.href);
+					u.hash = "";
+					u.search = "?q=" + encodeURIComponent(q);
+					const more = row(u.href, "+" + h.more + " more");
+					more.className = "more";
+					to.append(more);
+				};
+				// Levels from the nearest down: at each, the pages the reader
+				// opened, then names, then lines. A page outside the searched
+				// directory is farther than any level.
+				const rows = [
+					...recents.map((p) => {
+						const label = recentFrom(p, b.dataset.search);
+						return { depth: recentDepth(label), rank: 0, draw: () => (!near || recentDepth(label) ? far : near).append(row(p, label)) };
+					}),
+					...res.names.map((h) => ({ depth: h.ignored ? Infinity : h.depth || 0, rank: 1, draw: () => add(h, h.path) })),
+					...res.lines.map((h) => ({ depth: h.ignored ? Infinity : h.depth || 0, rank: 2, draw: () => add(h, h.path + ":" + h.line, h.text || "") })),
+				];
+				rows.sort((x, y) => x.depth - y.depth || x.rank - y.rank);
+				for (const r of rows) r.draw();
 				const results = document.createElement("div");
 				results.className = "found";
 				const line = (cls, text) => {
@@ -404,23 +432,6 @@
 					p.textContent = text;
 					results.append(p);
 				};
-				// Pages the reader opened that match lead, from any tree.
-				const recent = list(false);
-				recent.classList.add("recent");
-				for (const p of recents) {
-					const li = document.createElement("li");
-					const a = document.createElement("a");
-					a.href = p;
-					a.textContent = recentLabel(p);
-					li.append(a);
-					recent.append(li);
-				}
-				if (recent.children.length) {
-					const p = document.createElement("p");
-					p.className = "note";
-					p.textContent = "recent";
-					results.prepend(p, recent);
-				}
 				// A forge's URL leads, read on the web address; Enter opens it.
 				if (res.web) {
 					const web = list(false);
@@ -436,10 +447,27 @@
 					p.textContent = "online";
 					results.prepend(p, web);
 				}
-				const any = (res.web ? 1 : 0) + recent.children.length + (near ? near.children.length : 0) + far.children.length;
+				const any = (res.web ? 1 : 0) + (near ? near.children.length + nearLines.children.length : 0) + far.children.length + ignored.children.length;
 				if (near && near.children.length) results.append(near);
-				else if (near && any) line("unfound", "nothing in this directory itself");
+				if (near && nearLines.children.length) results.append(nearLines);
+				if (near && !near.children.length && !nearLines.children.length && any) line("unfound", "nothing in this directory itself");
 				if (far.children.length) results.append(far);
+				if (ignored.children.length) {
+					const hits = [...res.names, ...res.lines].filter((h) => h.ignored && !own(h));
+					const n = hits.reduce((sum, h) => sum + 1 + (h.more || 0), 0);
+					const files = new Set(hits.map((h) => h.path)).size;
+					const opener = list(true);
+					const li = row("#", n + (n === 1 ? " hit" : " hits") + " in " + files + (files === 1 ? " ignored file" : " ignored files"));
+					li.firstChild.classList.add("reveal");
+					li.firstChild.addEventListener("click", (e) => {
+						e.preventDefault();
+						opener.remove();
+						ignored.hidden = false;
+						select(ignored.querySelector("a"));
+					});
+					opener.append(li);
+					results.append(opener, ignored);
+				}
 				line("note", (any ? "" : "nothing found, ") + "searched " + res.files + " files" + (res.cut ? ", stopped early" : ""));
 				const main = document.querySelector("main");
 				const old = document.querySelector("div.found");
@@ -607,19 +635,32 @@
 			.sort((a, b) => score(b, now) - score(a, now))
 			.map((e) => e.p);
 	};
-	const recentLabel = (p) => {
+	const decoded = (p) => {
 		try {
-			return decodeURIComponent(p).replace(/^\//, "");
+			return decodeURIComponent(p);
 		} catch {
 			return p;
 		}
 	};
-	// recentMatching lists the five best pages whose path holds every word
-	// of q, without this page.
+	// recentFrom writes a page's path relative to a directory, both URL
+	// paths: the short name below it, or ../ steps from outside it.
+	const recentFrom = (p, dir) => {
+		const to = decoded(p).split("/");
+		const from = decoded(dir).split("/").slice(0, -1);
+		let i = 0;
+		while (i < from.length && i < to.length - 1 && from[i] === to[i]) i++;
+		return "../".repeat(from.length - i) + to.slice(i).join("/") || "./";
+	};
+	// recentDepth is a relative path's level below the searched directory.
+	const recentDepth = (label) => label.startsWith("../") ? Infinity : label.replace(/\/$/, "").split("/").length - 1;
+	// recentMatching lists the five best pages whose path in the tree holds
+	// every word of q, without this page. The path above the tree is the
+	// same for every page, so it matches nothing useful.
 	const recentMatching = (q) => {
 		const words = q.toLowerCase().split(/\s+/).filter((w) => w);
+		const tree = recentTree();
 		return recentPaths()
-			.filter((p) => p !== location.pathname && words.every((w) => recentLabel(p).toLowerCase().includes(w)))
+			.filter((p) => p !== location.pathname && words.every((w) => recentFrom(p, tree).toLowerCase().includes(w)))
 			.slice(0, 5);
 	};
 	const visit = () => {
@@ -776,7 +817,8 @@
 				if (!inBox && e.target.closest && e.target.closest("a, button, summary")) return;
 				const to = i >= 0 ? sel : q ? walk[0] : null;
 				if (!to) return;
-				if (to.matches("a")) location.href = to.href;
+				if (to.matches("a.reveal")) to.click();
+				else if (to.matches("a")) location.href = to.href;
 				else jump(to);
 				break;
 			}

@@ -396,7 +396,14 @@ pre.numberSource.filtering code > span > a:first-child::before { content: attr(d
 ::highlight(search) { background-color: var(--target); }
 div.found ul.wider { opacity: 0.6; margin-top: 1.4em; }
 div.found p.note:first-child { margin-top: 0; }
-div.found ul.recent, div.found ul.web { margin-bottom: 1.4em; }
+div.found ul.web { margin-bottom: 1.4em; }
+/* A line result keeps to one row: the path as it is, the line cut to fit,
+   since a path and a long line would otherwise fill the window. */
+div.found ul + ul { margin-top: 1.4em; }
+div.found li.hit { display: flex; align-items: baseline; gap: 1ch; }
+div.found li.hit > a { flex: 0 1 auto; min-width: 0; }
+div.found li.hit > .line { flex: 1 1 0; min-width: 12ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.found li.more { font-size: 0.8em; padding-left: 2ch; }
 /* Below a doc, the docs that link to it, in the program's quiet voice. */
 div.backlinks ul { list-style: none; padding: 0; text-align: left; font-size: 0.8em; }
 div.backlinks li { padding: 0.075em 0; overflow-wrap: anywhere; }
