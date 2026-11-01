@@ -135,17 +135,25 @@ func (w *web) serveListing(rw http.ResponseWriter, r *http.Request, l *listing) 
 		}
 		body.WriteString("</ul>\n")
 	}
-	src := l.source
-	if l.asked != "" {
-		src += ", " + l.asked
+	failed := "Failed first: "
+	if l.source == "" {
+		// A public server keeps the cache to itself, so nothing may have
+		// answered: the page says when it asked, and names no source.
+		failed = "Failed: "
+		fmt.Fprintf(&body, "<p class=\"own\">Asked at %s.</p>\n", clock(l.at))
+	} else {
+		src := l.source
+		if l.asked != "" {
+			src += ", " + l.asked
+		}
+		fmt.Fprintf(&body, "<p class=\"own\">%d repos, listed by %s at %s.", len(l.repos), esc(src), clock(l.at))
+		if l.source == "the cache" {
+			body.WriteString(" The cache holds only what was read here, so the host may hold more.")
+		}
+		body.WriteString("</p>\n")
 	}
-	fmt.Fprintf(&body, "<p class=\"own\">%d repos, listed by %s at %s.", len(l.repos), esc(src), clock(l.at))
-	if l.source == "the cache" {
-		body.WriteString(" The cache holds only what was read here, so the host may hold more.")
-	}
-	body.WriteString("</p>\n")
 	if len(l.failed) > 0 {
-		body.WriteString("<p class=\"own\">Failed first: " + esc(strings.Join(l.failed, "; ")) + ".</p>\n")
+		body.WriteString("<p class=\"own\">" + failed + esc(strings.Join(l.failed, "; ")) + ".</p>\n")
 	}
 	w.render(rw, r, status, key, webCrumbs(key), "index", body.String())
 }

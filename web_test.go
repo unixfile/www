@@ -284,6 +284,11 @@ func TestWebPublic(t *testing.T) {
 	if rec := read(t, w, "/"+f.host+"/acct"); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "acct/r") {
 		t.Errorf("a listing falls back to the cache: %d\n%s", rec.Code, rec.Body)
 	}
+	// With no source that answered, the page names none and counts nothing.
+	if body := read(t, w, "/"+f.host+"/acct").Body.String(); strings.Contains(body, "listed by") ||
+		strings.Contains(body, "0 repos") || !strings.Contains(body, "Asked at ") || !strings.Contains(body, "Failed: ") {
+		t.Errorf("a path no source lists:\n%s", body)
+	}
 	if rec := get("/" + f.host + "/acct/r/README.md"); rec.Code != http.StatusOK {
 		t.Errorf("a cached repo: %d\n%s", rec.Code, rec.Body)
 	}
