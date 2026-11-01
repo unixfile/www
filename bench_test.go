@@ -68,7 +68,7 @@ func BenchmarkSearch(b *testing.B) {
 // they are not installed.
 func BenchmarkCodePage(b *testing.B) {
 	pythons, _ := filepath.Glob("/usr/lib/python3*/argparse.py")
-	files := append([]string{"server.go", "assets/style.css",
+	files := append([]string{"git.go", "assets/style.css",
 		"/usr/share/javascript/jquery/jquery.js", "/usr/share/bash-completion/bash_completion"}, pythons...)
 	for _, name := range files {
 		b.Run(path.Base(name), func(b *testing.B) {
