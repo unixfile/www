@@ -208,3 +208,6 @@ func saveSnapshot(p, page string) error {
 	page = strings.Replace(page, `<link rel="stylesheet" href="`+styleURL+`">`, "<style>"+css+"</style>", 1)
 	return os.WriteFile(p, []byte(page), 0o600)
 }
+
+// bugOff, set by --no-bug, hides the bug button and refuses reports.
+var bugOff bool
