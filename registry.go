@@ -217,7 +217,7 @@ func (r *registry) markServer() error {
 		}
 	}
 	return os.WriteFile(filepath.Join(r.dir, serverFile),
-		[]byte(fmt.Sprintf("pid: %d\nboot_id: %s\n", os.Getpid(), bootID())), 0o600)
+		[]byte(fmt.Sprintf("pid: %d\nboot_id: %s\npid_ns: %s\n", os.Getpid(), bootID(), pidNS())), 0o600)
 }
 
 // binaryOf reads which binary last served ep, or "" for a registry with no
@@ -284,5 +284,5 @@ func serverOf(ep netip.AddrPort) (lockInfo, bool) {
 	}
 	l := parseLock(b)
 	l.since = info.ModTime()
-	return l, pidLive(l.pid, l.bootID, bootID())
+	return l, l.running()
 }

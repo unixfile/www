@@ -12,12 +12,12 @@ Write new Go tests as tables, with the cases in `testdata/` where they fit. Purp
 
 They run the built binary and check what a user sees. They cover what in-process tests cannot reach: flag parsing, the listener, `--public`, process lifecycle and browser pages. The first case is a missing path on `--public`, which shows the 404 coin.
 
-The suite is pytest in `tests/`, with its own `pyproject.toml`. `make blackbox` builds the binary and runs it. HTTP and browser cases exist so far; the CLI and process kinds below come with their first case.
+The suite is pytest in `tests/`, with its own `pyproject.toml`. `make blackbox` builds the binary and runs it. HTTP, browser and process cases exist so far; the CLI kind below comes with its first case.
 
 - CLI: `subprocess` checks stdout, stderr and the exit code apart, including `E{code}` messages
 - HTTP: `httpx` against a server the suite starts on a free port
 - Browser: Playwright in `tests/test_browser.py`, asserting DOM, layout and computed style, never pixels. It uses Playwright's Chromium where installed, else the machine's Brave, and skips with the reason when no browser starts, eg in a sandbox. Playwright drives only its own Firefox build, so a Firefox check stays a script in `csi/sketch/browser-tests/`
-- Processes: `subprocess.Popen` with signals and waits for locks, restarts and the journal
+- Processes: `subprocess.Popen` with signals and waits for locks, restarts and the journal, in `tests/test_processes.py`. A case that needs a new PID namespace skips with the reason where `unshare` is refused, eg in a sandbox
 
 Rules for the suite:
 

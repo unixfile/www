@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestIsLockName(t *testing.T) {
@@ -71,6 +74,86 @@ func TestLockOfDeadProcessRemoved(t *testing.T) {
 	}
 	if _, err := os.Stat(p); !os.IsNotExist(err) {
 		t.Error("stale lock not removed")
+	}
+}
+
+// A PID from another namespace says nothing here. Deleting its lock stopped
+// a live server when `www -l` ran inside a sandbox.
+func TestLockInOtherPIDNamespace(t *testing.T) {
+	dead := 1<<22 + 1
+	for _, c := range []struct {
+		name string
+		boot string
+		ns   string
+		live bool
+	}{
+		{"other namespace", bootID(), "pid:[1]", true},
+		{"this namespace", bootID(), pidNS(), false},
+		{"no record", bootID(), "", false},
+		{"other namespace, earlier boot", "earlier-boot", "pid:[1]", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), lockName(testEP))
+			body := fmt.Sprintf("url: http://127.31.1.1:8080/\npid: %d\nboot_id: %s\npid_ns: %s\n", dead, c.boot, c.ns)
+			if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := findLive(testEP, p); ok != c.live {
+				t.Errorf("live %v, want %v", ok, c.live)
+			}
+			if _, err := os.Stat(p); (err == nil) != c.live {
+				t.Errorf("lock kept %v, want %v", err == nil, c.live)
+			}
+		})
+	}
+}
+
+func TestLockAndRecordNamePIDNamespace(t *testing.T) {
+	if pidNS() == "" {
+		t.Skip("/proc does not name this namespace")
+	}
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	dir := t.TempDir()
+	l, err := createLock(filepath.Join(dir, lockName(testEP)), dir, "http://127.31.1.1:8080/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parseLock(l.body).pidNS; got != pidNS() {
+		t.Errorf("lock names %q, want %q", got, pidNS())
+	}
+	reg, err := openRegistry(testEP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.close()
+	if err := reg.markServer(); err != nil {
+		t.Fatal(err)
+	}
+	srv, ok := serverOf(testEP)
+	if !ok || srv.pidNS != pidNS() {
+		t.Errorf("server record: live %v, names %q", ok, srv.pidNS)
+	}
+}
+
+// A signal to another namespace's PID would reach whichever process holds
+// that number here.
+func TestStopServerRefusesOtherPIDNamespace(t *testing.T) {
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Skip(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	defer cmd.Process.Kill()
+	pid := cmd.Process.Pid
+	err := stopServer(testEP, pid, []servedTree{{foreign: true, pid: pid, dir: t.TempDir()}})
+	if errnoOf(err) != syscall.EPERM {
+		t.Errorf("err %v, want EPERM", err)
+	}
+	select {
+	case <-done:
+		t.Error("the process was signalled")
+	case <-time.After(100 * time.Millisecond):
 	}
 }
 

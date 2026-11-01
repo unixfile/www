@@ -25,6 +25,7 @@ type servedTree struct {
 	lockPath string
 	persist  bool   // the lock outlives its server
 	binary   string // the server's binary, or "" when unrecorded
+	foreign  bool   // the server runs in another PID namespace, so pid means nothing here
 }
 
 // readTree reads the lock that a registry link targets and reports whether
@@ -36,7 +37,7 @@ func readTree(ep netip.AddrPort, target string) (servedTree, bool) {
 		return servedTree{}, false
 	}
 	t := servedTree{ep: ep, pid: l.pid, dir: filepath.Dir(lockPath), url: l.url, token: token,
-		lockPath: lockPath, persist: isPersist(lockPath), binary: binaryOf(ep)}
+		lockPath: lockPath, persist: isPersist(lockPath), binary: binaryOf(ep), foreign: l.foreign()}
 	if info, err := os.Stat(lockPath); err == nil {
 		t.since = info.ModTime()
 	}

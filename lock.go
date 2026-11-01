@@ -71,6 +71,7 @@ type lockInfo struct {
 	pid    int
 	url    string
 	bootID string
+	pidNS  string    // the PID namespace pid means something in
 	since  time.Time // when a server record was written, as the server started
 }
 
@@ -88,6 +89,8 @@ func parseLock(b []byte) lockInfo {
 			l.url = v
 		case "boot_id":
 			l.bootID = v
+		case "pid_ns":
+			l.pidNS = v
 		}
 	}
 	return l
@@ -100,20 +103,40 @@ func bootID() string {
 	return strings.TrimSpace(string(b))
 }
 
-func (l lockInfo) live(boot string) bool {
-	return l.url != "" && pidLive(l.pid, l.bootID, boot)
+// pidNS names this process's PID namespace, or "" where /proc cannot say,
+// eg a new namespace that still sees the old /proc.
+func pidNS() string {
+	ns, _ := os.Readlink("/proc/self/ns/pid")
+	return ns
 }
 
-// pidLive reports whether pid, recorded in the boot was, still runs in
-// the boot now.
-func pidLive(pid int, was, now string) bool {
-	if pid <= 0 {
+func (l lockInfo) live() bool {
+	return l.url != "" && l.running()
+}
+
+// foreign reports whether l's PID means nothing here: the server wrote it
+// in another PID namespace, eg outside the sandbox or container this
+// process runs in. A lock with no record is older than the record.
+func (l lockInfo) foreign() bool {
+	return l.pidNS != "" && l.pidNS != pidNS()
+}
+
+// running reports whether l's server still runs. A PID from an earlier boot
+// is dead. A PID from another namespace cannot be checked from here, and
+// wrongly calling it dead would delete a live server's lock and stop it, so
+// it counts as running. Its lock then stays until a reboot or until someone
+// deletes it, which costs less.
+func (l lockInfo) running() bool {
+	if l.pid <= 0 {
 		return false
 	}
-	if was != "" && now != "" && was != now {
+	if now := bootID(); l.bootID != "" && now != "" && l.bootID != now {
 		return false
 	}
-	err := syscall.Kill(pid, 0)
+	if l.foreign() {
+		return true
+	}
+	err := syscall.Kill(l.pid, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
@@ -137,9 +160,9 @@ func readLive(ep netip.AddrPort, path string) (lockInfo, bool) {
 		if err != nil || info.ModTime().Before(srv.since) {
 			return l, false
 		}
-		l.pid, l.bootID = srv.pid, srv.bootID
+		l.pid, l.bootID, l.pidNS = srv.pid, srv.bootID, srv.pidNS
 	}
-	return l, l.live(bootID())
+	return l, l.live()
 }
 
 // findLive returns the lock at path if its server still runs. A stale lock
@@ -181,8 +204,8 @@ func createLock(path, root, url string) (*lock, error) {
 			"url: %s\nroot: %s\nstarted: %s\n", url, root, time.Now().Format(time.RFC3339))
 	} else {
 		body = fmt.Sprintf("# "+progName+" is serving this directory. Delete this file to stop serving it.\n"+
-			"url: %s\nroot: %s\npid: %d\nstarted: %s\nboot_id: %s\n",
-			url, root, os.Getpid(), time.Now().Format(time.RFC3339), bootID())
+			"url: %s\nroot: %s\npid: %d\nstarted: %s\nboot_id: %s\npid_ns: %s\n",
+			url, root, os.Getpid(), time.Now().Format(time.RFC3339), bootID(), pidNS())
 	}
 	_, err = f.WriteString(body)
 	if cerr := f.Close(); err == nil {
