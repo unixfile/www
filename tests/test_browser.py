@@ -83,7 +83,7 @@ def test_click_marks_a_line_below_the_bars(origin, page):
 def test_details_names_line_up(origin, page):
     page.goto(origin + "/forge.invalid/acct/r/?details", wait_until="load")
     lefts = page.evaluate(
-        """[...document.querySelectorAll("ul.listing li:not(.view):not(.log) > a")]
+        """[...document.querySelectorAll("ul.listing li:not(.cmds) > a")]
             .map((a) => a.getBoundingClientRect().left)"""
     )
     assert len(lefts) == 2, lefts

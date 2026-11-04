@@ -36,7 +36,7 @@ func TestAgeOf(t *testing.T) {
 func TestListingLeadsToDetails(t *testing.T) {
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/a/").Body.String()
-	if !strings.Contains(body, `<li class="view"><a href="?details">&lt;(ls -l)</a></li>`) {
+	if !strings.Contains(body, `<li class="cmds"><a href="?details">&lt;(ls -l)</a></li>`) {
 		t.Errorf("no details entry:\n%s", body)
 	}
 	if strings.Contains(body, `class="lead`) || !strings.Contains(body, `<li><a href="../">../</a></li>`) {
@@ -55,7 +55,7 @@ func TestDetailsView(t *testing.T) {
 	h := s.handler()
 	body := get(h, "/a/?details").Body.String()
 	for _, want := range []string{
-		`<li class="view"><a href="./">&lt;(ls)</a></li>`,
+		`<li class="cmds"><a href="./">&lt;(ls)</a></li>`,
 		`<li><span class="lead num size"></span> <span class="lead num age"></span> <a href="../?details">../</a></li>`,
 		`<li><span class="lead num size">23</span> <span class="lead num age" title="` + exact(old) + `">3d</span> <a href="b.go">b.go</a></li>`,
 	} {

@@ -33,7 +33,7 @@ func TestVersion(t *testing.T) {
 		t.Errorf("a/b.go now:\n%s", body)
 	}
 	listing := get(h, at+"a/").Body.String()
-	if !strings.Contains(listing, " @ "+star+"</a>") || !strings.Contains(listing, `href="b.go"`) || strings.Contains(listing, "Delete lock") || strings.Contains(listing, `<li class="log">`) {
+	if !strings.Contains(listing, " @ "+star+"</a>") || !strings.Contains(listing, `href="b.go"`) || strings.Contains(listing, "Delete lock") || strings.Contains(listing, `href="?log"`) {
 		t.Errorf("listing of a/ as of %s:\n%s", short, listing)
 	}
 	if body := get(h, at+"untracked/x.txt"); body.Code != 404 {

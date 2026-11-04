@@ -190,10 +190,10 @@ ul.listing li { padding: 0.075em 0; overflow-wrap: anywhere; }
    does not matter. Padding, not margin, spaces the rows, so no gap
    between them is dead. A button in the row, eg Delete lock, sits above. */
 ul.listing li, ol.versions > li, div.backlinks li, table.locks tr { position: relative; }
-ul.listing li > a:first-of-type::after, ol.versions > li > a::after, div.backlinks li > a::after,
+ul.listing li:not(.cmds) > a:first-of-type::after, ol.versions > li > a::after, div.backlinks li > a::after,
   table.locks td:first-child > a::after { content: ""; position: absolute; inset: 0; }
 table.locks form { position: relative; z-index: 1; }
-ul.listing li:hover > a, ol.versions > li:hover > a, div.backlinks li:hover > a, table.locks tr:hover a { text-decoration-color: currentColor; }
+ul.listing li:not(.cmds):hover > a, ol.versions > li:hover > a, div.backlinks li:hover > a, table.locks tr:hover a { text-decoration-color: currentColor; }
 /* The program's own links, in the header, listings and the index, are quiet,
    not lost: the text colour with a faint underline, which tells a link
    from the current crumb or a refused entry on a share. The underline
@@ -319,6 +319,8 @@ table.locks .lead { margin: 0 1em 0 0; }
    characters at most, so their columns need no width from the server. */
 ul.listing .lead.size { min-width: 4ch; }
 ul.listing .lead.age { min-width: 3ch; }
+/* The commands row holds a link per command, each its own target. */
+ul.listing li.cmds > a + a { margin-left: 1ch; }
 table.locks td + td { text-align: right; }
 table.locks form { display: inline; }
 
@@ -388,7 +390,7 @@ html.calm :is(div.search, div.view) { background-color: transparent; pointer-eve
    which the text would count as breaks, and a 404's coin. Line numbers are generated
    content, which the text never holds. */
 body.copying main .own, body.copying main div.view, body.copying main div.backlinks,
-body.copying main li.log, body.copying main li.view, body.copying main li:has(> a[href="../"]), body.copying main li:has(> a[href="../?details"]), body.copying main i.scope, body.copying main a.web, body.copying main div.semantic, body.copying main p.coin { display: none; }
+body.copying main li.log, body.copying main li.cmds, body.copying main li:has(> a[href="../"]), body.copying main li:has(> a[href="../?details"]), body.copying main i.scope, body.copying main a.web, body.copying main div.semantic, body.copying main p.coin { display: none; }
 /* Search results: the path is the program's and mono, a matching line is
    the file's and stays mono too, in the muted colour. */
 div.found .line { color: var(--muted); font-size: 0.8em; hyphens: none; }
