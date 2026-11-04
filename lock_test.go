@@ -42,7 +42,7 @@ func TestLockNameIsEndpoint(t *testing.T) {
 func writeLock(t *testing.T, dir string, pid int, boot string) string {
 	t.Helper()
 	p := filepath.Join(dir, "127.31.1.1-8080.lock")
-	body := fmt.Sprintf("url: http://127.31.1.1:8080/\npid: %d\nboot_id: %s\n", pid, boot)
+	body := fmt.Sprintf("url: http://127.31.1.1:8080/\npid: %d\nboot_id: %s\npid_ns: %s\n", pid, boot, pidNS())
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -77,24 +77,43 @@ func TestLockOfDeadProcessRemoved(t *testing.T) {
 	}
 }
 
+// setPIDNS makes the test run as if in namespace ns.
+func setPIDNS(t *testing.T, ns string) {
+	t.Helper()
+	old := pidNS
+	pidNS = func() string { return ns }
+	t.Cleanup(func() { pidNS = old })
+}
+
 // A PID from another namespace says nothing here. Deleting its lock stopped
-// a live server when `www -l` ran inside a sandbox.
+// a live server when `www -l` ran inside a sandbox. A lock written before
+// locks named their namespace counts as the host's, so a sandbox keeps it
+// and the host still clears it once its server is gone. A reader that
+// cannot name its own namespace can check no PID.
 func TestLockInOtherPIDNamespace(t *testing.T) {
 	dead := 1<<22 + 1
+	const sandbox = "pid:[4026533000]"
 	for _, c := range []struct {
-		name string
-		boot string
-		ns   string
-		live bool
+		name   string
+		reader string
+		boot   string
+		ns     string
+		live   bool
 	}{
-		{"other namespace", bootID(), "pid:[1]", true},
-		{"this namespace", bootID(), pidNS(), false},
-		{"no record", bootID(), "", false},
-		{"other namespace, earlier boot", "earlier-boot", "pid:[1]", false},
+		{"other namespace", sandbox, bootID(), "pid:[1]", true},
+		{"this namespace", sandbox, bootID(), sandbox, false},
+		{"no record, read on the host", initPIDNS, bootID(), "", false},
+		{"no record, read in a sandbox", sandbox, bootID(), "", true},
+		{"reader cannot name its namespace", "", bootID(), sandbox, true},
+		{"other namespace, earlier boot", sandbox, "earlier-boot", "pid:[1]", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			setPIDNS(t, c.reader)
 			p := filepath.Join(t.TempDir(), lockName(testEP))
-			body := fmt.Sprintf("url: http://127.31.1.1:8080/\npid: %d\nboot_id: %s\npid_ns: %s\n", dead, c.boot, c.ns)
+			body := fmt.Sprintf("url: http://127.31.1.1:8080/\npid: %d\nboot_id: %s\n", dead, c.boot)
+			if c.ns != "" {
+				body += "pid_ns: " + c.ns + "\n"
+			}
 			if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -105,6 +124,34 @@ func TestLockInOtherPIDNamespace(t *testing.T) {
 				t.Errorf("lock kept %v, want %v", err == nil, c.live)
 			}
 		})
+	}
+}
+
+// A server here that exits leaves alone the record of a server in another
+// namespace that has the same PID.
+func TestUnmarkServerSparesOtherNamespace(t *testing.T) {
+	setPIDNS(t, "pid:[4026533000]")
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	reg, err := openRegistry(testEP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.close()
+	p := filepath.Join(reg.dir, serverFile)
+	other := fmt.Sprintf("pid: %d\nboot_id: %s\npid_ns: pid:[1]\n", os.Getpid(), bootID())
+	if err := os.WriteFile(p, []byte(other), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reg.unmarkServer()
+	if _, err := os.Stat(p); err != nil {
+		t.Fatal("removed another namespace's record")
+	}
+	if err := reg.markServer(); err != nil {
+		t.Fatal(err)
+	}
+	reg.unmarkServer()
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Error("kept its own record")
 	}
 }
 

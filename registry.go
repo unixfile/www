@@ -250,12 +250,15 @@ func otherBinary(ep netip.AddrPort) string {
 }
 
 // unmarkServer removes the record, unless another server has written its
-// own. The binary record stays while persistent trees wait for a server,
-// and goes with the last link.
+// own. A PID repeats across namespaces, so the record is this server's
+// only if it names this namespace too. The binary record stays while
+// persistent trees wait for a server, and goes with the last link.
 func (r *registry) unmarkServer() {
 	p := filepath.Join(r.dir, serverFile)
-	if b, err := os.ReadFile(p); err == nil && parseLock(b).pid == os.Getpid() {
-		os.Remove(p)
+	if b, err := os.ReadFile(p); err == nil {
+		if l := parseLock(b); l.pid == os.Getpid() && l.pidNS == pidNS() {
+			os.Remove(p)
+		}
 	}
 	if links, err := r.links(); err == nil && len(links) == 0 {
 		os.Remove(filepath.Join(r.dir, binaryFile))

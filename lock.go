@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -97,28 +98,39 @@ func parseLock(b []byte) lockInfo {
 }
 
 // bootID changes on every boot, so a lock from before a reboot is stale
-// even when its PID now belongs to a live process.
-func bootID() string {
+// even when its PID now belongs to a live process. It holds for the life
+// of the process, so it is read once.
+var bootID = sync.OnceValue(func() string {
 	b, _ := os.ReadFile("/proc/sys/kernel/random/boot_id")
 	return strings.TrimSpace(string(b))
-}
+})
 
 // pidNS names this process's PID namespace, or "" where /proc cannot say,
-// eg a new namespace that still sees the old /proc.
-func pidNS() string {
+// eg where it is not mounted. It is read once. Tests replace it.
+var pidNS = sync.OnceValue(func() string {
 	ns, _ := os.Readlink("/proc/self/ns/pid")
 	return ns
-}
+})
+
+// initPIDNS names the initial PID namespace, the host's own. The kernel
+// gives it a fixed inode, PROC_PID_INIT_INO.
+const initPIDNS = "pid:[4026531836]"
 
 func (l lockInfo) live() bool {
 	return l.url != "" && l.running()
 }
 
-// foreign reports whether l's PID means nothing here: the server wrote it
-// in another PID namespace, eg outside the sandbox or container this
-// process runs in. A lock with no record is older than the record.
+// foreign reports whether l's PID cannot be checked from here: the server
+// wrote it in another PID namespace, eg outside the sandbox or container
+// this process runs in, or this process cannot name its own. A lock with
+// no record was written before locks named their namespace, most likely
+// by a server on the host, so it counts as the initial namespace's.
 func (l lockInfo) foreign() bool {
-	return l.pidNS != "" && l.pidNS != pidNS()
+	ns := l.pidNS
+	if ns == "" {
+		ns = initPIDNS
+	}
+	return ns != pidNS()
 }
 
 // running reports whether l's server still runs. A PID from an earlier boot

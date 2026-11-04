@@ -10,8 +10,8 @@ import pytest
 import harness
 
 # With --mount-proc the binary reads the new namespace from its own /proc.
-# Without it /proc still belongs to the old namespace and cannot name this
-# process at all, which must count as another namespace too.
+# Without it /proc still belongs to the old namespace, where the process
+# has a PID too, so /proc/self still names the new namespace.
 NAMESPACES = {
     "own-proc": ["unshare", "--user", "--map-current-user", "--pid", "--fork", "--mount-proc"],
     "old-proc": ["unshare", "--user", "--map-current-user", "--pid", "--fork"],

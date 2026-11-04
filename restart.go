@@ -285,7 +285,11 @@ func kill(c config) int {
 func stopServer(ep netip.AddrPort, pid int, trees []servedTree) error {
 	// Here the number may name another process, or none.
 	if len(trees) > 0 && trees[0].foreign {
-		return &errno{syscall.EPERM, "cannot stop the server on " + ep.String() + ": it runs in another PID namespace"}
+		why := "it runs in another PID namespace"
+		if pidNS() == "" {
+			why = "/proc does not name this process's PID namespace"
+		}
+		return &errno{syscall.EPERM, "cannot stop the server on " + ep.String() + ": " + why}
 	}
 	logInfo("sends SIGTERM to the server on %s, pid %d", ep, pid)
 	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
