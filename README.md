@@ -56,7 +56,7 @@ www needs git.
 
 - [Options and environment](doc/options.md): every option, the keyval output and the variables that set defaults
 - [Servers and locks](doc/servers.md): how trees join a server, the index at `/`, addresses, restarts and serving after reboot
-- [Pages](doc/pages.md): URLs, how docs render, links, live reload and the look
+- [Pages](doc/pages.md): URLs, how docs and listings render, links, live reload and the look
 - [Code pages](doc/code-pages.md): highlighting, line links, scope boxes, the syntax tree and gron
 - [Search and controls](doc/search.md): the search box, keys, the copy buttons and when controls fade
 - [History](doc/history.md): histories, commits, stardates, the timeline and old versions of a tree
