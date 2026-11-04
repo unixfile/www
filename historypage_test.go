@@ -14,7 +14,7 @@ import (
 func TestListingLeadsToHistory(t *testing.T) {
 	s, _ := repoTree(t)
 	h := s.handler()
-	entry := `<ul class="listing">` + "\n" + `<li class="cmds"><span>&lt;(ls)</span> <a href="?details">&lt;(ls -l)</a> <a href="?log">&lt;(git log)</a></li>`
+	entry := `<ul class="listing">` + "\n" + `<li class="cmds"><span>&lt;(ls)</span> <a href="?details">&lt;(ls -l)</a> <a class="history" href="?log">&lt;(git log)</a></li>`
 	for _, p := range []string{"/", "/a/"} {
 		if body := get(h, p).Body.String(); !strings.Contains(body, entry) {
 			t.Errorf("%s: no history entry first:\n%s", p, body)

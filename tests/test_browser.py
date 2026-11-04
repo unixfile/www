@@ -88,3 +88,15 @@ def test_details_names_line_up(origin, page):
     )
     assert len(lefts) == 2, lefts
     assert max(lefts) - min(lefts) < ROUNDING, lefts
+
+
+# The history keeps to the right end of a listing's first row.
+def test_history_ends_the_first_row(origin, page):
+    page.goto(origin + "/forge.invalid/acct/r/", wait_until="load")
+    got = page.evaluate(
+        """({
+            history: document.querySelector("ul.listing li.cmds > a.history").getBoundingClientRect().right,
+            row: document.querySelector("ul.listing li.cmds").getBoundingClientRect().right,
+        })"""
+    )
+    assert abs(got["history"] - got["row"]) < ROUNDING, got

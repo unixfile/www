@@ -329,9 +329,11 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		}
 		return "<a href=\"" + href + "\">" + template.HTMLEscapeString(label) + "</a>"
 	}
+	// The history sits at the row's right end, apart from the two
+	// listing views.
 	body.WriteString("<li class=\"cmds\">" + cmd(namesLabel, "./", !details) + " " + cmd(detailsLabel, "?details", details))
 	if t.lastCommit(r.Context(), name) != nil {
-		body.WriteString(" " + cmd(logLabel, "?log", false))
+		body.WriteString(" <a class=\"history\" href=\"?log\">" + template.HTMLEscapeString(logLabel) + "</a>")
 	}
 	body.WriteString("</li>\n")
 	if name != "." {

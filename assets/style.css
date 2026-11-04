@@ -320,8 +320,9 @@ table.locks .lead { margin: 0 1em 0 0; }
 ul.listing .lead.size { min-width: 4ch; }
 ul.listing .lead.age { min-width: 3ch; }
 /* The commands row holds a link per command, each its own target, and
-   the view on screen as text. */
-ul.listing li.cmds > * + * { margin-left: 1ch; }
+   the view on screen as text. The history keeps to the right end. */
+ul.listing li.cmds { display: flex; flex-wrap: wrap; column-gap: 1ch; }
+ul.listing li.cmds > .history { margin-left: auto; }
 table.locks td + td { text-align: right; }
 table.locks form { display: inline; }
 
