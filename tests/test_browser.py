@@ -76,3 +76,15 @@ def test_click_marks_a_line_below_the_bars(origin, page):
     page.locator("#L200 > a").first.dispatch_event("click")
     page.wait_for_function("""location.hash === "#L200" """)
     assert_below_bars(page, "L200")
+
+
+# The details view leads each row with size and age. Sizes of different
+# widths, here 4 and 3.0K, still leave the names in one column.
+def test_details_names_line_up(origin, page):
+    page.goto(origin + "/forge.invalid/acct/r/?details", wait_until="load")
+    lefts = page.evaluate(
+        """[...document.querySelectorAll("ul.listing li:not(.view):not(.log) > a")]
+            .map((a) => a.getBoundingClientRect().left)"""
+    )
+    assert len(lefts) == 2, lefts
+    assert max(lefts) - min(lefts) < ROUNDING, lefts

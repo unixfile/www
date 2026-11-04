@@ -6,6 +6,8 @@ Below the prefix, URLs mirror the file tree, so relative links in the docs work 
 
 A `.md` file renders as a page, a directory as a listing of its names, a text file as a highlighted code page with linkable lines, and anything else raw. Add `?raw` to any URL for the file itself.
 
+A listing's entry `<(ls -l)` opens its details view, `?details`. Each name follows its size and how long ago it changed, eg `3d` or `5w`; hover shows the exact time. Directories show no size. A version shows no age, since git keeps no modification times. The view stays on through the directories it links, and `<(ls)` returns to names.
+
 ## Missing pages
 
 An absolute link such as `/x.md` points outside the prefix and gives 404. Its page names the trees nearest it, or every tree when none is near.

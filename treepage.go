@@ -12,6 +12,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -264,7 +265,9 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		name string
 		dir  bool
 		ref  *refusal
+		info fs.FileInfo // nil when unknown or refused
 	}
+	details := r.URL.Query().Has("details")
 	// Entries reached through a link out of the tree are checked one by
 	// one, since each may be refused. So is every entry of a shared tree.
 	// A version holds only what git stored, so nothing leads out of it.
@@ -281,17 +284,20 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		}
 		dir := e.IsDir()
 		var ref *refusal
+		var info fs.FileInfo
 		if e.Type()&fs.ModeSymlink != 0 || outside {
 			ref = t.refused(path.Join(name, n))
 			if ref != nil {
 				if ref.link == path.Join(name, n) {
 					dir = ref.dir
 				}
-			} else if info, err := fs.Stat(t.fsys, path.Join(name, n)); err == nil {
-				dir = info.IsDir()
+			} else if i, err := fs.Stat(t.fsys, path.Join(name, n)); err == nil {
+				dir, info = i.IsDir(), i
 			}
+		} else if details {
+			info, _ = e.Info()
 		}
-		items = append(items, item{n, dir, ref})
+		items = append(items, item{n, dir, ref, info})
 	}
 	slices.SortStableFunc(items, func(a, b item) int {
 		if a.dir != b.dir {
@@ -311,26 +317,43 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	if t.lastCommit(r.Context(), name) != nil {
 		body.WriteString("<li class=\"log\"><a href=\"?log\">" + template.HTMLEscapeString(logLabel) + "</a></li>\n")
 	}
-	if name != "." {
-		body.WriteString("<li><a href=\"../\">../</a></li>\n")
+	// The view entry leads to the other view. The details view stays on
+	// while the reader moves between directories, as a file manager's does.
+	view, lead := "", ""
+	if details {
+		body.WriteString("<li class=\"view\"><a href=\"./\">" + template.HTMLEscapeString(namesLabel) + "</a></li>\n")
+		view = "?details"
+		lead = detailFields(nil, true, true, time.Time{})
+	} else {
+		body.WriteString("<li class=\"view\"><a href=\"?details\">" + template.HTMLEscapeString(detailsLabel) + "</a></li>\n")
 	}
+	if name != "." {
+		body.WriteString("<li>" + lead + "<a href=\"../" + view + "\">../</a></li>\n")
+	}
+	now := time.Now()
 	for _, it := range items {
 		label := it.name
 		if it.dir {
 			label += "/"
 		}
 		href := (&url.URL{Path: label}).String()
+		if it.dir {
+			href += view
+		}
+		if details {
+			lead = detailFields(it.info, it.dir, t.at != nil, now)
+		}
 		if it.ref != nil && (t.shared || t.public) {
-			fmt.Fprintf(&body, "<li class=\"refused\">%s <span class=\"own\">refused</span></li>\n", template.HTMLEscapeString(label))
+			fmt.Fprintf(&body, "<li class=\"refused\">%s%s <span class=\"own\">refused</span></li>\n", lead, template.HTMLEscapeString(label))
 			continue
 		}
 		if it.ref != nil {
-			fmt.Fprintf(&body, "<li class=\"refused\"><a href=\"%s\" title=\"%s\">%s</a> <span class=\"own\">refused</span></li>\n",
-				template.HTMLEscapeString(href), template.HTMLEscapeString(it.ref.Error()), template.HTMLEscapeString(label))
+			fmt.Fprintf(&body, "<li class=\"refused\">%s<a href=\"%s\" title=\"%s\">%s</a> <span class=\"own\">refused</span></li>\n",
+				lead, template.HTMLEscapeString(href), template.HTMLEscapeString(it.ref.Error()), template.HTMLEscapeString(label))
 			continue
 		}
-		fmt.Fprintf(&body, "<li><a href=\"%s\">%s</a></li>\n",
-			template.HTMLEscapeString(href), template.HTMLEscapeString(label))
+		fmt.Fprintf(&body, "<li>%s<a href=\"%s\">%s</a></li>\n",
+			lead, template.HTMLEscapeString(href), template.HTMLEscapeString(label))
 	}
 	body.WriteString("</ul>\n")
 	t.render(w, r, http.StatusOK, page{
