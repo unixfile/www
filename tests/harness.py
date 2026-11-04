@@ -95,6 +95,7 @@ class Server:
 
     def __init__(self, home, argv, origin, listens):
         self.origin = origin
+        self.home = home
         self.log = home / "stderr"
         self.proc = subprocess.Popen(
             [str(binary()), *argv],

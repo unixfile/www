@@ -3,6 +3,8 @@
 import shutil
 
 import pytest
+
+import harness
 from playwright.sync_api import Error, sync_playwright
 
 PAGE = "/forge.invalid/acct/r/long.go"
@@ -90,9 +92,19 @@ def test_details_names_line_up(origin, page):
     assert max(lefts) - min(lefts) < ROUNDING, lefts
 
 
-# The history keeps to the right end of a listing's first row.
-def test_history_ends_the_first_row(origin, page):
-    page.goto(origin + "/forge.invalid/acct/r/", wait_until="load")
+
+# The history keeps to the right end of a listing's first row. A public
+# server offers no history for a seeded repo, since its forge does not
+# resolve, so this reads a repo in the default server's tree.
+def test_history_ends_the_first_row(servers, page):
+    server = servers("default")
+    repo = server.home / "tree" / "hist"
+    repo.mkdir()
+    harness.git(repo, "init", "-q")
+    (repo / "a.md").write_text("a\n")
+    harness.git(repo, "add", ".")
+    harness.git(repo, "commit", "-q", "-m", "first")
+    page.goto(server.origin.replace(".2:", ".1:") + "/tree/hist/", wait_until="load")
     got = page.evaluate(
         """({
             history: document.querySelector("ul.listing li.cmds > a.history").getBoundingClientRect().right,
