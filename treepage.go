@@ -314,22 +314,26 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		body.WriteString(t.versionLine(r.Context(), name, true))
 	}
 	body.WriteString("<ul class=\"listing\">\n")
-	// The first row holds the commands behind other views of the
-	// directory: its history, when it has one, and the other listing view.
-	// The details view stays on while the reader moves between
-	// directories, as a file manager's does.
-	body.WriteString("<li class=\"cmds\">")
-	if t.lastCommit(r.Context(), name) != nil {
-		body.WriteString("<a href=\"?log\">" + template.HTMLEscapeString(logLabel) + "</a> ")
-	}
+	// The first row names the commands behind the directory's views: its
+	// names, its details and its history, when it has one. The view on
+	// screen shows as text, the others as links. The details view stays on
+	// while the reader moves between directories, as a file manager's does.
 	view, lead := "", ""
 	if details {
-		body.WriteString("<a href=\"./\">" + template.HTMLEscapeString(namesLabel) + "</a></li>\n")
 		view = "?details"
 		lead = detailFields(nil, true, true, time.Time{})
-	} else {
-		body.WriteString("<a href=\"?details\">" + template.HTMLEscapeString(detailsLabel) + "</a></li>\n")
 	}
+	cmd := func(label, href string, here bool) string {
+		if here {
+			return "<span>" + template.HTMLEscapeString(label) + "</span>"
+		}
+		return "<a href=\"" + href + "\">" + template.HTMLEscapeString(label) + "</a>"
+	}
+	body.WriteString("<li class=\"cmds\">" + cmd(namesLabel, "./", !details) + " " + cmd(detailsLabel, "?details", details))
+	if t.lastCommit(r.Context(), name) != nil {
+		body.WriteString(" " + cmd(logLabel, "?log", false))
+	}
+	body.WriteString("</li>\n")
 	if name != "." {
 		body.WriteString("<li>" + lead + "<a href=\"../" + view + "\">../</a></li>\n")
 	}

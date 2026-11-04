@@ -2,7 +2,7 @@
 
 Add `?log` to a path for its git history: the commits that touched it, newest first, one line each with its stardate and subject. A directory's history covers everything below it. A history lists the 500 newest commits.
 
-A listing whose directory has commits opens its history from its first entry, `<(git log)`. A page outside a repo shows git's complaint.
+A listing whose directory has commits opens its history from `<(git log)` on its first row. A page outside a repo shows git's complaint.
 
 ## A history's lines
 
