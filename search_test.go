@@ -209,6 +209,44 @@ func TestSearchIgnoredLast(t *testing.T) {
 	}
 }
 
+// Each keystroke searches again, so a tree keeps git's answer for
+// ignoredTTL instead of starting a process per repo every time.
+func TestSearchKeepsIgnored(t *testing.T) {
+	s, tr, dir := serveTree(t)
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %s", out)
+	}
+	ignore := filepath.Join(dir, ".gitignore")
+	os.WriteFile(ignore, []byte("/build/\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "build"), 0o755)
+	os.WriteFile(filepath.Join(dir, "build", "needle.html"), []byte("needle\n"), 0o644)
+	ignored := func() bool {
+		t.Helper()
+		var res found
+		json.Unmarshal(get(s.handler(), "/?search=needle").Body.Bytes(), &res)
+		if len(res.Lines) != 1 {
+			t.Fatalf("lines: %+v", res.Lines)
+		}
+		return res.Lines[0].Ignored
+	}
+	if !ignored() {
+		t.Fatal("build/needle.html not ignored")
+	}
+	os.WriteFile(ignore, nil, 0o644)
+	if !ignored() {
+		t.Error("asked git again within ignoredTTL")
+	}
+	tr.ignores.mu.Lock()
+	for k, d := range tr.ignores.dirs {
+		d.at = d.at.Add(-ignoredTTL)
+		tr.ignores.dirs[k] = d
+	}
+	tr.ignores.mu.Unlock()
+	if ignored() {
+		t.Error("kept git's answer past ignoredTTL")
+	}
+}
+
 // Hidden files and directories are searched, but not the stores in
 // unsearched.
 func TestSearchHidden(t *testing.T) {

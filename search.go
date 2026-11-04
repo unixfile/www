@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -218,15 +219,68 @@ func (s *searcher) gitIgnored(dir string) {
 	if s.t.at != nil || s.t.web != nil {
 		return
 	}
-	out, err := git(s.ctx, filepath.Join(s.t.dir, filepath.FromSlash(dir)), "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory")
-	if err != nil {
-		return
+	paths, ok := s.t.ignores.get(dir)
+	if !ok {
+		out, err := git(s.ctx, filepath.Join(s.t.dir, filepath.FromSlash(dir)), "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory")
+		if err != nil && s.ctx.Err() != nil {
+			return
+		}
+		// A directory outside any repo fails too, and keeps that answer.
+		if err == nil {
+			for _, p := range strings.Split(string(out), "\x00") {
+				if p = strings.TrimSuffix(p, "/"); p != "" && p != "." {
+					paths = append(paths, p)
+				}
+			}
+		}
+		s.t.ignores.put(dir, paths)
 	}
-	for _, p := range strings.Split(string(out), "\x00") {
-		if p = strings.TrimSuffix(p, "/"); p != "" && p != "." {
-			s.ignored[path.Join(dir, p)] = true
+	for _, p := range paths {
+		s.ignored[path.Join(dir, p)] = true
+	}
+}
+
+// ignoredTTL is how long a tree keeps git's answer for a directory. Each
+// keystroke of a query searches again, and asking git each time starts a
+// process for every repo the walk meets. A file git ignores that appears
+// meanwhile is searched as if it were not ignored until the answer expires.
+const ignoredTTL = 10 * time.Second
+
+// ignoredCache keeps, by directory, what git ignores below it, relative to
+// it.
+type ignoredCache struct {
+	mu   sync.Mutex
+	dirs map[string]ignoredDir
+}
+
+type ignoredDir struct {
+	at    time.Time
+	paths []string
+}
+
+func (c *ignoredCache) get(dir string) ([]string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	d, ok := c.dirs[dir]
+	if !ok || time.Since(d.at) >= ignoredTTL {
+		return nil, false
+	}
+	return d.paths, true
+}
+
+// put keeps paths for dir and drops the answers that have expired.
+func (c *ignoredCache) put(dir string, paths []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.dirs == nil {
+		c.dirs = map[string]ignoredDir{}
+	}
+	for k, d := range c.dirs {
+		if time.Since(d.at) >= ignoredTTL {
+			delete(c.dirs, k)
 		}
 	}
+	c.dirs[dir] = ignoredDir{time.Now(), paths}
 }
 
 func (s *searcher) visit(p string, d fs.DirEntry) {

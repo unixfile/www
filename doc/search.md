@@ -8,7 +8,7 @@ On a listing it searches the directory, nearest first. The directory's own names
 
 A line result takes one row, cut so the match shows, and opens a code page at its line. A file shows its first three matching lines, then `+N more`, which opens the file filtered by the query.
 
-What git ignores comes last, behind one link: `1 hit in 1 ignored file`. Following it shows the hits. A repo inside the tree counts its own ignores. A search started inside an ignored directory treats its contents as ordinary. Limits apply per level, so a deep directory full of hits cannot crowd out a shallower one.
+What git ignores comes last, behind one link: `1 hit in 1 ignored file`. Following it shows the hits. A repo inside the tree counts its own ignores. www asks git what it ignores at most once every 10 seconds per directory, so a file that becomes ignored can show as ordinary for that long. A search started inside an ignored directory treats its contents as ordinary. Limits apply per level, so a deep directory full of hits cannot crowd out a shallower one.
 
 Any other page filters itself, and each match is marked:
 

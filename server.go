@@ -90,20 +90,21 @@ type tree struct {
 	label    string // the tree as the first breadcrumb, eg ~/scratch/notes
 	fsys     fs.FS
 	root     *os.Root
-	lock     *lock       // nil only in tests
-	link     string      // registry link
-	linkInfo os.FileInfo // the link this server knows, to tell it from a new join
-	wd       int         // inotify watch on dir, or -1
-	shared   bool        // served beyond loopback: only what other users could read
-	secret   bool        // mounted under a token, and left off the index
-	web      *webRepo    // the cached repo this tree is a worktree of, on the web address
-	public   bool        // a stranger's repo on a public server: no link out, no path of the machine
-	srv      *server     // the server that serves it, set when it joins
-	linked   linkIndex   // the relative links of each doc, for ?backlinks
-	at       *commit     // for a version, the commit it shows
-	atLabel  string      // for a version, its commit's stardate, day and x, or hash
-	base     *tree       // for a version, the tree it is a version of
-	versions sync.Map    // the versions served so far, by full hash
+	lock     *lock        // nil only in tests
+	link     string       // registry link
+	linkInfo os.FileInfo  // the link this server knows, to tell it from a new join
+	wd       int          // inotify watch on dir, or -1
+	shared   bool         // served beyond loopback: only what other users could read
+	secret   bool         // mounted under a token, and left off the index
+	web      *webRepo     // the cached repo this tree is a worktree of, on the web address
+	public   bool         // a stranger's repo on a public server: no link out, no path of the machine
+	srv      *server      // the server that serves it, set when it joins
+	linked   linkIndex    // the relative links of each doc, for ?backlinks
+	ignores  ignoredCache // what git ignores, for ?search
+	at       *commit      // for a version, the commit it shows
+	atLabel  string       // for a version, its commit's stardate, day and x, or hash
+	base     *tree        // for a version, the tree it is a version of
+	versions sync.Map     // the versions served so far, by full hash
 }
 
 func newTree(root *os.Root, dir, prefix, label string) *tree {
