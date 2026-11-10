@@ -278,7 +278,9 @@ func (t *tree) goneRows(ctx context.Context, name string) string {
 // Kill server. A secret tree is never named.
 func (s *server) serveStray(w http.ResponseWriter, r *http.Request) {
 	var trees []*tree
-	best := 1
+	// Every address shares the base and the slash after it.
+	root := len(basePath) + 1
+	best := root
 	for _, t := range s.list() {
 		if t.secret {
 			continue
@@ -292,7 +294,7 @@ func (s *server) serveStray(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	label := "close"
-	if best == 1 {
+	if best == root {
 		label = "served"
 	}
 	var b strings.Builder

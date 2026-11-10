@@ -40,7 +40,7 @@ func (t *tree) serve(w http.ResponseWriter, r *http.Request) {
 	// name. It moves there for good, so old links still lead to it.
 	if first, rest, _ := strings.Cut(name, "/"); t.hasVersions() && atSegment.MatchString(first) {
 		if _, err := fs.Stat(t.fsys, first); err != nil {
-			if t.prefix == "/" {
+			if t.prefix == rooted("/") {
 				t.serveVersion(w, r, first, rest)
 				return
 			}
@@ -142,8 +142,8 @@ func (t *tree) serveMarkdown(w http.ResponseWriter, r *http.Request, name string
 	t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "doc", Body: body, Raw: true})
 }
 
-// webBase is where t's docs send a link to a forge: the web address, ""
-// on the web address itself, or nil where no server here serves it, eg on
+// webBase is where t's docs send a link to a forge: the web address, the
+// base path alone on the web address itself, or nil where no server here serves it, eg on
 // a share.
 func (t *tree) webBase() *string {
 	if t.base != nil {
@@ -153,7 +153,7 @@ func (t *tree) webBase() *string {
 	case s == nil:
 		return nil
 	case s.web != nil:
-		return new(string)
+		return &basePath
 	case s.webURL != "":
 		return &s.webURL
 	}

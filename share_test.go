@@ -44,7 +44,7 @@ func shareTree(t *testing.T) *server {
 		os.Chmod(d, 0o755)
 	}
 	os.Chmod(filepath.Join(dir, "shut"), 0o700)
-	s := newServer().local().local()
+	s := newServer().local()
 	s.shared = true
 	for _, tc := range []struct{ dir, token string }{{dir, ""}, {hid, "s3cret"}} {
 		prefix, label := shareMount(tc.dir, tc.token)

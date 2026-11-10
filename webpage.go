@@ -18,7 +18,7 @@ func webCrumbs(key string) []crumb {
 	for i, s := range segs {
 		c := crumb{Label: s}
 		if i < len(segs)-1 {
-			c.Href = (&url.URL{Path: "/" + strings.Join(segs[:i+1], "/") + "/"}).String()
+			c.Href = (&url.URL{Path: rooted("/" + strings.Join(segs[:i+1], "/") + "/")}).String()
 		}
 		out = append(out, c)
 	}
@@ -42,7 +42,7 @@ func (w *web) serveRoot(rw http.ResponseWriter, r *http.Request) {
 	slices.SortFunc(repos, func(a, b cachedRepo) int { return strings.Compare(a.key, b.key) })
 	var total int64
 	var body strings.Builder
-	body.WriteString("<p class=\"own\">Type a forge's host and a path after this address, eg <a href=\"/github.com/junegunn/fzf/\">/github.com/junegunn/fzf</a>, to read that repo, or <a href=\"/git.suckless.org/\">/git.suckless.org</a> to list a host's repos.</p>\n")
+	fmt.Fprintf(&body, "<p class=\"own\">Type a forge's host and a path after this address, eg <a href=\"%[1]s/github.com/junegunn/fzf/\">%[1]s/github.com/junegunn/fzf</a>, to read that repo, or <a href=\"%[1]s/git.suckless.org/\">%[1]s/git.suckless.org</a> to list a host's repos.</p>\n", basePath)
 	if w.public {
 		w.render(rw, r, http.StatusOK, "web", []crumb{{Label: "index"}}, "index", body.String())
 		return
@@ -58,7 +58,7 @@ func (w *web) serveRoot(rw http.ResponseWriter, r *http.Request) {
 		for i, c := range repos {
 			total += c.size
 			fmt.Fprintf(&body, "<tr><td><span class=\"since lead num\">%s</span> <a href=\"%s\">%s</a> <span class=\"since\">last read %s</span></td></tr>\n",
-				sizes[i], esc((&url.URL{Path: "/" + c.key + "/"}).String()), segments(c.key), clock(c.used))
+				sizes[i], esc((&url.URL{Path: rooted("/" + c.key + "/")}).String()), segments(c.key), clock(c.used))
 		}
 		body.WriteString("</table>\n")
 	}
@@ -105,7 +105,7 @@ func (w *web) serveJob(rw http.ResponseWriter, r *http.Request, j *webJob) {
 // serveConfirm asks before a download that another site set going.
 func (w *web) serveConfirm(rw http.ResponseWriter, r *http.Request, key string) {
 	esc := template.HTMLEscapeString
-	u := (&url.URL{Path: "/" + key}).String()
+	u := (&url.URL{Path: rooted("/" + key)}).String()
 	body := fmt.Sprintf("<p class=\"own\">Another site sent you here, so nothing is fetched yet. <a href=\"%s\">Read %s</a> fetches it from %s into the cache.</p>\n",
 		esc(u), esc(key), esc(webScheme+"://"+key))
 	// The page runs the script, which carries the link's fragment, eg
@@ -117,7 +117,8 @@ func (w *web) serveConfirm(rw http.ResponseWriter, r *http.Request, key string) 
 // serveListing lists a host's or account's repos, and names its source.
 func (w *web) serveListing(rw http.ResponseWriter, r *http.Request, l *listing) {
 	esc := template.HTMLEscapeString
-	key := strings.Trim(path.Clean(r.URL.Path), "/")
+	p, _ := unrooted(path.Clean(r.URL.Path))
+	key := strings.Trim(p, "/")
 	var body strings.Builder
 	status := http.StatusOK
 	if len(l.repos) == 0 {
@@ -127,7 +128,7 @@ func (w *web) serveListing(rw http.ResponseWriter, r *http.Request, l *listing) 
 		body.WriteString("<ul class=\"listing\">\n")
 		for _, e := range l.repos {
 			name := strings.TrimPrefix(e.key, key+"/")
-			fmt.Fprintf(&body, "<li><a href=\"%s\">%s/</a>", esc((&url.URL{Path: "/" + e.key + "/"}).String()), esc(name))
+			fmt.Fprintf(&body, "<li><a href=\"%s\">%s/</a>", esc((&url.URL{Path: rooted("/" + e.key + "/")}).String()), esc(name))
 			if e.desc != "" {
 				fmt.Fprintf(&body, " <span class=\"own desc\">%s</span>", esc(e.desc))
 			}

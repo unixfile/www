@@ -113,11 +113,11 @@ func (t *tree) atVersion(ctx context.Context, seg string) (*tree, string, error)
 }
 
 // versionPrefix is the URL path of the version seg, eg @261024.4, of the
-// tree at prefix: the version on the tree's name, or below / for a tree
-// at the root.
+// tree at prefix: the version on the tree's name, or below the root for a
+// tree there, which under a base path is the base and its slash.
 func versionPrefix(prefix, seg string) string {
-	if prefix == "/" {
-		return "/" + seg + "/"
+	if prefix == rooted("/") {
+		return prefix + seg + "/"
 	}
 	return strings.TrimSuffix(prefix, "/") + seg + "/"
 }
@@ -127,7 +127,7 @@ func versionPrefix(prefix, seg string) string {
 // rest the path below it, doc/x.md. A tree at / reads its versions as
 // entries, in serve.
 func (t *tree) versionIn(urlPath string) (first, rest string, ok bool) {
-	if t.prefix == "/" || !t.hasVersions() {
+	if t.prefix == rooted("/") || !t.hasVersions() {
 		return "", "", false
 	}
 	after, found := strings.CutPrefix(urlPath, strings.TrimSuffix(t.prefix, "/")+"@")

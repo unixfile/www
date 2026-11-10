@@ -90,6 +90,7 @@ func run(c config, rep *reporter) int {
 		if c.secret {
 			rep.send("note", "already served; --secret applies to a new share. Delete "+persistPath+" and share again to change it.")
 		}
+		baseNote(c, rep)
 		report(rep, c.ep, l.url)
 		return 0
 	}
@@ -103,6 +104,7 @@ func run(c config, rep *reporter) int {
 		if c.secret {
 			rep.send("note", "already served; --secret applies to a new share. Delete "+lockPath+" and share again to change it.")
 		}
+		baseNote(c, rep)
 		report(rep, c.ep, l.url)
 		return 0
 	} else if ok {
@@ -136,10 +138,23 @@ func run(c config, rep *reporter) int {
 		reg.close()
 		return rep.fail(syscall.EADDRINUSE, taken(c.ep))
 	case errors.Is(err, syscall.EADDRINUSE):
+		baseNote(c, rep)
 		return join(c.ep, rep, reg, dir, lockPath, upgrade, c.token)
 	default:
 		reg.close()
 		return rep.fail(errnoOf(err), "cannot listen on "+c.ep.String()+": "+err.Error())
+	}
+}
+
+// baseNote says that --base did not apply, when the server already on
+// c.ep has another base: a base belongs to a server, not to a tree.
+func baseNote(c config, rep *reporter) {
+	if has := baseOf(c.ep); c.base != "" && c.base != has {
+		at := "the root"
+		if has != "" {
+			at = has
+		}
+		rep.send("note", "note: the server on "+c.ep.String()+" serves at "+at+"; --base applies to a new server. Stop it with --kill -a "+c.ep.String()+" to change it.")
 	}
 }
 
@@ -409,8 +424,8 @@ func (h *hub) startWeb(c config, ep netip.AddrPort) {
 	h.web, h.webLn, h.webStop = w, ln, cancel
 	h.webHTTPD = &http.Server{Handler: w.srv.handler(), ReadHeaderTimeout: 10 * time.Second, ConnState: h.track,
 		ErrorLog: log.New(logWriter{}, "", 0)}
-	h.srv.webURL = origin(ep)
-	w.srv.homeURL = h.origin
+	h.srv.webURL = origin(ep) + basePath
+	w.srv.homeURL = h.origin + basePath
 	go h.webHTTPD.Serve(ln)
 	logInfo("serves online repos at %s from %s, within %s", origin(ep), w.root, sizeText(limit))
 }

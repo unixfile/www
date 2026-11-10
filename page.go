@@ -116,7 +116,7 @@ func (t *tree) crumbs(name string) []crumb {
 	if t.web != nil {
 		segs := strings.Split(t.web.key, "/")
 		for i := range segs[:len(segs)-1] {
-			out = append(out, crumb{Label: segs[i], Href: (&url.URL{Path: "/" + strings.Join(segs[:i+1], "/") + "/"}).String()})
+			out = append(out, crumb{Label: segs[i], Href: (&url.URL{Path: rooted("/" + strings.Join(segs[:i+1], "/") + "/")}).String()})
 		}
 	}
 	if name == "." {

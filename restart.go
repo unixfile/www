@@ -48,7 +48,7 @@ func restart(c config) int {
 				say("the persistent trees on %s wait for %s, so they stay; -f serves them with this binary", ep, other)
 				continue
 			} else if len(kept) > 0 {
-				err = startTrees(ep, kept, c.debug, c.noBug)
+				err = startTrees(ep, kept, c.debug, c.noBug, baseOf(ep))
 			} else if !named || c.dir != "" {
 				continue
 			}
@@ -147,6 +147,10 @@ func startDir(c config, open []string) int {
 	if c.noBug {
 		args = append(args, "--no-bug")
 	}
+	// A server this starts takes the base of the one before it.
+	if base := baseOf(c.ep); base != "" {
+		args = append(args, "--base="+base)
+	}
 	cmd := exec.Command(exe, append(args, "--", dir)...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -179,6 +183,7 @@ func restartServer(ep netip.AddrPort, pid int, trees []servedTree, debug, noBug 
 		return nil, &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
 			", so the server on " + ep.String() + " keeps its old one. Run the installed package's " + progName + ", which holds cap_net_bind_service"}
 	}
+	base := baseOf(ep)
 	var record string
 	if dir, err := registryDir(ep); err == nil {
 		record = filepath.Join(dir, pagesFile)
@@ -194,13 +199,14 @@ func restartServer(ep netip.AddrPort, pid int, trees []servedTree, debug, noBug 
 		pages = strings.FieldsFunc(string(b), func(r rune) bool { return r == '\n' })
 		os.Remove(record)
 	}
-	return pages, startTrees(ep, trees, debug, noBug)
+	return pages, startTrees(ep, trees, debug, noBug, base)
 }
 
 // startTrees serves each tree on ep through this binary, as a start from
 // the command line would, persistent ones with --persist. The first start
-// runs the server, so --debug and --no-bug reach it.
-func startTrees(ep netip.AddrPort, trees []servedTree, debug, noBug bool) error {
+// runs the server, so --debug, --no-bug and base, the base path of the
+// server before it, reach it.
+func startTrees(ep netip.AddrPort, trees []servedTree, debug, noBug bool, base string) error {
 	if ep.Port() < 1024 && !lowPortOK() {
 		return &errno{syscall.EACCES, "this binary cannot bind port " + strconv.Itoa(int(ep.Port())) +
 			", so it cannot serve " + ep.String() + ". Run the installed package's " + progName + ", which holds cap_net_bind_service"}
@@ -230,6 +236,9 @@ func startTrees(ep netip.AddrPort, trees []servedTree, debug, noBug bool) error 
 		}
 		if noBug {
 			args = append(args, "--no-bug")
+		}
+		if base != "" {
+			args = append(args, "--base="+base)
 		}
 		cmd := exec.Command(exe, append(args, "--", t.dir)...)
 		cmd.Env = env

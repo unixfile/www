@@ -208,13 +208,41 @@ func (r *registry) writePages(paths []string) {
 // another install alone.
 const binaryFile = "binary"
 
-// markServer records this process as the server of the registry, and its
-// binary.
+// baseFile, in a registry, holds the base path of the last server on its
+// endpoint, or is missing for a server at the root. It outlives the
+// server, as binaryFile does, so --restart serves the trees under the
+// same URLs again.
+const baseFile = "base"
+
+// baseOf reads the base path the last server on ep had, or "".
+func baseOf(ep netip.AddrPort) string {
+	dir, err := registryDir(ep)
+	if err != nil {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(dir, baseFile))
+	if err != nil {
+		return ""
+	}
+	base, err := checkBase(strings.TrimSuffix(string(b), "\n"))
+	if err != nil {
+		return ""
+	}
+	return base
+}
+
+// markServer records this process as the server of the registry, its
+// binary and its base path.
 func (r *registry) markServer() error {
 	if exe, err := os.Executable(); err == nil {
 		if err := os.WriteFile(filepath.Join(r.dir, binaryFile), []byte(exe+"\n"), 0o600); err != nil {
 			return err
 		}
+	}
+	if basePath == "" {
+		os.Remove(filepath.Join(r.dir, baseFile))
+	} else if err := os.WriteFile(filepath.Join(r.dir, baseFile), []byte(basePath+"\n"), 0o600); err != nil {
+		return err
 	}
 	return os.WriteFile(filepath.Join(r.dir, serverFile),
 		[]byte(fmt.Sprintf("pid: %d\nboot_id: %s\npid_ns: %s\n", os.Getpid(), bootID(), pidNS())), 0o600)

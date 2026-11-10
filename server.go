@@ -32,9 +32,12 @@ var styleCSS = append(append([]byte{}, fontsCSS...), mainCSS...)
 // styleURL names the stylesheet by a hash of its content, so the browser
 // keeps it for a year and a binary with a changed stylesheet links a new
 // URL.
-var styleURL = func() string {
+var styleURL = ownPath + styleFile
+
+// styleFile is the stylesheet's name below ownPath.
+var styleFile = func() string {
 	sum := sha256.Sum256(styleCSS)
-	return ownPath + "style." + hex.EncodeToString(sum[:6]) + ".css"
+	return "style." + hex.EncodeToString(sum[:6]) + ".css"
 }()
 
 //go:embed assets/layout.html
@@ -190,11 +193,11 @@ func mount(dir, home string) (prefix, label string) {
 	rel, err := filepath.Rel(home, dir)
 	switch {
 	case home == "" || err != nil || rel == ".." || strings.HasPrefix(rel, "../"):
-		return strings.TrimSuffix(dir, "/") + "/", dir
+		return rooted(strings.TrimSuffix(dir, "/") + "/"), dir
 	case rel == ".":
-		return "/", "~"
+		return rooted("/"), "~"
 	default:
-		return "/" + filepath.ToSlash(rel) + "/", "~/" + filepath.ToSlash(rel)
+		return rooted("/" + filepath.ToSlash(rel) + "/"), "~/" + filepath.ToSlash(rel)
 	}
 }
 
@@ -204,11 +207,11 @@ func shareMount(dir, token string) (prefix, label string) {
 	label = filepath.Base(dir)
 	switch {
 	case token != "":
-		return "/" + token + "/", label
+		return rooted("/" + token + "/"), label
 	case label == "/":
-		return "/", label
+		return rooted("/"), label
 	default:
-		return "/" + label + "/", label
+		return rooted("/" + label + "/"), label
 	}
 }
 
@@ -268,7 +271,7 @@ func (s *server) handleStop(w http.ResponseWriter, r *http.Request) {
 		if len(s.list()) > 1 {
 			if r.PostFormValue("from") == "index" {
 				s.stop(trees, why+" on the index")
-				http.Redirect(w, r, "/", http.StatusSeeOther)
+				http.Redirect(w, r, rooted("/"), http.StatusSeeOther)
 				return
 			}
 			crumbs = []crumb{indexCrumb, t.rootCrumb()}
@@ -316,9 +319,9 @@ func stoppedRows(trees []*tree, kill bool, left int) string {
 	case 0:
 		b.WriteString(goneRow("server", "stopped; close this tab"))
 	case 1:
-		b.WriteString(goneRow("server", `<a href="/">serves 1 more tree</a>`))
+		b.WriteString(goneRow("server", `<a href="`+rooted("/")+`">serves 1 more tree</a>`))
 	default:
-		b.WriteString(goneRow("server", fmt.Sprintf(`<a href="/">serves %d more trees</a>`, left)))
+		b.WriteString(goneRow("server", fmt.Sprintf(`<a href="%s">serves %d more trees</a>`, rooted("/"), left)))
 	}
 	return b.String()
 }
@@ -332,6 +335,9 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	}
 	t := s.lookup(r.URL.Path)
 	switch {
+	case basePath != "" && r.URL.Path == basePath:
+		// The base without its slash, as a proxy may pass it on.
+		http.Redirect(w, r, rooted("/"), http.StatusMovedPermanently)
 	case s.web != nil:
 		s.web.serve(w, r, t)
 	case t != nil:
@@ -339,7 +345,7 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	case s.byPrefix(r.URL.Path+"/") != nil:
 		// Temporary: the tree may be withdrawn and another served here.
 		http.Redirect(w, r, s.byPrefix(r.URL.Path+"/").prefixURL(), http.StatusFound)
-	case r.URL.Path == "/" && s.index != nil:
+	case r.URL.Path == rooted("/") && s.index != nil:
 		s.index(w, r, http.StatusOK, "")
 	default:
 		s.serveStray(w, r)

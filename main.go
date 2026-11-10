@@ -45,6 +45,7 @@ func Local() {
 		noteRun()
 		os.Exit(lookupCommit(os.Stdout, c))
 	}
+	setBase(c.base)
 	if hint := spacedShare(c); hint != "" {
 		noteRun()
 		os.Exit(failNow(syscall.ENOENT, hint))

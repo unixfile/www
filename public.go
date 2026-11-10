@@ -17,8 +17,9 @@ import (
 
 // publicUsage is the public executable's usage, in docopt notation as
 // usageText is. TestUsageIsDocopt checks it too.
-var publicUsage = strings.NewReplacer("@NAME@", publicName, "@ENV@", envPrefix).Replace(`Usage:
+var publicUsage = strings.NewReplacer("@NAME@", publicName, "@BASE@", progName, "@ENV@", envPrefix).Replace(`Usage:
   @NAME@ --disk=SIZE (-a ADDR | --share[=HOST]) [--debug] [--cache=SIZE]
+      [--base=PATH]
   @NAME@ -h | --help
   @NAME@ -V | --version
 
@@ -33,6 +34,8 @@ Options:
                         it drops the repos read longest ago
   --cache=SIZE          memory the server may spend on cached git answers,
                         eg 64M; 0 caches nothing [default: 32M]
+  --base=PATH           serve every URL below PATH, eg /@BASE@, for a proxy
+                        that gives the server that part of a domain
   --debug               show above each page's header, small and faint,
                         the binary's build time, the seconds since, its
                         commit and the page's render time
@@ -70,6 +73,7 @@ func Public() {
 		os.Exit(failNow(errnoOf(err), err.Error()))
 	}
 	c.ep = ep
+	setBase(c.base)
 	setLogEndpoint(endpointName(ep))
 	noteRun()
 	os.Exit(servePublic(c))
@@ -115,6 +119,14 @@ func parsePublicArgs(args []string) (config, error) {
 					c.disk = v
 				} else {
 					c.cache = v
+				}
+			case "base":
+				v, err := value(&i, "--base", val, has)
+				if err != nil {
+					return c, err
+				}
+				if c.base, err = checkBase(v); err != nil {
+					return c, err
 				}
 			case "share":
 				if has && val == "" {

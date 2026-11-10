@@ -21,6 +21,7 @@ type config struct {
 	noBug   bool   // hide the bug button and refuse reports
 	cache   string // the memory for cached git answers, eg 32M; "" takes defaultCache
 	disk    string // the disk for online repos, eg 4G; "" takes defaultDisk
+	base    string // the path every URL starts with, eg /www; "" serves at the root
 	public  bool   // serve only online repos, to the open web; the public executable sets it
 	help    bool
 	version bool
@@ -37,9 +38,9 @@ type config struct {
 // indented lines.
 var usageText = strings.NewReplacer("@NAME@", progName, "@ENV@", envPrefix).Replace(`Usage:
   @NAME@ [-p] [--foreground] [--no-open] [-a ADDR] [--debug] [--no-bug]
-      [--cache=SIZE] [--disk=SIZE] [--] [DIR]
+      [--cache=SIZE] [--disk=SIZE] [--base=PATH] [--] [DIR]
   @NAME@ [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [--debug]
-      [--no-bug] [--cache=SIZE] [--disk=SIZE] [--] [DIR]
+      [--no-bug] [--cache=SIZE] [--disk=SIZE] [--base=PATH] [--] [DIR]
   @NAME@ --restart [-f] [--no-open] [--debug] [--no-bug]
       [-a ADDR | --share[=HOST]] [--] [DIR]
   @NAME@ -l [-a ADDR | --share[=HOST]] [--] [DIR]
@@ -80,6 +81,10 @@ Options:
                         eg 64M; 0 caches nothing [default: 32M]
   --disk=SIZE           disk a new server may fill with online repos, eg 4G;
                         it drops the repos read longest ago [default: 2G]
+  --base=PATH           serve a new server's every URL below PATH, eg /@NAME@,
+                        for a proxy that gives it that part of a domain; a
+                        tree that joins a server takes the server's base,
+                        and a restart keeps it
   --restart             replace every server this binary started with one
                         running it now, serving the same trees, and start
                         one for its persistent trees that have none; with an
@@ -189,6 +194,16 @@ func parseArgs(args []string) (config, error) {
 				c.commit = v
 				continue
 			}
+			if name == "base" {
+				v, err := value(&i, "--base", val)
+				if err != nil {
+					return c, err
+				}
+				if c.base, err = checkBase(v); err != nil {
+					return c, err
+				}
+				continue
+			}
 			if name == "cache" || name == "disk" {
 				v, err := value(&i, "--"+name, val)
 				if err != nil {
@@ -236,8 +251,11 @@ func parseArgs(args []string) (config, error) {
 		}
 	}
 	if c.commit != "" && (c.restart || c.list || c.kill || c.fg || c.noopen || c.persist || c.debug || c.noBug ||
-		c.sharing || c.secret || c.addr != "" || c.cache != "" || c.disk != "") {
+		c.sharing || c.secret || c.addr != "" || c.cache != "" || c.disk != "" || c.base != "") {
 		return c, &errno{syscall.EINVAL, "--commit takes a directory and no other option"}
+	}
+	if c.base != "" && (c.restart || c.list || c.kill) {
+		return c, &errno{syscall.EINVAL, "--base goes with a start; --restart keeps each server's base"}
 	}
 	if c.force && !c.restart {
 		return c, &errno{syscall.EINVAL, "--force goes with --restart"}

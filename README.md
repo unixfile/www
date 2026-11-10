@@ -12,9 +12,9 @@ It is fast. A page takes one to three milliseconds and a server starts in about 
 
 ```
 www [-p] [--foreground] [--no-open] [-a ADDR] [--debug] [--no-bug]
-    [--cache=SIZE] [--disk=SIZE] [--] [DIR]
+    [--cache=SIZE] [--disk=SIZE] [--base=PATH] [--] [DIR]
 www [-p] [--foreground] [--no-open] --share[=HOST] [--secret] [--debug]
-    [--no-bug] [--cache=SIZE] [--disk=SIZE] [--] [DIR]
+    [--no-bug] [--cache=SIZE] [--disk=SIZE] [--base=PATH] [--] [DIR]
 www --restart [-f] [--no-open] [--debug] [--no-bug]
     [-a ADDR | --share[=HOST]] [--] [DIR]
 www -l [-a ADDR | --share[=HOST]] [--] [DIR]
@@ -28,6 +28,7 @@ A second executable, `www-public`, serves online repos to the web and nothing el
 
 ```
 www-public --disk=SIZE (-a ADDR | --share[=HOST]) [--debug] [--cache=SIZE]
+    [--base=PATH]
 www-public -h | --help
 www-public -V | --version
 ```
@@ -61,7 +62,7 @@ www needs git.
 ## Documentation
 
 - [Options and environment](doc/options.md): every option, the keyval output and the variables that set defaults
-- [Servers and locks](doc/servers.md): how trees join a server, the index at `/`, addresses, restarts and serving after reboot
+- [Servers and locks](doc/servers.md): how trees join a server, the index at `/`, addresses, restarts, serving after reboot and a base path
 - [Pages](doc/pages.md): URLs, how docs and listings render, links, live reload and the look
 - [Code pages](doc/code-pages.md): highlighting, line links, scope boxes, the syntax tree and gron
 - [Search and controls](doc/search.md): the search box, keys, the copy buttons and when controls fade

@@ -72,3 +72,13 @@ A joining `www` adds a link, and the server sees it through inotify, writes the 
 A lock left by a crash is detected on the next start through its PID and the kernel boot ID, then removed. A new server also clears what a crashed server left in the registry.
 
 A lock also names the server's PID namespace. Inside a sandbox or container, another namespace's PID says nothing, so www takes that server to be running: it keeps the lock, lists the tree and refuses `--kill` and `--restart` with E1. If that server has crashed, its lock stays until a reboot or until you delete it. A lock written before locks named their namespace counts as the host's. A `www` that cannot read its own namespace from `/proc` treats every lock this way.
+
+## A base path
+
+`--base=PATH` puts every URL of a new server below PATH, eg `www --base=/www` serves `~/notes` at `/www/notes/`. It is for a proxy that gives www one part of a domain, eg `example.org/www/`, beside other sites. The proxy passes the path on whole, base included.
+
+The base covers everything www writes and answers: trees, the index at `/www/`, the stylesheet and fonts, the stop and bug forms, redirects and the web address's repos. `/www` alone redirects to `/www/`. A path outside the base is a 404.
+
+A base is one or more segments of letters, digits, `-`, `.` and `_`, and no segment starts with `_`.
+
+A base belongs to a server, not to a tree. A tree that joins a running server takes the server's base, and www says so when `--base` named another. `--restart` keeps each server's base, so it takes no `--base`; to change one, stop the server with `--kill` and start it again.

@@ -31,8 +31,8 @@ func serveTree(t *testing.T) (*server, *tree, string) {
 		}
 	}
 	os.Symlink("/etc", filepath.Join(dir, "escape"))
-	s := newServer().local().local()
-	tr := addTree(t, s, dir, "/", filepath.Base(dir))
+	s := newServer().local()
+	tr := addTree(t, s, dir, rooted("/"), filepath.Base(dir))
 	return s, tr, dir
 }
 

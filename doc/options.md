@@ -12,6 +12,7 @@
 - `--debug`: show what serves debugging: above each page's header, the build stamp, see `doc/debugging.md`; on the index, each server's build and start time and each lock's time. `make run` sets it; `--restart` passes it to the new servers when given, and leaves it off otherwise
 - `--cache=SIZE`: memory a new server may spend on cached git answers, eg `64M`; `0` caches nothing. The default is `32M`, and `--restart` goes back to it
 - `--disk=SIZE`: disk a new server may fill with online repos, eg `4G`; it drops the repos read longest ago, but not one that another server is fetching, since every server shares the cache. The default is `2G`, and `--restart` goes back to it
+- `--base=PATH`: serve a new server's every URL below PATH, eg `--base=/www` for `http://127.31.1.1/www/notes/`; see `doc/servers.md`
 - `--restart`: replace every server this binary started with one running it now, serving the same trees, and print each tree's URL; an address with persistent trees and no server gets one, when this binary served it last; with `-a` or `--share`, only the server on that address, whichever binary runs it; with a directory, it also serves that directory there and opens it in the browser unless a page of it was open, and says which
 - `-f`, `--force`: with `--restart`, take the servers and persistent trees of other binaries too
 - `-l`, `--list`: print each served tree's directory, URL and binary as keyval, on every address; with `-a` or `--share`, on that address only; with a directory, only the trees at or below it. A directory that holds no served tree prints nothing; one that does not exist fails with `E2`
@@ -20,7 +21,7 @@
 - `-V`, `--version`: print when the binary was built and the commit it came from, as the stamp says it, eg `www built 2026-10-21 12:49, from 1aa282c+modified`
 - `-h`, `--help`: print the options
 
-`www-public` takes five of these: `-a`, `--share`, `--disk`, which it requires, `--cache` and `--debug`, with `-V` and `-h`. It takes no directory. `www-public --help` prints them, and `doc/online-repos.md` says what it serves.
+`www-public` takes six of these: `-a`, `--share`, `--disk`, which it requires, `--cache`, `--debug` and `--base`, with `-V` and `-h`. It takes no directory. `www-public --help` prints them, and `doc/online-repos.md` says what it serves.
 
 Options follow GNU style. Short ones combine, as in `-pa 127.31.1.2`, and options may follow the directory. Optional values go joined, as in `--share=192.168.1.5`; with a space the address would be read as the directory, and www says so. `-f` and `-n` mean force and dry run in every tool of the author's, so `--foreground` and `--no-open` have no short form. The help text is written in docopt notation, except that docopt has no way to write the optional `=HOST`.
 

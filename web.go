@@ -218,7 +218,13 @@ func (w *web) serve(rw http.ResponseWriter, r *http.Request, t *tree) {
 		t.serve(rw, r)
 		return
 	}
-	p := path.Clean(r.URL.Path)
+	// Below, p and every key are paths from the server's root; what is
+	// written back as a URL is rooted at the base again.
+	p, ok := unrooted(path.Clean(r.URL.Path))
+	if !ok {
+		w.fail(rw, r, http.StatusNotFound, "Nothing is served outside "+basePath+"/")
+		return
+	}
 	if p == "/" {
 		w.serveRoot(rw, r)
 		return
@@ -240,7 +246,7 @@ func (w *web) serve(rw http.ResponseWriter, r *http.Request, t *tree) {
 			}
 		}
 		if strings.TrimSuffix(to, "/") != strings.TrimSuffix(p, "/") {
-			http.Redirect(rw, r, (&url.URL{Path: to}).String(), http.StatusMovedPermanently)
+			http.Redirect(rw, r, (&url.URL{Path: rooted(to)}).String(), http.StatusMovedPermanently)
 			return
 		}
 	}
@@ -253,7 +259,7 @@ func (w *web) serve(rw http.ResponseWriter, r *http.Request, t *tree) {
 	last := segs[len(segs)-1]
 	if trimmed := strings.TrimSuffix(last, ".git"); host != segs[0] || len(segs) > 1 && trimmed != last && trimmed != "" {
 		segs[0], segs[len(segs)-1] = host, trimmed
-		http.Redirect(rw, r, (&url.URL{Path: "/" + strings.Join(segs, "/")}).String(), http.StatusMovedPermanently)
+		http.Redirect(rw, r, (&url.URL{Path: rooted("/" + strings.Join(segs, "/"))}).String(), http.StatusMovedPermanently)
 		return
 	}
 	if w.cached(segs) != "" {
@@ -425,7 +431,7 @@ func (w *web) show(r *webRepo, wt string) error {
 	if err != nil {
 		return err
 	}
-	t := newTree(root, wt, "/"+r.key+"/", r.key)
+	t := newTree(root, wt, rooted("/"+r.key+"/"), r.key)
 	t.web, t.public = r, w.public
 	r.mu.Lock()
 	old := r.tree
@@ -629,7 +635,8 @@ func tildePath(p string) string {
 
 // version writes the state of a page at urlPath that no tree serves.
 func (w *web) version(h io.Writer, urlPath string) {
-	key := strings.Trim(path.Clean(urlPath), "/")
+	p, _ := unrooted(path.Clean(urlPath))
+	key := strings.Trim(p, "/")
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if j := w.jobs[key]; j != nil {
