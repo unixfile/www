@@ -6,10 +6,14 @@ NAME := $(shell cat WORKING_NAME)
 
 all: build
 
+# The root is a library package and each executable has its main under
+# cmd/. MODULE is the library's import path, which -X needs.
+MODULE := $(shell go list -m)
+
 # build names this checkout in the binary, so its bug button files into
 # csi/bugs here; the package is built without it.
 build:
-	CGO_ENABLED=0 go build -ldflags='-X main.sourceDir=$(CURDIR)' -o build/$(NAME) .
+	CGO_ENABLED=0 go build -ldflags='-X $(MODULE).sourceDir=$(CURDIR)' -o build/$(NAME) ./cmd/local
 
 # syntax builds the tree-sitter helper beside the binary, which finds it
 # there. It is a module of its own, in syntax/, since tree-sitter needs cgo
@@ -88,7 +92,7 @@ DEB := build/$(NAME)_$(VERSION)_$(ARCH).deb
 
 deb:
 	rm -rf $(STAGE)
-	CGO_ENABLED=0 GOARCH=$(ARCH) go build -trimpath -ldflags='-s -w' -o $(STAGE)/usr/bin/$(NAME) .
+	CGO_ENABLED=0 GOARCH=$(ARCH) go build -trimpath -ldflags='-s -w' -o $(STAGE)/usr/bin/$(NAME) ./cmd/local
 	install -D -m 0644 README.md $(STAGE)/usr/share/doc/$(NAME)/README.md
 	{ sed '/^@EXPAT@$$/,$$d; s/@NAME@/$(NAME)/g' deb/copyright.in; sed '1,4d; s/^$$/./; s/^/ /' LICENSE; \
 	  sed '1,/^@EXPAT@$$/d' deb/copyright.in; sed 's/^$$/./; s/^/ /' assets/fonts/STIXTwoText-OFL.txt; } > $(STAGE)/copyright

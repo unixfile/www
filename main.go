@@ -1,8 +1,8 @@
-// Command www browses trees of Markdown docs in the browser. It renders
+// Package www browses trees of Markdown docs in the browser. It renders
 // each page with goldmark when requested and mirrors the file tree in its
 // URLs. Trees on one address share a server, which lives while their locks
-// exist.
-package main
+// exist. The executables under cmd/ share it.
+package www
 
 import (
 	"bufio"
@@ -19,7 +19,8 @@ import (
 // readyEnv names the descriptor a detached child reports its start on.
 var readyEnv = envPrefix + "READY_FD"
 
-func main() {
+// Main runs the program on the process's arguments and exits.
+func Main() {
 	c, err := parseArgs(os.Args[1:])
 	switch {
 	case err != nil:

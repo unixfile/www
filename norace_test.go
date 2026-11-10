@@ -1,5 +1,5 @@
 //go:build !race
 
-package main
+package www
 
 const raceOn = false

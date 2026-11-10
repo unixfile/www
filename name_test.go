@@ -1,4 +1,4 @@
-package main
+package www
 
 import (
 	"go/scanner"
@@ -13,8 +13,9 @@ import (
 // The name lives in WORKING_NAME alone. Go code takes it from progName, the Makefile
 // and the package files from WORKING_NAME, so a tracked file names the program
 // only in prose: comments, README.md, doc/ and go.mod, which Go needs as
-// a literal. A name such as www also occurs inside words that belong to
-// others, which foreign strips first.
+// a literal, as it does the module's path where a main under cmd/ imports
+// it. A name such as www also occurs inside words that belong to others,
+// which foreign strips first.
 func TestNameHasOneSource(t *testing.T) {
 	needGit(t)
 	out, err := exec.Command("git", "ls-files").Output()
@@ -34,10 +35,21 @@ func TestNameHasOneSource(t *testing.T) {
 			var s scanner.Scanner
 			fset := token.NewFileSet()
 			s.Init(fset.AddFile(f, -1, len(src)), src, nil, 0)
+			imports := false
 			for {
 				pos, tok, lit := s.Scan()
 				if tok == token.EOF {
 					break
+				}
+				// An import clause ends at the first declaration after it.
+				switch tok {
+				case token.IMPORT:
+					imports = true
+				case token.FUNC, token.VAR, token.CONST, token.TYPE:
+					imports = false
+				}
+				if imports {
+					continue
 				}
 				if (tok == token.STRING || tok == token.CHAR) && strings.Contains(foreign.Replace(strings.ToLower(lit)), lower) {
 					t.Errorf("%s: %s", fset.Position(pos), lit)

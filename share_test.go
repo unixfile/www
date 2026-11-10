@@ -1,4 +1,4 @@
-package main
+package www
 
 import (
 	"encoding/binary"
