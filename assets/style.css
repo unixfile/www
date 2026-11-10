@@ -154,9 +154,10 @@ pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound
    as one sign, are off wherever mono is set. Serif text keeps its own. */
 pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone,
 p.bug, main a.web, ul.decls, p.coin, p.reason, .lead, div.view, div.syntax { font-variant-ligatures: none; }
-/* Code is half the body size, so about 115 columns fit the doc's measure
-   and no page needs to be wider. It never drops below 11px, where small
-   screens set the body at 16px. */
+/* Code is smaller than the body, so no page needs to be wider than the
+   doc's measure. Diffs and the program's own blocks are half the body
+   size. It never drops below 11px, where small screens set the body at
+   16px. */
 /* A code block has no margin of its own, since its em is half the body's:
    the blocks around it make the gap. */
 pre {
@@ -167,6 +168,13 @@ pre {
   hyphens: none;
   overflow-x: auto;
 }
+/* A code block in a document fits 99 columns in the measure, and a code
+   page 104: a line number of up to four digits, a space and 99 columns
+   of code. In font-size, ch is the parent's, so 58ch is the measure in
+   the body font, and an Iosevka cell is half an em wide: 99 cells are
+   49.5em and 104 are 52em. */
+body.doc pre { font-size: max(calc(58ch / 49.5), 11px); }
+div.code pre, div.code > div.view, div.code > div.syntax { font-size: max(calc(58ch / 52), 11px); }
 :not(pre) > code { font-size: 0.85em; }
 table { border-collapse: collapse; }
 th, td { border-bottom: 1px solid var(--rule); padding: 0.2em 0.6em; text-align: left; }
@@ -469,7 +477,7 @@ pre.numberSource code > span
   { position: relative; margin-left: -4em; padding-left: calc(4em + 8px); counter-increment: source-line; }
 pre.numberSource code > span > a:first-child::before
   { content: counter(source-line);
-    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    position: relative; left: calc(4px - 0.5em); text-align: right; vertical-align: baseline;
     border: none; display: inline-block; margin-left: calc(-4em - 8px);
     -webkit-touch-callout: none; -webkit-user-select: none;
     -khtml-user-select: none; -moz-user-select: none;
@@ -478,8 +486,11 @@ pre.numberSource code > span > a:first-child::before
     color: var(--gutter);
   }
 /* No rule between the numbers and the code; the space between them
-   suffices, and the padding takes the rule's pixel so the text stays put. */
-pre.numberSource { margin-left: 3em; padding-left: 5px; }
+   suffices, and the padding takes the rule's pixel so the text stays put.
+   The text starts five cells in: the margin, the padding's 5px and the
+   line's 8px make 2.5em. A number ends one cell before the text, so four
+   digits fill the gutter. */
+pre.numberSource { margin-left: calc(2.5em - 13px); padding-left: 5px; }
 /* Scopes: each block of code is a sunken box behind its text, like a
    pressed Windows 3.1 button: shadow above and left, light below and
    right. render.go places each box in its first line and sizes it in

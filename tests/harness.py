@@ -17,7 +17,14 @@ SEEDED = {
     "forge.invalid/acct/r": {
         "README.md": "# r\n",
         "long.go": "package long\n" + "// a line\n" * 300,
-    }
+    },
+    # Lines of 99 and 100 columns, in a document's code blocks and in code
+    # files. fits.go reaches a four-digit line number.
+    "forge.invalid/acct/cols": {
+        "cols.md": "# cols\n\n```\n" + "x" * 99 + "\n```\n\n```\n" + "x" * 100 + "\n```\n",
+        "fits.go": "package cols\n" + "// a line\n" * 998 + "// " + "x" * 96 + "\n",
+        "over.go": "package cols\n// " + "x" * 97 + "\n",
+    },
 }
 
 

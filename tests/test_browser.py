@@ -112,3 +112,51 @@ def test_history_ends_the_first_row(servers, page):
         })"""
     )
     assert abs(got["history"] - got["row"]) < ROUNDING, got
+
+
+def overflow(page, selector):
+    """How far each scroll box's content runs past its width, in px."""
+    return page.evaluate(
+        """(selector) => [...document.querySelectorAll(selector)].map((e) => e.scrollWidth - e.clientWidth)""",
+        selector,
+    )
+
+
+# A code block in a document holds 99 columns in the measure: a line of 99
+# does not scroll and a line of 100 does.
+def test_a_document_s_code_fits_99_columns(servers, page):
+    server = servers("public")
+    server.get("/forge.invalid/acct/cols/cols.md")
+    page.goto(server.origin + "/forge.invalid/acct/cols/cols.md", wait_until="load")
+    page.evaluate("document.fonts.ready")
+    fits, over = overflow(page, "main pre")
+    assert fits == 0, (fits, over)
+    assert over > 0, (fits, over)
+
+
+# A code page holds 104 columns: 99 of code after a gutter of five cells,
+# which a four-digit line number and a space fill.
+def test_a_code_page_fits_99_columns_and_four_digits(servers, page):
+    server = servers("public")
+    server.get("/forge.invalid/acct/cols/fits.go")
+    page.goto(server.origin + "/forge.invalid/acct/cols/fits.go", wait_until="load")
+    page.evaluate("document.fonts.ready")
+    assert overflow(page, "div.code > div.sourceCode") == [0]
+    got = page.evaluate(
+        """(() => {
+            const line = document.getElementById("L1000");
+            const text = document.createRange();
+            text.selectNodeContents(line);
+            const box = text.getBoundingClientRect();
+            return {
+                gutter: box.left - document.querySelector("div.code > div.sourceCode").getBoundingClientRect().left,
+                cell: box.width / line.textContent.length,
+                columns: line.textContent.length,
+            };
+        })()"""
+    )
+    assert got["columns"] == 99, got
+    assert abs(got["gutter"] - 5 * got["cell"]) < ROUNDING, got
+    page.goto(server.origin + "/forge.invalid/acct/cols/over.go", wait_until="load")
+    page.evaluate("document.fonts.ready")
+    assert overflow(page, "div.code > div.sourceCode")[0] > 0
