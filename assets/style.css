@@ -155,9 +155,8 @@ pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound
 pre, code, header, div.search, .own, ul.listing, p.built, div.found p, p.unfound, table.gone,
 p.bug, main a.web, ul.decls, p.coin, p.reason, .lead, div.view, div.syntax { font-variant-ligatures: none; }
 /* Code is smaller than the body, so no page needs to be wider than the
-   doc's measure. Diffs and the program's own blocks are half the body
-   size. It never drops below 11px, where small screens set the body at
-   16px. */
+   doc's measure. The program's own blocks are half the body size. It
+   never drops below 11px, where small screens set the body at 16px. */
 /* A code block has no margin of its own, since its em is half the body's:
    the blocks around it make the gap. */
 pre {
@@ -168,12 +167,12 @@ pre {
   hyphens: none;
   overflow-x: auto;
 }
-/* A code block in a document fits 99 columns in the measure, and a code
-   page 104: a line number of up to four digits, a space and 99 columns
+/* A code block in a document and a diff fit 99 columns in the measure, a
+   diff's sign included, and a code page 104: a line number of up to four digits, a space and 99 columns
    of code. In font-size, ch is the parent's, so 58ch is the measure in
    the body font, and an Iosevka cell is half an em wide: 99 cells are
    49.5em and 104 are 52em. */
-body.doc pre { font-size: max(calc(58ch / 49.5), 11px); }
+body.doc pre, pre.diff { font-size: max(calc(58ch / 49.5), 11px); }
 div.code pre, div.code > div.view, div.code > div.syntax { font-size: max(calc(58ch / 52), 11px); }
 :not(pre) > code { font-size: 0.85em; }
 table { border-collapse: collapse; }

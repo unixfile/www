@@ -160,3 +160,22 @@ def test_a_code_page_fits_99_columns_and_four_digits(servers, page):
     page.goto(server.origin + "/forge.invalid/acct/cols/over.go", wait_until="load")
     page.evaluate("document.fonts.ready")
     assert overflow(page, "div.code > div.sourceCode")[0] > 0
+
+
+# A diff holds 99 columns, its sign included: an added line of 98 does not
+# scroll and one of 99 does. A commit page gives each file its own diff.
+def test_a_diff_fits_99_columns(servers, page):
+    server = servers("default")
+    repo = server.home / "tree" / "diffcols"
+    repo.mkdir()
+    harness.git(repo, "init", "-q")
+    (repo / "a-fits.txt").write_text("x" * 98 + "\n")
+    (repo / "b-over.txt").write_text("x" * 99 + "\n")
+    harness.git(repo, "add", ".")
+    harness.git(repo, "commit", "-q", "-m", "first")
+    head = harness.git(repo, "rev-parse", "HEAD")
+    page.goto(server.origin.replace(".2:", ".1:") + "/tree/diffcols/?commit=" + head, wait_until="load")
+    page.evaluate("document.fonts.ready")
+    fits, over = overflow(page, "pre.diff")
+    assert fits == 0, (fits, over)
+    assert over > 0, (fits, over)

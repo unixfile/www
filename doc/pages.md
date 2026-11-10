@@ -74,7 +74,7 @@ The header names a tree by its base name and shows the full path on hover. Every
 
 The header, listings and www's own messages are mono; documents keep the serif. Mono text shows no ligatures, so `<=` stays two characters in any font.
 
-Every page keeps one width, 58ch of the body font, and keeps space for a scrollbar, so the header holds still from page to page. Code is smaller than the body text and never under 11px. A code block in a document fits 99 columns in that width. A code page fits 104: a line number of up to four digits, a space and 99 columns of code. Longer lines scroll. Diffs are half the size of the body text.
+Every page keeps one width, 58ch of the body font, and keeps space for a scrollbar, so the header holds still from page to page. Code is smaller than the body text and never under 11px. A code block in a document fits 99 columns in that width, and so does a diff, its leading sign included. A code page fits 104: a line number of up to four digits, a space and 99 columns of code. Longer lines scroll.
 
 ## Fonts
 
