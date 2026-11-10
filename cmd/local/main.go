@@ -4,4 +4,4 @@ package main
 
 import "www"
 
-func main() { www.Main() }
+func main() { www.Local() }

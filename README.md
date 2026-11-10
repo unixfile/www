@@ -20,10 +20,16 @@ www --restart [-f] [--no-open] [--debug] [--no-bug]
 www -l [-a ADDR | --share[=HOST]] [--] [DIR]
 www --kill [-a ADDR | --share[=HOST]]
 www --commit=REV [--] [DIR]
-www --public --disk=SIZE (-a ADDR | --share[=HOST]) [--debug]
-    [--cache=SIZE]
 www -h | --help
 www -V | --version
+```
+
+A second executable, `www-public`, serves online repos to the web and nothing else:
+
+```
+www-public --disk=SIZE (-a ADDR | --share[=HOST]) [--debug] [--cache=SIZE]
+www-public -h | --help
+www-public -V | --version
 ```
 
 Run `www` in a directory. It prints the tree's URL and opens the browser.
@@ -36,7 +42,7 @@ www -p ~/notes              serve ~/notes, and again after a reboot
 www --share=192.168.1.5     serve this directory to the LAN
 www -l                      list every served tree as keyval
 www --restart               move every server to the current binary
-www --public --disk=6G -a 127.0.0.1:8080
+www-public --disk=6G -a 127.0.0.1:8080
                             serve online repos to the web, behind a proxy
 ```
 
@@ -48,7 +54,7 @@ To read a repo from GitHub, open `http://127.31.1.2/github.com/junegunn/fzf/`.
 
 www needs git.
 
-`make install` links `build/www` into `~/.local/bin` and serves on port 8080.
+`make install` links `build/www` and `build/www-public` into `~/.local/bin` and serves on port 8080.
 
 `make install-deb` builds and installs two Debian packages: www and its syntax tree helper. The package's binary may bind port 80, so URLs carry no port.
 
@@ -67,7 +73,7 @@ www needs git.
 - [Log](doc/log.md): what www writes to the journal
 - [Debugging](doc/debugging.md): the bug button and the build stamp
 - [Install](doc/install.md): the Debian package, port 80 and locks in git
-- [Development](doc/development.md): `make run`, the working name and the usage check
+- [Development](doc/development.md): `make run`, the two executables, the working name and the usage check
 - [Testing](doc/testing.md): Go tests, the black-box suite and the heavy runs
 
 ## Licence

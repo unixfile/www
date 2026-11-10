@@ -144,7 +144,7 @@ func BenchmarkSyntaxTree(b *testing.B) {
 			b.Fatal(err)
 		}
 		defer root.Close()
-		s := newServer()
+		s := newServer().local().local()
 		s.add(newTree(root, dir, "/", "bench"))
 		h := s.handler()
 		b.ReportAllocs()

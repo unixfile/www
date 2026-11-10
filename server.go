@@ -76,10 +76,22 @@ type server struct {
 	// homeURL is, on the web address, the default address's URL, which
 	// its index links back to.
 	homeURL string
+	// What only the reader's executable serves, set by local and nil in
+	// the public executable, which so does not contain their code: the
+	// stop buttons' form, the bug button's form and the index at /.
+	stopForm http.HandlerFunc
+	bugForm  http.HandlerFunc
+	index    func(w http.ResponseWriter, r *http.Request, status int, msg string)
 }
 
 func newServer() *server {
 	return &server{stop: func([]*tree, string) {}}
+}
+
+// local gives s what only the reader's executable serves.
+func (s *server) local() *server {
+	s.stopForm, s.bugForm, s.index = s.handleStop, s.handleBug, s.serveIndex
+	return s
 }
 
 // tree is one served directory, exposed with everything below it.
@@ -223,12 +235,12 @@ func (s *server) handler() http.Handler {
 	})
 	// A shared server has no buttons: no visitor may stop it. The web
 	// address has none either; its server stops with the default address.
-	if !s.shared && s.web == nil {
-		mux.HandleFunc("POST "+ownPath+"stop", s.handleStop)
+	if s.stopForm != nil && !s.shared && s.web == nil {
+		mux.HandleFunc("POST "+ownPath+"stop", s.stopForm)
 	}
 	// The bug button is on every page but a share's, unless --no-bug.
-	if !bugOff && !s.shared {
-		mux.HandleFunc("POST "+ownPath+"bug", s.handleBug)
+	if s.bugForm != nil && !bugOff && !s.shared {
+		mux.HandleFunc("POST "+ownPath+"bug", s.bugForm)
 	}
 	mux.HandleFunc("GET "+ownPath+"live", s.handleLive)
 	mux.HandleFunc("GET /", s.handlePath)
@@ -327,8 +339,8 @@ func (s *server) handlePath(w http.ResponseWriter, r *http.Request) {
 	case s.byPrefix(r.URL.Path+"/") != nil:
 		// Temporary: the tree may be withdrawn and another served here.
 		http.Redirect(w, r, s.byPrefix(r.URL.Path+"/").prefixURL(), http.StatusFound)
-	case r.URL.Path == "/":
-		s.serveIndex(w, r, http.StatusOK, "")
+	case r.URL.Path == "/" && s.index != nil:
+		s.index(w, r, http.StatusOK, "")
 	default:
 		s.serveStray(w, r)
 	}

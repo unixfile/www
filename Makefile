@@ -10,10 +10,12 @@ all: build
 # cmd/. MODULE is the library's import path, which -X needs.
 MODULE := $(shell go list -m)
 
-# build names this checkout in the binary, so its bug button files into
-# csi/bugs here; the package is built without it.
+# build names this checkout in the reader's binary, so its bug button files
+# into csi/bugs here; the package is built without it. The public binary
+# has no bug button.
 build:
 	CGO_ENABLED=0 go build -ldflags='-X $(MODULE).sourceDir=$(CURDIR)' -o build/$(NAME) ./cmd/local
+	CGO_ENABLED=0 go build -o build/$(NAME)-public ./cmd/public
 
 # syntax builds the tree-sitter helper beside the binary, which finds it
 # there. It is a module of its own, in syntax/, since tree-sitter needs cgo
@@ -43,7 +45,7 @@ test:
 
 # blackbox runs tests/ against the built binary. See doc/testing.md.
 blackbox: build
-	cd tests && TEST_BIN=$(CURDIR)/build/$(NAME) uv run pytest
+	cd tests && TEST_BIN=$(CURDIR)/build/$(NAME) TEST_PUBLIC_BIN=$(CURDIR)/build/$(NAME)-public uv run pytest
 
 # bench runs the benchmarks in bench_test.go. BENCH picks them by pattern
 # and COUNT repeats each, eg COUNT=10 for benchstat.
@@ -72,6 +74,7 @@ OLDUNIT := $(HOME)/.config/systemd/user/$(NAME).service
 
 install: build
 	ln -sf $(CURDIR)/build/$(NAME) $(HOME)/.local/bin/$(NAME)
+	ln -sf $(CURDIR)/build/$(NAME)-public $(HOME)/.local/bin/$(NAME)-public
 	mkdir -p $(dir $(USERUNIT))
 	sed 's/@NAME@/$(NAME)/g; s|@BIN@|$(HOME)/.local/bin/$(NAME)|' systemd/dev.service.in > $(USERUNIT)
 	-grep -qs '^ExecStart=$(HOME)/.local/bin/' $(OLDUNIT) && { systemctl --user disable $(NAME); rm $(OLDUNIT); }
@@ -79,7 +82,7 @@ install: build
 	-build/$(NAME) --restart
 
 uninstall:
-	rm -f $(HOME)/.local/bin/$(NAME) $(USERUNIT)
+	rm -f $(HOME)/.local/bin/$(NAME) $(HOME)/.local/bin/$(NAME)-public $(USERUNIT)
 	-systemctl --user daemon-reload
 
 # deb builds a Debian package in build/. The version comes from the last
@@ -93,6 +96,7 @@ DEB := build/$(NAME)_$(VERSION)_$(ARCH).deb
 deb:
 	rm -rf $(STAGE)
 	CGO_ENABLED=0 GOARCH=$(ARCH) go build -trimpath -ldflags='-s -w' -o $(STAGE)/usr/bin/$(NAME) ./cmd/local
+	CGO_ENABLED=0 GOARCH=$(ARCH) go build -trimpath -ldflags='-s -w' -o $(STAGE)/usr/bin/$(NAME)-public ./cmd/public
 	install -D -m 0644 README.md $(STAGE)/usr/share/doc/$(NAME)/README.md
 	{ sed '/^@EXPAT@$$/,$$d; s/@NAME@/$(NAME)/g' deb/copyright.in; sed '1,4d; s/^$$/./; s/^/ /' LICENSE; \
 	  sed '1,/^@EXPAT@$$/d' deb/copyright.in; sed 's/^$$/./; s/^/ /' assets/fonts/STIXTwoText-OFL.txt; } > $(STAGE)/copyright

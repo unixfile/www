@@ -56,7 +56,7 @@ func linkTree(t *testing.T) *server {
 			t.Fatal(err)
 		}
 	}
-	s := newServer()
+	s := newServer().local().local()
 	addTree(t, s, dir, "/", "tree")
 	return s
 }

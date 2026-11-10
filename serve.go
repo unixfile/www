@@ -220,16 +220,27 @@ func originHost(host string, port uint16) string {
 // this machine passes through loopback, so only a capture tells.
 func report(rep *reporter, ep netip.AddrPort, url string) {
 	rep.send("url", url)
-	if shared(ep) {
-		port := strconv.Itoa(int(ep.Port()))
-		dest := ep.String()
-		if ep.Addr().IsUnspecified() {
-			dest = "port " + port
-		}
-		rep.send("note", "note: other machines connect to "+dest+"; a firewall here may drop them unseen.")
-		rep.send("note", "      Check with: sudo tcpdump -ni "+ifaceOf(ep.Addr())+" tcp port "+port)
+	for _, line := range firewallNote(ep) {
+		rep.send("note", line)
 	}
 	rep.finish()
+}
+
+// firewallNote is report's note for a server beyond loopback, and nothing
+// for one on loopback.
+func firewallNote(ep netip.AddrPort) []string {
+	if !shared(ep) {
+		return nil
+	}
+	port := strconv.Itoa(int(ep.Port()))
+	dest := ep.String()
+	if ep.Addr().IsUnspecified() {
+		dest = "port " + port
+	}
+	return []string{
+		"note: other machines connect to " + dest + "; a firewall here may drop them unseen.",
+		"      Check with: sudo tcpdump -ni " + ifaceOf(ep.Addr()) + " tcp port " + port,
+	}
 }
 
 // ifaceOf names the interface that holds a, or "any" for 0.0.0.0 or an
@@ -261,7 +272,7 @@ func serve(c config, rep *reporter, ln net.Listener, reg *registry, dir, home, o
 		size, _ = parseSize(c.cache)
 	}
 	gitCache.reset(size)
-	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer(), w: newWatcher(lockMask),
+	h := &hub{ep: c.ep, home: home, reg: reg, ln: ln, srv: newServer().local(), w: newWatcher(lockMask),
 		done: make(chan struct{}), fresh: map[net.Conn]bool{}}
 	defer h.w.close()
 	defer reg.close()
@@ -394,7 +405,7 @@ func (h *hub) startWeb(c config, ep netip.AddrPort) {
 		logErr("E%d: cannot serve online repos from %s: %v", errnoOf(err), root, err)
 		return
 	}
-	w.srv.live = newLive()
+	w.srv.local().live = newLive()
 	h.web, h.webLn, h.webStop = w, ln, cancel
 	h.webHTTPD = &http.Server{Handler: w.srv.handler(), ReadHeaderTimeout: 10 * time.Second, ConnState: h.track,
 		ErrorLog: log.New(logWriter{}, "", 0)}
@@ -402,67 +413,6 @@ func (h *hub) startWeb(c config, ep netip.AddrPort) {
 	w.srv.homeURL = h.origin
 	go h.webHTTPD.Serve(ln)
 	logInfo("serves online repos at %s from %s, within %s", origin(ep), w.root, sizeText(limit))
-}
-
-// servePublic serves online repos on c.ep until a signal, for strangers:
-// no tree of the machine, no registry, no lock and no other address. A
-// service manager keeps it running, so it never detaches.
-func servePublic(c config) int {
-	rep := &reporter{noopen: true}
-	logInfo("public server starts on %s: %s", c.ep, build())
-	go warmLexers()
-	debugOn, bugOff = c.debug, true
-	size := int64(defaultCache)
-	if c.cache != "" {
-		size, _ = parseSize(c.cache)
-	}
-	gitCache.reset(size)
-	limit, _ := parseSize(c.disk)
-	root, err := cacheDir()
-	if err != nil {
-		return rep.fail(errnoOf(err), "cannot find the cache: "+err.Error())
-	}
-	ln, err := net.Listen("tcp", c.ep.String())
-	if err != nil {
-		return rep.fail(errnoOf(err), "cannot listen on "+c.ep.String()+": "+err.Error())
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	w, err := newWeb(ctx, root, limit)
-	if err != nil {
-		ln.Close()
-		return rep.fail(errnoOf(err), "cannot serve online repos from "+root+": "+err.Error())
-	}
-	w.public, w.srv.public = true, true
-	publicNet.Store(true)
-	w.slots = make(chan struct{}, cloneSlots)
-	w.srv.live = newLive()
-	httpd := &http.Server{Handler: w.srv.handler(), ReadHeaderTimeout: 10 * time.Second,
-		ErrorLog: log.New(logWriter{}, "", 0)}
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-	defer signal.Stop(sigs)
-	why := make(chan string, 1)
-	go func() {
-		why <- signalName(<-sigs)
-		// Live pages hold their streams open; closing them lets
-		// Shutdown finish.
-		w.srv.live.close()
-		cancel()
-		stop, done := context.WithTimeout(context.Background(), 5*time.Second)
-		defer done()
-		httpd.Shutdown(stop)
-	}()
-	logInfo("serves online repos at %s from %s, within %s", origin(c.ep), w.root, sizeText(limit))
-	report(rep, c.ep, origin(c.ep)+"/")
-	if err := httpd.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
-		logErr("E%d: %s", syscall.EIO, err)
-		fmt.Fprintf(os.Stderr, "E%d: %s\n", syscall.EIO, err)
-		return int(syscall.EIO)
-	}
-	w.wg.Wait()
-	logInfo("public server exits: %s", <-why)
-	return 0
 }
 
 // track keeps fresh up to date.

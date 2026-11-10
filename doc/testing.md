@@ -10,7 +10,7 @@ Write new Go tests as tables, with the cases in `testdata/` where they fit. Purp
 
 ## Black-box tests
 
-They run the built binary and check what a user sees. They cover what in-process tests cannot reach: flag parsing, the listener, `--public`, process lifecycle and browser pages. The first case is a missing path on `--public`, which shows the 404 coin.
+They run the built binary and check what a user sees. They cover what in-process tests cannot reach: flag parsing, the listener, the public executable, process lifecycle and browser pages. The first case is a missing path on `--public`, which shows the 404 coin.
 
 The suite is pytest in `tests/`, with its own `pyproject.toml`. `make blackbox` builds the binary and runs it. HTTP, browser and process cases exist so far; the CLI kind below comes with its first case.
 
@@ -21,9 +21,9 @@ The suite is pytest in `tests/`, with its own `pyproject.toml`. `make blackbox` 
 
 Rules for the suite:
 
-- It reads the binary from `TEST_BIN` and assumes nothing else about it
+- It reads the reader's binary from `TEST_BIN` and the public one from `TEST_PUBLIC_BIN`, and assumes nothing else about them
 - An HTTP or CLI case is a TOML file in `tests/cases/`: argv with expected stdout and exit code, or a request with the expected page. A parametrized test loads it
-- A case names the server forms it runs on: `public`, the `--public` flag, or `default`, a reader's server, as wwwvm's unit runs it
+- A case names the server forms it runs on: `public`, the public executable, or `default`, a reader's server, as wwwvm's unit runs it
 - A case compares the page without its script and style, since a reader never sees their words
 - `tests/harness.py` seeds the cache on disk, since a public server clones only over https from the open internet. It is the one place the suite knows the cache's layout
 - Name each case after the decision it checks

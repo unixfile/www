@@ -22,3 +22,6 @@ var envPrefix = strings.ToUpper(progName) + "_"
 // stylesheet and the live reload stream. Trees mount at paths relative to
 // home, which this one, starting with an underscore, does not shadow.
 var ownPath = "/_" + progName + "/"
+
+// publicName is the executable that serves online repos to the open web.
+var publicName = progName + "-public"

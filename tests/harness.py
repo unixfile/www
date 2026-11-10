@@ -35,6 +35,14 @@ def binary():
     return Path(path).resolve()
 
 
+def public_binary():
+    """The executable for the open web, which make blackbox builds beside TEST_BIN."""
+    path = os.environ.get("TEST_PUBLIC_BIN")
+    if not path:
+        raise RuntimeError("TEST_PUBLIC_BIN must name the public binary; make blackbox sets it")
+    return Path(path).resolve()
+
+
 def environment(home):
     """The whole environment of a run: nothing leaks in from the caller's."""
     return {
@@ -100,12 +108,12 @@ def free_port():
 class Server:
     """One running binary. origin is where its repos answer."""
 
-    def __init__(self, home, argv, origin, listens):
+    def __init__(self, home, exe, argv, origin, listens):
         self.origin = origin
         self.home = home
         self.log = home / "stderr"
         self.proc = subprocess.Popen(
-            [str(binary()), *argv],
+            [str(exe), *argv],
             cwd=home,
             env=environment(home),
             stdin=subprocess.DEVNULL,
@@ -144,7 +152,7 @@ class Server:
             self.proc.wait()
 
 
-# public: the flag the README names for the open web.
+# public: the executable the README names for the open web.
 # default: a reader's server, as wwwvm's unit runs it, whose online repos
 # answer on the .2 beside the user's default address.
 def start(form, home):
@@ -154,7 +162,7 @@ def start(form, home):
         seed(cache, key, files)
     port = free_port()
     if form == "public":
-        return Server(home, ["--public", "--disk=1G", "-a", f"127.0.0.1:{port}"],
+        return Server(home, public_binary(), ["--disk=1G", "-a", f"127.0.0.1:{port}"],
                       f"http://127.0.0.1:{port}", ("127.0.0.1", port))
     if form == "default":
         n = os.getuid() - 1000
@@ -162,6 +170,6 @@ def start(form, home):
             raise OSError(f"uid {os.getuid()} has no default address")
         tree = home / "tree"
         tree.mkdir()
-        return Server(home, ["--foreground", "--no-open", "--no-bug", "--disk=1G", "-a", f"127.31.{n}.1:{port}", str(tree)],
+        return Server(home, binary(), ["--foreground", "--no-open", "--no-bug", "--disk=1G", "-a", f"127.31.{n}.1:{port}", str(tree)],
                       f"http://127.31.{n}.2:{port}", (f"127.31.{n}.2", port))
     raise ValueError(form)

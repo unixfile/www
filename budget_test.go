@@ -45,7 +45,7 @@ func TestPageBudget(t *testing.T) {
 		t.Fatalf("git init: %v\n%s", err, out)
 	}
 	commitAll(t, dir, "Add the README and render.go")
-	s := newServer()
+	s := newServer().local().local()
 	addTree(t, s, dir, "/", "budget")
 	h := s.handler()
 	c := head(t, dir, "HEAD")

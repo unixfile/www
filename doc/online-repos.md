@@ -70,7 +70,9 @@ The listing names its source and the sources that failed first, so a partial lis
 
 ## On the open web
 
-`www --public --disk=SIZE -a ADDR` serves online repos to anyone who reaches the address, eg through Caddy in front of it. It serves no tree from the machine and no other address, and it runs in the foreground for a service manager. `--share=HOST` binds a public address directly instead.
+`www-public --disk=SIZE -a ADDR` serves online repos to anyone who reaches the address, eg through Caddy in front of it. It serves no tree from the machine and no other address, and it runs in the foreground for a service manager. `--share=HOST` binds a public address directly instead.
+
+`www-public` is an executable of its own, built from the code `www` uses for online repos. It does not contain the bug button, the stop buttons, the index of servers, the browser launch, `--restart`, `-l`, `--kill`, `-p` or locks, so no flag or request can reach them. `make test` reads the binary's symbols and fails if one of them is there. `www --public` is gone and says where it went.
 
 A visitor learns nothing of the machine or of what others read. `/` says only how to read a repo. A listing that no forge or web frontend gives is a 404, never the cache. Pages write the cache's paths from `cache/`, git's errors included. 
 

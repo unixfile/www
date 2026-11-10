@@ -19,8 +19,9 @@ import (
 // readyEnv names the descriptor a detached child reports its start on.
 var readyEnv = envPrefix + "READY_FD"
 
-// Main runs the program on the process's arguments and exits.
-func Main() {
+// Local runs the reader's executable on the process's arguments and
+// exits. It serves trees of this machine.
+func Local() {
 	c, err := parseArgs(os.Args[1:])
 	switch {
 	case err != nil:
@@ -67,8 +68,6 @@ func Main() {
 
 	fd := os.Getenv(readyEnv)
 	switch {
-	case c.public:
-		os.Exit(servePublic(c))
 	case c.restart:
 		os.Exit(restart(c))
 	case c.list:
