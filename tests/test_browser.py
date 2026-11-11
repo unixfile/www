@@ -179,3 +179,30 @@ def test_a_diff_fits_99_columns(servers, page):
     fits, over = overflow(page, "pre.diff")
     assert fits == 0, (fits, over)
     assert over > 0, (fits, over)
+
+
+# The colour mode's line names the mode in force, and each mode in its
+# menu wears its own colours: light and dark their own, system the
+# system's. The system here is dark.
+def test_colour_modes_wear_their_colours(origin, browser):
+    page = browser.new_page(viewport={"width": 1280, "height": 800}, color_scheme="dark")
+    try:
+        page.goto(origin + PAGE, wait_until="load")
+        shown = """document.querySelector("details.theme > summary").innerText"""
+        assert page.evaluate(shown) == "system"
+        page.click("details.theme > summary")
+        got = page.evaluate(
+            """Object.fromEntries([...document.querySelectorAll("details.theme button")]
+                .map((b) => [b.dataset.theme, getComputedStyle(b).backgroundColor]))"""
+        )
+        assert got == {
+            "light": "rgb(246, 246, 246)",
+            "system": "rgb(28, 28, 28)",
+            "dark": "rgb(28, 28, 28)",
+        }, got
+        page.click("details.theme button[data-theme=light]")
+        assert page.evaluate(shown) == "light"
+        assert page.evaluate("""document.querySelector("details.theme").open""") is False
+        assert page.evaluate("""getComputedStyle(document.body).backgroundColor""") == "rgb(246, 246, 246)"
+    finally:
+        page.close()

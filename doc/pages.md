@@ -74,7 +74,7 @@ The stylesheet is www's own. It began as md2html-default's, whose light palette 
 
 A page turns dark when the OS asks for it, with a dark palette and syntax colours of its own. The dark palette is a first draft.
 
-Three small bars at the header's right open a menu that sets the mode by hand: `dark`, `light` and `system`. The one in force stands in reverse video. A click outside the menu, or Escape, closes it. `system` follows the OS again. The browser keeps the choice per server address, so a server on another address starts with the system's mode, and nothing goes to the server. The stylesheet writes each colour as `light-dark(light, dark)`, which browsers know since 2024; an older one shows pages without www's colours.
+The header's right end names the mode in force, eg `▸ system`, and opens like the menu of versions. The menu sets the mode by hand: `light`, `system` and `dark`. Each shows in its own colours: light as a light page, dark as a dark one, system as the OS has it now. The one in force has a border. A choice, a click outside the menu or Escape closes it. `system` follows the OS again. The browser keeps the choice per server address, so a server on another address starts with the system's mode, and nothing goes to the server. The stylesheet writes each colour as `light-dark(light, dark)`, which browsers know since 2024; an older one shows pages without www's colours.
 
 The browser loads the stylesheet once. Its URL names a hash of its content, eg `/_www/style.7b94a08e7731.css`, so it is kept for a year, and a changed stylesheet comes under a new URL.
 

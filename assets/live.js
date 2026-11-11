@@ -22,8 +22,10 @@
 		if (menu && !(e.target.closest && e.target.closest("details.theme"))) menu.open = false;
 		const b = e.target.closest && e.target.closest("details.theme button");
 		if (!b) return;
+		// The menu closes on a choice, and its line names the new mode.
 		const t = b.dataset.theme;
 		theme(t);
+		b.closest("details.theme").open = false;
 		try {
 			if (t === "dark" || t === "light") localStorage.setItem(themeKey, t);
 			else localStorage.removeItem(themeKey);

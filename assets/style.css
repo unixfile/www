@@ -116,25 +116,32 @@ header nav > *, .seg { display: inline-block; max-width: 100%; overflow-wrap: an
 }
 header > span { display: inline-flex; gap: 1em; align-items: baseline; flex: none; margin-left: auto; }
 header form { display: inline; }
-/* The colour mode sits behind three bars, drawn here so no font has to
-   carry the sign. A click opens its three words in a box like the menu
-   of versions: the page's colour inside one border, under the bars and
-   flush with their right edge. The words are buttons, since they change
-   a setting, drawn as text; the mode in force is in reverse video. */
-header details.theme { position: relative; align-self: center; color: var(--muted); }
-header details.theme > summary { list-style: none; cursor: pointer; width: 0.8em; height: 0.6em;
-  background: linear-gradient(currentColor, currentColor) top / 100% 1px no-repeat,
-    linear-gradient(currentColor, currentColor) center / 100% 1px no-repeat,
-    linear-gradient(currentColor, currentColor) bottom / 100% 1px no-repeat; }
-header details.theme > summary::-webkit-details-marker { display: none; }
+/* The colour mode opens like the menu of versions: its line names the
+   mode in force after the browser's disclosure marker, and a click drops
+   the three modes in a box under it, flush with its right edge. The line
+   holds all three words and shows the one the root's data-theme names,
+   so it is right before the script runs and without it.
+   Each mode in the box wears its own colours: light as light pages,
+   dark as dark ones, system as the system's mode is now. The page's
+   colours are light-dark() pairs, so color-scheme on a button picks its
+   side. The mode in force has a border in its own text colour. The
+   modes are buttons, since they change a setting, drawn as text. */
+header details.theme { position: relative; color: var(--muted);
+  font-family: "Iosevka", "Iosevka web", monospace; font-size: max(0.625em, 11px); font-variant-ligatures: none; }
+header details.theme > summary { cursor: pointer; white-space: nowrap; }
+header details.theme > summary > span { display: none; }
+:root[data-theme="light"] summary > span[data-theme="light"], :root[data-theme="dark"] summary > span[data-theme="dark"],
+  :root:not([data-theme]) summary > span[data-theme="system"] { display: inline; }
 header details.theme > summary:hover, header details.theme[open] > summary { color: var(--text); }
 header details.theme > span { position: absolute; z-index: 2; top: calc(100% + 0.4em); right: 0; display: flex; flex-direction: column;
-  padding: 0.3em 0.4em; background: var(--page); border: 1px solid var(--text);
-  font-family: "Iosevka", "Iosevka web", monospace; font-size: max(0.625em, 11px); font-variant-ligatures: none; }
-header details.theme button { all: unset; cursor: pointer; padding: 0 0.4em; }
+  gap: 0.3em; padding: 0.4em; background: var(--page); border: 1px solid var(--text); }
+header details.theme button { all: unset; cursor: pointer; padding: 0.15em 0.8em; color: var(--text); background: var(--page); }
+header details.theme button[data-theme="light"] { color-scheme: light; }
+header details.theme button[data-theme="system"] { color-scheme: light dark; }
+header details.theme button[data-theme="dark"] { color-scheme: dark; }
 header details.theme button:focus-visible, header details.theme > summary:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
 :root[data-theme="dark"] button[data-theme="dark"], :root[data-theme="light"] button[data-theme="light"],
-  :root:not([data-theme]) button[data-theme="system"] { color: var(--page); background: var(--text); }
+  :root:not([data-theme]) button[data-theme="system"] { box-shadow: inset 0 0 0 1px var(--text); }
 /* Buttons are flat, as on printed paper: one border in the text's
    colour, square corners, no bevel. */
 header button, table.locks button, p.bug button.bug {

@@ -12,7 +12,7 @@ import (
 func TestColourMode(t *testing.T) {
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/a/").Body.String()
-	want := `<details class="theme"><summary title="dark or light pages" aria-label="dark or light pages"></summary><span><button data-theme="dark" title="dark pages">dark</button><button data-theme="light" title="light pages">light</button><button data-theme="system" title="pages follow the system">system</button></span></details>`
+	want := `<details class="theme"><summary title="light or dark pages"><span data-theme="light">light</span><span data-theme="system">system</span><span data-theme="dark">dark</span></summary><span><button data-theme="light" title="light pages">light</button><button data-theme="system" title="pages follow the system">system</button><button data-theme="dark" title="dark pages">dark</button></span></details>`
 	if !strings.Contains(body, want) {
 		t.Errorf("the header lacks the colour modes:\n%s", body)
 	}
@@ -21,7 +21,8 @@ func TestColourMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, w := range []string{`:root[data-theme="dark"] { color-scheme: dark; }`, `:root[data-theme="light"] { color-scheme: light; }`,
-		`--page: light-dark(#f6f6f6, #1c1c1c);`, `:root:not([data-theme]) button[data-theme="system"]`} {
+		`--page: light-dark(#f6f6f6, #1c1c1c);`, `:root:not([data-theme]) summary > span[data-theme="system"]`, `button[data-theme="light"] { color-scheme: light; }`,
+		`button[data-theme="system"] { color-scheme: light dark; }`, `button[data-theme="dark"] { color-scheme: dark; }`} {
 		if !strings.Contains(string(css), w) {
 			t.Errorf("the stylesheet lacks %s", w)
 		}
