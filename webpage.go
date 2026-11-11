@@ -38,8 +38,6 @@ func (w *web) fail(rw http.ResponseWriter, r *http.Request, status int, msg stri
 // public server says only how to read a repo.
 func (w *web) serveRoot(rw http.ResponseWriter, r *http.Request) {
 	esc := template.HTMLEscapeString
-	repos := w.onDisk()
-	slices.SortFunc(repos, func(a, b cachedRepo) int { return strings.Compare(a.key, b.key) })
 	var total int64
 	var body strings.Builder
 	fmt.Fprintf(&body, "<p class=\"own\">Type a forge's host and a path after this address, eg <a href=\"%[1]s/github.com/junegunn/fzf/\">%[1]s/github.com/junegunn/fzf</a>, to read that repo, or <a href=\"%[1]s/git.suckless.org/\">%[1]s/git.suckless.org</a> to list a host's repos.</p>\n", basePath)
@@ -47,6 +45,8 @@ func (w *web) serveRoot(rw http.ResponseWriter, r *http.Request) {
 		w.render(rw, r, http.StatusOK, "web", []crumb{{Label: "index"}}, "index", body.String())
 		return
 	}
+	repos := w.onDisk()
+	slices.SortFunc(repos, func(a, b cachedRepo) int { return strings.Compare(a.key, b.key) })
 	if len(repos) > 0 {
 		var sizes []string
 		for _, c := range repos {
@@ -95,7 +95,7 @@ func (w *web) serveJob(rw http.ResponseWriter, r *http.Request, j *webJob) {
 	if failed != "" {
 		body.WriteString(" Reload after 30 s to try again.")
 	} else {
-		body.WriteString(" The page turns into the repo when it is read.")
+		body.WriteString(" The page turns into what was asked for when it is read.")
 	}
 	body.WriteString("</p>\n")
 	key := strings.TrimPrefix(j.urlPath, "/")

@@ -19,9 +19,9 @@ type cachedRepo struct {
 	used time.Time
 }
 
-// onDisk lists the repos in the cache, with their size and last request.
-func (w *web) onDisk() []cachedRepo {
-	var out []cachedRepo
+// eachRepo calls fn for every repo in the cache, with its key and its
+// directory. It reads directory names alone, never a repo's files.
+func (w *web) eachRepo(fn func(key, dir string)) {
 	filepath.WalkDir(w.root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || !d.IsDir() {
 			return nil
@@ -34,7 +34,27 @@ func (w *web) onDisk() []cachedRepo {
 			return nil
 		}
 		key, _ := filepath.Rel(w.root, p)
-		c := cachedRepo{key: filepath.ToSlash(key), size: diskUse(filepath.Join(p, ".git"))}
+		fn(filepath.ToSlash(key), p)
+		return nil
+	})
+}
+
+// onDiskKeys names every repo in the cache. It costs a walk of the
+// cache's directories, where onDisk reads every file's size.
+func (w *web) onDiskKeys() []string {
+	var out []string
+	w.eachRepo(func(key, _ string) { out = append(out, key) })
+	return out
+}
+
+// onDisk is every repo in the cache with its disk use and its last
+// request. Measuring reads every file of every repo, which takes a minute
+// on a full cache of some GiB, so only a caller that shows or acts on
+// sizes asks for it.
+func (w *web) onDisk() []cachedRepo {
+	var out []cachedRepo
+	w.eachRepo(func(key, p string) {
+		c := cachedRepo{key: key, size: diskUse(filepath.Join(p, ".git"))}
 		if wt, err := os.Readlink(filepath.Join(p, ".tree")); err == nil {
 			c.size += diskUse(filepath.Join(p, wt))
 		}
@@ -45,13 +65,13 @@ func (w *web) onDisk() []cachedRepo {
 			}
 		}
 		out = append(out, c)
-		return nil
 	})
 	return out
 }
 
-// diskUse is the disk space below dir.
-func diskUse(dir string) int64 {
+// diskUse is the disk space below dir. It is a variable so a test can
+// tell when a page measures the cache.
+var diskUse = func(dir string) int64 {
 	var n int64
 	filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {

@@ -54,9 +54,10 @@ func (w *web) list(j *webJob, key string, probed bool) {
 	// never lists the cache.
 	if l.source == "" && !w.public {
 		l.source = "the cache"
-		for _, c := range w.onDisk() {
-			if strings.HasPrefix(c.key, key+"/") {
-				l.repos = append(l.repos, listed{key: c.key})
+		w.step(j, "no source lists "+key+", so the cache does")
+		for _, k := range w.onDiskKeys() {
+			if strings.HasPrefix(k, key+"/") {
+				l.repos = append(l.repos, listed{key: k})
 			}
 		}
 		slices.SortFunc(l.repos, func(a, b listed) int { return strings.Compare(a.key, b.key) })
