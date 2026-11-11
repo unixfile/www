@@ -327,8 +327,11 @@ table.locks .lead { margin: 0 1em 0 0; }
 ul.listing .lead.size { min-width: 4ch; }
 ul.listing .lead.age { min-width: 3ch; }
 /* The commands row holds a link per command, each its own target, and
-   the view on screen as text. The history keeps to the right end. */
+   the view on screen in reverse video, as a code page's view row has it.
+   Its block reaches past the label on both sides without moving it. The
+   history keeps to the right end. */
 ul.listing li.cmds { display: flex; flex-wrap: wrap; column-gap: 1ch; }
+ul.listing li.cmds > span { color: var(--page); background: var(--text); margin: 0 -0.4em; padding: 0 0.4em; }
 ul.listing li.cmds > .history { margin-left: auto; }
 table.locks td + td { text-align: right; }
 table.locks form { display: inline; }
@@ -516,11 +519,16 @@ div.code > div.sourceCode { margin: 0; }
 div.view { position: sticky; top: var(--search-h, 0); z-index: 1; text-align: right; background: var(--page);
   font-family: "Iosevka", "Iosevka web", monospace; font-size: max(0.5em, 11px); line-height: 1.35; }
 div.view a, div.view span { padding: 0 0.4em; margin-left: 0.4em; color: var(--muted); text-decoration-color: var(--rule); }
-div.view span { color: inherit; }
+/* The view on screen is in reverse video, as a terminal marks a selection,
+   so it reads apart from the links at a glance. */
+div.view span { color: var(--page); background: var(--text); }
 div.view a:hover { text-decoration-color: currentColor; }
 /* A JSON file's gron view and a structured file's other formats start at the
    row's left edge, spaced as the views on the right are. */
 div.view .left { float: left; margin: 0 0.4em 0 0; padding: 0 0.8em 0 0; }
+/* A left view on screen pads both sides of its block and keeps its text
+   and the next link where they were. */
+div.view span.left { margin: 0 0.8em 0 -0.4em; padding: 0 0.4em; }
 /* Browsers round each row's height, so a box over hundreds of rows can
    end a pixel or two past its last line; the scrolling div around the pre
    clips that rather than grow a scroll bar. */

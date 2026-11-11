@@ -20,7 +20,7 @@ Clicking a line's number highlights it and puts its address in the address bar. 
 
 ## Views
 
-A code page's views, flat, scopes and tree, and raw sit in a row of their own above the code's top right corner. The row follows the page down as it scrolls. Each view keeps its place; the view shown is plain text, not a link.
+A code page's views, flat, scopes and tree, and raw sit in a row of their own above the code's top right corner. The row follows the page down as it scrolls. Each view keeps its place; the view shown is not a link and stands in reverse video, light on dark where the page is dark on light.
 
 ## Scopes
 
