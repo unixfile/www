@@ -72,7 +72,9 @@ The server watches the directory of each open page and its repo's git directory 
 
 The stylesheet is www's own. It began as md2html-default's, whose light palette it keeps, and the page colours sit as variables on `:root`.
 
-A page turns dark when the OS asks for it through `prefers-color-scheme`, with a dark palette and syntax colours of its own. The dark palette is a first draft.
+A page turns dark when the OS asks for it, with a dark palette and syntax colours of its own. The dark palette is a first draft.
+
+Three small words at the header's right, `dark`, `light` and `system`, set the mode by hand; the one in force stands in reverse video. `system` follows the OS again. The browser keeps the choice per server address, so a server on another address starts with the system's mode, and nothing goes to the server. The stylesheet writes each colour as `light-dark(light, dark)`, which browsers know since 2024; an older one shows pages without www's colours.
 
 The browser loads the stylesheet once. Its URL names a hash of its content, eg `/_www/style.7b94a08e7731.css`, so it is kept for a year, and a changed stylesheet comes under a new URL.
 

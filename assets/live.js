@@ -1,5 +1,31 @@
 (() => {
 	let url = document.currentScript.dataset.live;
+	// The colour mode is the system's unless the reader chose dark or
+	// light in the header. The choice lives in this browser, per server
+	// address, and goes on the root before the body is read, so no page
+	// shows in the other mode first. The stylesheet does the rest.
+	const themeKey = "theme";
+	const theme = (t) => {
+		if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+		else delete document.documentElement.dataset.theme;
+	};
+	try {
+		theme(localStorage.getItem(themeKey));
+	} catch {}
+	// Another tab of this server follows the choice.
+	addEventListener("storage", (e) => {
+		if (e.key === themeKey) theme(e.newValue);
+	});
+	document.addEventListener("click", (e) => {
+		const b = e.target.closest && e.target.closest("span.theme button");
+		if (!b) return;
+		const t = b.dataset.theme;
+		theme(t);
+		try {
+			if (t === "dark" || t === "light") localStorage.setItem(themeKey, t);
+			else localStorage.removeItem(themeKey);
+		} catch {}
+	});
 	let es = null;
 	// A page outlives its server. A stream lost for three seconds puts a
 	// line over the page that says the server is gone and since when, and
