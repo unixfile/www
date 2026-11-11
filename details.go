@@ -51,12 +51,12 @@ func detailsQuery(flags string) string {
 }
 
 // detailHeader is the row over the details view's columns: -S over the
-// sizes, -t over the ages and name over the names, each a link. A first
+// sizes, -t over the ages and a bare dash over the names, each a link. A first
 // click sorts by the column as ls does, a second adds r and reverses, a
 // third returns to name order; on name, a click reverses and the next
 // returns. The order in force is in reverse video and shows its flags as
 // the view's command has them, eg -tr. ls has no flag for name order, so
-// that header is the word, and -r once reversed. A version has no ages
+// that header is a dash with no flag after it, and -r once reversed. A version has no ages
 // and so no -t.
 func detailHeader(key string, rev, version bool) string {
 	link := func(k, off string) string {
@@ -80,7 +80,7 @@ func detailHeader(key string, rev, version bool) string {
 	// The name's link sits in a span, so the listing's rule that
 	// stretches a row's first link over the row leaves this row alone.
 	return `<li class="flags"><span class="lead num size">` + link("S", "-S") + `</span> <span class="lead num age">` + age +
-		`</span> <span>` + link("", "name") + "</span></li>\n"
+		`</span> <span>` + link("", "-") + "</span></li>\n"
 }
 
 // detailsCmd is the label of the details view's entry: the command with
