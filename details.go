@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"math"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -63,9 +62,8 @@ func detailsQuery(flags string) string {
 // third returns to name order; on name, a click reverses and the next
 // returns. The order in force is in reverse video and shows its flags as
 // the view's command has them, eg -rt. ls has no flag for name order, so
-// that header is a dash with no flag after it, and -r once reversed.
-// Each link names its key in its title: Alt+S, Alt+T and Alt+-. A version has no ages
-// and so no -t.
+// that header is a dash with no flag after it, and -r once reversed. A
+// version has no ages and so no -t.
 func detailHeader(key string, rev, version bool) string {
 	link := func(k, off string) string {
 		label, next, on := off, k, ""
@@ -79,13 +77,7 @@ func detailHeader(key string, rev, version bool) string {
 				}
 			}
 		}
-		// Alt with the flag's letter, or Alt+- for name order, follows
-		// the link; the script reads the key from data-key.
-		press := "-"
-		if k != "" {
-			press = strings.ToLower(k)
-		}
-		return `<a` + on + ` href="` + detailsQuery(next) + `" title="Alt+` + strings.ToUpper(press) + `" data-key="` + press + `">` + label + `</a>`
+		return `<a` + on + ` href="` + detailsQuery(next) + `">` + label + `</a>`
 	}
 	age := ""
 	if !version {
