@@ -212,9 +212,15 @@
 	let opened = [];
 	let matches = [];
 	const box = () => document.querySelector("input.search");
+	// A colon as the box's first character turns the box into the
+	// palette, which lists commands and searches nothing.
+	const palOn = () => {
+		const b = box();
+		return !!b && b.value.startsWith(":");
+	};
 	const searching = () => {
 		const b = box();
-		return !!b && b.value.trim() !== "";
+		return !!b && b.value.trim() !== "" && !palOn();
 	};
 	const filters = () => ["code", "doc", "log", "commit", "tree"].includes(document.body.className);
 	const unfilter = () => {
@@ -386,6 +392,14 @@
 	};
 	const runSearch = () => {
 		const b = box();
+		if (palOn()) {
+			if (ctl) ctl.abort();
+			const u = withQuery("");
+			if (u !== location.pathname + location.search + location.hash) history.replaceState(history.state, "", u);
+			showPage();
+			return showPalette(b.value.slice(1));
+		}
+		hidePalette();
 		const q = b.value.trim();
 		const u = withQuery(q);
 		if (u !== location.pathname + location.search + location.hash) history.replaceState(history.state, "", u);
@@ -537,7 +551,12 @@
 	document.addEventListener("input", (e) => {
 		if (!e.target.matches("input.search")) return;
 		clearTimeout(timer);
-		timer = setTimeout(runSearch, 120);
+		// The palette filters at once: it asks the server nothing.
+		if (palOn()) runSearch();
+		else {
+			hidePalette();
+			timer = setTimeout(runSearch, 120);
+		}
 		settle();
 	});
 
@@ -560,7 +579,7 @@
 	};
 	const needed = () => {
 		const f = document.activeElement;
-		return atTop() || searching() || (!!f && !!f.closest && !!f.closest(chrome) && !f.matches("input.search"));
+		return atTop() || searching() || palOn() || (!!f && !!f.closest && !!f.closest(chrome) && !f.matches("input.search"));
 	};
 	const calm = () => {
 		calmTimer = null;
@@ -791,6 +810,142 @@
 		if (ago) ago.textContent = Math.max(0, Math.floor((Date.now() - Number(ago.parentNode.dataset.built)) / 1000));
 	}, 1000);
 
+	// The palette lists the commands the page offers, when the box's
+	// first character is a colon: the page's own first, a listing's views
+	// and sorts or a code page's views, then those every page has. What
+	// follows the colon filters the list, by the start of a command's
+	// name, then anywhere in it, then by its letters in order, so -t finds
+	// ls -lt, then in what it does. Each command is a
+	// link or button on the page, which the palette clicks, so it offers
+	// nothing the page lacks. A command that stops or deletes something
+	// asks for a second Enter. Files stay out: search finds those.
+	const sortWhat = { "": "details by name", r: "details by name, reversed", S: "details, largest first", rS: "details, smallest first",
+		t: "details, newest first", rt: "details, oldest first" };
+	const viewWhat = { flat: "the code", scopes: "the code with its scopes", tree: "the syntax tree", raw: "the file as it is on disk",
+		gron: "the JSON as one line per value", current: "this page as it is now", commit: "this version's commit" };
+	const commands = () => {
+		const out = [];
+		const names = new Set();
+		// A command clicks el, or goes to href when it has one.
+		const add = (name, what, el, danger, href) => {
+			if (!el || names.has(name)) return;
+			names.add(name);
+			out.push({ name, what, el, danger: !!danger, href });
+		};
+		const text = (el) => el.textContent.trim();
+		for (const a of document.querySelectorAll("main li.cmds a")) add(text(a), a.matches(".history") ? "history" : text(a) === "ls" ? "names" : "details", a);
+		for (const a of document.querySelectorAll("main li.flags a")) {
+			const f = new URL(a.href).searchParams.get("details") || "";
+			add("ls -l" + f, sortWhat[f] || "details", a);
+		}
+		// From the names view, the details link names the sorts it offers.
+		const ls = document.querySelector("main li.cmds a[data-sorts]");
+		if (ls) for (const k of ls.dataset.sorts) for (const f of [k, "r" + k]) add("ls -l" + f, sortWhat[f], ls, false, "?details=" + f);
+		for (const a of document.querySelectorAll("div.view a, a.now")) {
+			const n = text(a);
+			add(n, viewWhat[n] || (n.startsWith("as ") ? "this file " + n : n), a);
+		}
+		for (const a of document.querySelectorAll("header > span > a")) add(text(a), viewWhat[text(a)] || text(a), a);
+		const latest = document.querySelector("details.latest > summary");
+		if (latest) add("versions", "this page's versions", latest);
+		const crumbs = [...document.querySelectorAll("header nav a")];
+		if (crumbs.length) add("up", "to " + text(crumbs[crumbs.length - 1]), crumbs[crumbs.length - 1]);
+		if (crumbs.length && crumbs[0].getAttribute("href") === "/") add("index", "the served trees", crumbs[0]);
+		for (const b of document.querySelectorAll("details.theme button")) add(b.dataset.theme, b.title, b);
+		add("copy", "copy the page's text", document.querySelector("button.copy"));
+		add("share", "copy a link to what is selected, or to the page", document.querySelector("button.share"));
+		const bug = document.querySelector("button.bug");
+		if (bug) add("bug", bug.title.split(";")[0], bug);
+		const stop = document.querySelector("header form button");
+		if (stop) {
+			if (stop.matches(".kill")) add("kill server", "stop this server", stop, true);
+			else add("delete lock", "stop serving this tree", stop, true);
+		}
+		return out;
+	};
+	const cmdOf = new WeakMap();
+	let armed = null;
+	// disarm takes back the second Enter a stopping command asked for.
+	const disarm = () => {
+		if (!armed) return;
+		armed.classList.remove("armed");
+		armed.querySelector("span.what").textContent = cmdOf.get(armed).what;
+		armed = null;
+	};
+	const showPalette = (q) => {
+		const row = document.querySelector("div.search");
+		if (!row) return;
+		let ul = row.querySelector("ul.palette");
+		if (!ul) {
+			ul = document.createElement("ul");
+			ul.className = "palette";
+			row.append(ul);
+		}
+		q = q.trim().toLowerCase();
+		const rank = (c) => {
+			const n = c.name.toLowerCase();
+			let at = 0;
+			for (const ch of n) if (at < q.length && ch === q[at]) at++;
+			return n.startsWith(q) ? 0 : n.includes(q) ? 1 : at === q.length ? 2 : c.what.toLowerCase().includes(q) ? 3 : -1;
+		};
+		const found = commands().map((c, i) => [rank(c), i, c]).filter(([r]) => r >= 0).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+		armed = null;
+		const rows = found.map(([, , c]) => {
+			const li = document.createElement("li");
+			const name = document.createElement("span");
+			name.className = "name";
+			name.textContent = c.name;
+			const what = document.createElement("span");
+			what.className = "what";
+			what.textContent = c.what;
+			li.append(name, what);
+			cmdOf.set(li, c);
+			return li;
+		});
+		if (!rows.length) {
+			const li = document.createElement("li");
+			li.className = "none";
+			li.textContent = "no command matches";
+			rows.push(li);
+		}
+		ul.replaceChildren(...rows);
+		select(cmdOf.has(rows[0]) ? rows[0] : null);
+	};
+	const hidePalette = () => {
+		const ul = document.querySelector("ul.palette");
+		if (!ul) return;
+		if (sel && ul.contains(sel)) select(null);
+		armed = null;
+		ul.remove();
+	};
+	const runCommand = (li) => {
+		const c = cmdOf.get(li);
+		if (!c) return;
+		if (c.danger && armed !== li) {
+			disarm();
+			armed = li;
+			li.classList.add("armed");
+			li.querySelector("span.what").textContent = "Enter again to " + c.what;
+			return;
+		}
+		clearSearch();
+		if (c.href) location.href = c.href;
+		else c.el.click();
+	};
+	// The pointer runs a row too. Pressing it keeps focus in the box.
+	document.addEventListener("mousedown", (e) => {
+		if (e.target.closest && e.target.closest("ul.palette")) e.preventDefault();
+	});
+	document.addEventListener("click", (e) => {
+		const li = e.target.closest && e.target.closest("ul.palette li");
+		if (!li) return;
+		// The click ends here, so a menu the command opens, eg versions,
+		// does not take it for a click outside and close.
+		e.stopImmediatePropagation();
+		select(li);
+		runCommand(li);
+	});
+
 	// The box holds the keyboard, so typing searches from anywhere: a key
 	// that types, or Backspace during a search, goes to the box wherever
 	// focus is. Up and Down move the highlight through what can be opened,
@@ -804,7 +959,7 @@
 	// other focused control comes back to the box.
 	const openMenu = () => document.querySelector("details.latest[open]");
 	const walkable = () =>
-		openMenu() ? [...openMenu().querySelectorAll("ol.versions a")] : (searching() ? [...document.querySelectorAll("div.found ul.web a"), ...matches, ...document.querySelectorAll("div.found ul:not(.web) a")] : [...document.querySelectorAll("main ul.listing:not(.row) li:not(.flags) a")])
+		palOn() ? [...document.querySelectorAll("ul.palette li:not(.none)")] : openMenu() ? [...openMenu().querySelectorAll("ol.versions a")] : (searching() ? [...document.querySelectorAll("div.found ul.web a"), ...matches, ...document.querySelectorAll("div.found ul:not(.web) a")] : [...document.querySelectorAll("main ul.listing:not(.row) li:not(.flags) a")])
 			.filter((el) => el.offsetParent !== null);
 	const up = () => {
 		const crumbs = document.querySelectorAll("header nav a");
@@ -837,6 +992,7 @@
 		switch (e.key) {
 			case "ArrowDown":
 			case "ArrowUp":
+				disarm();
 				if (walk.length) {
 					if (e.key === "ArrowDown") select(walk[Math.min(i + 1, walk.length - 1)]);
 					else select(walk[i < 0 ? walk.length - 1 : Math.max(i - 1, 0)]);
@@ -845,6 +1001,10 @@
 				else return;
 				break;
 			case "Enter": {
+				if (inBox && palOn()) {
+					if (walk.length) runCommand(i >= 0 ? sel : walk[0]);
+					break;
+				}
 				if (!inBox && e.target.closest && e.target.closest("a, button, summary")) return;
 				const to = i >= 0 ? sel : q ? walk[0] : null;
 				if (!to) return;
@@ -855,6 +1015,7 @@
 			}
 			case "Escape":
 				if (document.querySelector("details.theme[open]")) document.querySelector("details.theme[open]").open = false;
+				else if (palOn()) clearSearch();
 				else if (openMenu()) openMenu().open = false;
 				else if (b && !inBox && document.activeElement !== document.body) b.focus({ preventScroll: true });
 				else if (q) clearSearch();

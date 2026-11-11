@@ -376,6 +376,22 @@ div.search {
   z-index: 1;
   background: var(--page);
 }
+/* The palette drops under the box over the page, in the box like the
+   menu of versions: the page's colour inside one border. Each row is a
+   command as the page names it, then what it does, quieter; the names
+   share one column. A command that asks for a second Enter says so at
+   the text's strength. */
+ul.palette { position: absolute; z-index: 3; top: 100%; left: 0; margin: 0; padding: 0.4em 0; list-style: none;
+  display: grid; grid-template-columns: max-content 1fr; column-gap: 2ch; min-width: 24em; max-width: 100%;
+  max-height: 60vh; overflow-y: auto; background: var(--page); border: 1px solid var(--text); font-variant-ligatures: none; }
+ul.palette > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; padding: 0.15em 0.8em; cursor: pointer; white-space: nowrap; }
+ul.palette > li.sel { outline-offset: -1px; }
+ul.palette span.what { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+ul.palette > li.armed span.what { color: var(--text); }
+ul.palette > li.none { color: var(--muted); cursor: default; }
+/* While the palette is open, its row rises over a code page's sticky
+   view links, which would otherwise paint across it. */
+div.search:has(> ul.palette) { z-index: 4; }
 input.search, button.copy, button.share {
   font: inherit;
   border: 1px solid var(--text);

@@ -186,7 +186,7 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	// row, so the arrow keys still scroll the history instead of walking
 	// its two links.
 	if dir {
-		body.WriteString("<ul class=\"listing row\">\n<li class=\"cmds\"><a href=\"./\">" + esc(namesLabel) + "</a> <a href=\"?details\">" +
+		body.WriteString("<ul class=\"listing row\">\n<li class=\"cmds\"><a href=\"./\">" + esc(namesLabel) + "</a> <a href=\"?details\" data-sorts=\"" + sortsOffered(t.at != nil) + "\">" +
 			esc(detailsLabel) + "</a> <span class=\"history\">" + esc(logLabel) + "</span></li>\n</ul>\n")
 	}
 	if len(log) == 0 {

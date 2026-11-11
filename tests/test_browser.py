@@ -206,3 +206,98 @@ def test_colour_modes_wear_their_colours(origin, browser):
         assert page.evaluate("""getComputedStyle(document.body).backgroundColor""") == "rgb(246, 246, 246)"
     finally:
         page.close()
+
+
+def palette(page):
+    """The palette's rows as [name, what], and the highlighted row's name."""
+    return page.evaluate(
+        """({
+            rows: [...document.querySelectorAll("ul.palette li:not(.none)")]
+                .map((li) => [li.querySelector(".name").textContent, li.querySelector(".what").textContent]),
+            sel: (document.querySelector("ul.palette li.sel .name") || {}).textContent,
+        })"""
+    )
+
+
+def hist_repo(server, name):
+    """A repo in the default server's tree, and its listing's URL."""
+    repo = server.home / "tree" / name
+    repo.mkdir()
+    harness.git(repo, "init", "-q")
+    (repo / "a.md").write_text("a\n")
+    harness.git(repo, "add", ".")
+    harness.git(repo, "commit", "-q", "-m", "first")
+    return server.origin.replace(".2:", ".1:") + "/tree/" + name + "/"
+
+
+# A colon in the box lists the page's commands, its own first, and the
+# first row is highlighted. What follows the colon filters, and Enter
+# runs the highlighted command.
+def test_a_colon_lists_the_page_s_commands(origin, page):
+    page.goto(origin + PAGE, wait_until="load")
+    page.click("input.search")
+    page.keyboard.type(":")
+    got = palette(page)
+    names = [n for n, _ in got["rows"]]
+    for want in ["scopes", "tree", "raw", "up", "light", "system", "dark", "copy", "share"]:
+        assert want in names, got
+    assert names.index("raw") < names.index("up") < names.index("light"), names
+    assert got["sel"] == names[0], got
+    assert "?q=" not in page.url
+    page.keyboard.type("tre")
+    assert palette(page)["sel"] == "tree"
+    with page.expect_navigation():
+        page.keyboard.press("Enter")
+    assert page.url.endswith(PAGE + "?tree"), page.url
+
+
+# Escape clears the box and the palette with it.
+def test_escape_closes_the_palette(origin, page):
+    page.goto(origin + PAGE, wait_until="load")
+    page.click("input.search")
+    page.keyboard.type(":ra")
+    assert palette(page)["sel"] == "raw"
+    page.keyboard.press("Escape")
+    assert page.evaluate("""[!!document.querySelector("ul.palette"), document.querySelector("input.search").value]""") == [False, ""]
+
+
+# The names view offers the details view's sorts, and a command's letters
+# in order find it: -t finds ls -lt.
+def test_the_palette_sorts_from_the_names_view(servers, page):
+    url = hist_repo(servers("default"), "sorts")
+    page.goto(url, wait_until="load")
+    page.click("input.search")
+    page.keyboard.type(":-t")
+    assert palette(page)["sel"] == "ls -lt", palette(page)
+    with page.expect_navigation():
+        page.keyboard.press("Enter")
+    assert page.url == url + "?details=t", page.url
+
+
+# A colour mode runs in place, and a command that stops something asks
+# for a second Enter first.
+def test_the_palette_sets_colours_and_asks_before_stopping(servers, page):
+    url = hist_repo(servers("default"), "colours")
+    page.goto(url, wait_until="load")
+    page.click("input.search")
+    page.keyboard.type(":dark")
+    page.keyboard.press("Enter")
+    assert page.evaluate("""[document.documentElement.dataset.theme, document.querySelector("input.search").value]""") == ["dark", ""]
+    page.keyboard.type(":delete")
+    assert palette(page)["sel"] == "delete lock", palette(page)
+    page.keyboard.press("Enter")
+    got = page.evaluate("""[location.href, document.querySelector("ul.palette li.armed .what").textContent]""")
+    assert got == [url, "Enter again to stop serving this tree"], got
+
+
+# versions opens the menu of versions, which then takes the arrows.
+def test_the_palette_opens_the_versions(servers, page):
+    url = hist_repo(servers("default"), "versions")
+    page.goto(url + "a.md", wait_until="load")
+    page.click("input.search")
+    page.keyboard.type(":ver")
+    assert palette(page)["sel"] == "versions", palette(page)
+    page.keyboard.press("Enter")
+    # A selector, not a function: the page's CSP refuses eval.
+    page.wait_for_selector("details.latest[open] ol.versions")
+    assert page.evaluate("""[document.querySelector("details.latest").open, !!document.querySelector("ul.palette")]""") == [True, False]

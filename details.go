@@ -98,6 +98,15 @@ func detailsCmd(flags string, here bool) string {
 	return detailsLabel + flags
 }
 
+// sortsOffered names the sort keys a details view offers: S and t, or S
+// alone on a version, which has no ages.
+func sortsOffered(version bool) string {
+	if version {
+		return "S"
+	}
+	return "St"
+}
+
 // detailFields is the lead of a row in the details view: size, then age,
 // each right-aligned in a column of fixed width. A directory has no size,
 // and a version has no age, since git keeps no modification times; a

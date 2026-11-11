@@ -35,6 +35,14 @@ Shift+Tab in the box enters the header at the crumb Escape goes to, and Tab goes
 
 On a touch screen the box takes the keyboard only when tapped, since it would raise the on-screen keyboard.
 
+## Commands
+
+A colon as the box's first character lists the page's commands instead of searching. The list holds what the page offers: a listing's views and sorts, eg `ls -lt`, a code page's views, a doc's raw, the versions, then what every page has: up, index, the colour modes, copy, share, the bug button and the stop button. Each row names the command as the page does and says what it does.
+
+What follows the colon filters the list: by the start of a name first, then anywhere in it, then by its letters in order, so `:-t` finds `ls -lt`, and last by what a command does. Up and Down move through the list, Enter runs the highlighted command and Escape returns to the page. A click runs a row too.
+
+Kill server and Delete lock take a second Enter. Files and directories are not commands; search finds those.
+
 ## Copy buttons
 
 Beside the box, ⧉ copies the page's text: what lies below the box, without www's own lines and links or line numbers. A code page copies as its file and a listing as its names. A doc copies its Markdown, and lines a range marks, eg `#L3-L26`, copy alone. What a search hides stays out.

@@ -367,7 +367,14 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	}
 	// The history sits at the row's right end, apart from the two
 	// listing views.
-	body.WriteString("<li class=\"cmds\">" + cmd(namesLabel, "./", !details) + " " + cmd(detailsCmd(flags, details), "?details", details))
+	// The details link names the sorts that view offers, so the palette
+	// lists them from the names view too: -S and -t, or -S alone on a
+	// version, which has no ages.
+	detailsLink := cmd(detailsCmd(flags, details), "?details", details)
+	if !details {
+		detailsLink = "<a href=\"?details\" data-sorts=\"" + sortsOffered(t.at != nil) + "\">" + template.HTMLEscapeString(detailsLabel) + "</a>"
+	}
+	body.WriteString("<li class=\"cmds\">" + cmd(namesLabel, "./", !details) + " " + detailsLink)
 	if t.lastCommit(r.Context(), name) != nil {
 		body.WriteString(" <a class=\"history\" href=\"?log\">" + template.HTMLEscapeString(logLabel) + "</a>")
 	}
