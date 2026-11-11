@@ -64,7 +64,7 @@ www needs git.
 - [Options and environment](doc/options.md): every option, the keyval output and the variables that set defaults
 - [Servers and locks](doc/servers.md): how trees join a server, the index at `/`, addresses, restarts, serving after reboot and a base path
 - [Pages](doc/pages.md): URLs, how docs and listings render, links, live reload and the look
-- [Code pages](doc/code-pages.md): highlighting, line links, scope boxes, the syntax tree and gron
+- [Code pages](doc/code-pages.md): highlighting, line links, scope boxes, the syntax tree, gron and the switch between JSON, YAML and keyval
 - [Search and controls](doc/search.md): the search box, keys, the copy buttons and when controls fade
 - [History](doc/history.md): histories, commits, stardates, the timeline and old versions of a tree
 - [Online repos](doc/online-repos.md): reading a forge's repos on the second address, or serving them to the web
@@ -83,4 +83,4 @@ MIT, see `LICENSE`.
 
 The embedded fonts are subsets of STIX Two Text and Iosevka, under the SIL Open Font License: see `assets/fonts/STIXTwoText-OFL.txt` and `assets/fonts/Iosevka-OFL.txt`.
 
-The binary links in three Go modules under the MIT licence: goldmark by Yusuke Inuzuka, chroma by Alec Thomas and regexp2 by Doug Clark. regexp2 ports parts of Microsoft's dotnet/corefx. The package's copyright file carries their notices.
+The binary links in five Go modules. Four are under the MIT licence: goldmark by Yusuke Inuzuka, chroma by Alec Thomas, regexp2 by Doug Clark and kv, www's sister project. regexp2 ports parts of Microsoft's dotnet/corefx. The fifth, yaml.v3 by Canonical, is under Apache 2.0, with its files from Kirill Simonov's libyaml under MIT. The package's copyright file carries their notices.

@@ -177,7 +177,8 @@ func (t *tree) missing(name string) func(string) bool {
 
 // serveCode shows a text file as a highlighted code page with numbered,
 // linkable lines; ?scopes draws each block of code as a box, ?tree
-// shows the syntax tree, and ?gron shows a JSON file as one line per node.
+// shows the syntax tree, ?gron shows a JSON file as one line per node, and
+// ?json, ?yaml and ?keyval show a file in one of those formats in another.
 // Binary files go raw.
 func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, info fs.FileInfo) {
 	b, err := fs.ReadFile(t.fsys, name)
@@ -204,6 +205,18 @@ func (t *tree) serveCode(w http.ResponseWriter, r *http.Request, name string, in
 			return
 		}
 		body.WriteString("<p class=\"own warn\">No gron view, since this is not valid JSON: " + template.HTMLEscapeString(err.Error()) + "</p>\n")
+	}
+	if from := formatOf(name); from != nil {
+		if to := formatView(from, q); to != nil {
+			code, err := formatPage(b, from, to)
+			if err == nil {
+				body.WriteString(formatNote(name, from, to))
+				body.WriteString(`<div class="code">` + codeViews(name, to.name) + code + `</div>`)
+				t.render(w, r, http.StatusOK, page{Title: name, Crumbs: t.crumbs(name), Kind: "code", Body: template.HTML(body.String())})
+				return
+			}
+			body.WriteString(formatFail(from, to, err))
+		}
 	}
 	if _, ok := q["tree"]; ok {
 		tree, err := syntaxPage(r.Context(), name, pageHref(r.URL.Path), b)

@@ -22,7 +22,7 @@ func TestTokenMarks(t *testing.T) {
 		}
 	}
 	if len(got) != 2 || got[1] != "b" || got[3] != "c" {
-		t.Errorf("marks: %q", got)
+		t.Errorf("marks: %v", got)
 	}
 	if h := markLine(lines[3], marks[3]); h != "+\tx := f(a, <mark>c</mark>)" {
 		t.Errorf("line: %s", h)

@@ -49,3 +49,15 @@ A first view of a 1,400-line file takes about 20 ms and sends 1.2 MB; one of jqu
 A JSON file has one more view, gron, at the left end of that row. `?gron` shows the file as one line per node, each a JavaScript assignment such as `json.tags[0] = "a";`, so every value reads and searches with its full path.
 
 Keys keep the file's order and values show as written. A file that is not valid JSON shows the plain code under a line that names where parsing stopped.
+
+## Formats
+
+A JSON, YAML or keyval file names all three formats at the left end of the row: json, yaml and keyval. The file's own format is plain text. The other two are links, `?json`, `?yaml` and `?keyval`, and each shows the same document written in that format. The files are those ending in `.json`, `.yaml`, `.yml` and `.kv`.
+
+[kv](https://github.com/unixfile/kv) converts, through keyval's tree. A converted view is a reading aid, not the file: a line above the code says what changed. Keys are sorted. An empty list becomes an empty map. From YAML, comments are dropped and aliases are written out, and a stream of documents becomes a list.
+
+Values keep their types. A string that looks like a number or `true` stays quoted, and a name with a dot converts whole.
+
+Some files do not convert, and the page then says why above the file as written: a file that does not parse, a document that is a single value, a name with a space, or YAML whose aliases expand past a million nodes.
+
+A converted view takes about a second per MB the first time, most of it in kv and in colouring YAML, so a file over 1 MB is not converted. The server keeps the view by the file's hash, and a later view takes a few milliseconds.
