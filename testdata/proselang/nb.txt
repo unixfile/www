@@ -1,0 +1,1 @@
+Tjeneren gjengir hver side når noen ber om den, så det finnes ikke noe byggetrinn og ingenting å publisere. En endring i en fil vises i nettleseren så snart den har blitt lagret.

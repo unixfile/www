@@ -1,0 +1,1 @@
+Il server produce ogni pagina quando viene richiesta, quindi non c'è una fase di compilazione e non c'è nulla da pubblicare. Una modifica a un file si vede nel browser non appena viene salvata.

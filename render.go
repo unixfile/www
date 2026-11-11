@@ -50,6 +50,7 @@ var markdown = goldmark.New(
 func renderMarkdown(src []byte, missing func(dest string) bool, web *string) (template.HTML, error) {
 	doc := markdown.Parser().Parse(text.NewReader(src))
 	markAlerts(doc, src)
+	markLang(doc, src)
 	if missing != nil {
 		markBroken(doc, missing)
 	}

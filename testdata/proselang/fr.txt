@@ -1,0 +1,1 @@
+Le serveur produit chaque page au moment où elle est demandée, il n'y a donc pas d'étape de construction et rien à publier. Une modification dans un fichier apparaît dans le navigateur dès qu'il est enregistré.

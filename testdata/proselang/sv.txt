@@ -1,0 +1,1 @@
+Servern renderar varje sida när den efterfrågas, så det finns inget byggsteg och ingenting att publicera. En ändring i en fil syns i webbläsaren så snart den har sparats.

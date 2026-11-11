@@ -1,0 +1,1 @@
+Der Server erzeugt jede Seite, wenn sie angefragt wird, es gibt also keinen Build-Schritt und nichts zu veröffentlichen. Eine Änderung an einer Datei zeigt sich im Browser, sobald sie gespeichert ist.

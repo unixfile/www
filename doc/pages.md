@@ -26,6 +26,10 @@ Docs follow CommonMark with GitHub's extensions, rendered by goldmark: tables, s
 
 Lines join into a paragraph, and a blank line starts the next. A line that starts with a dash begins a list even right after text. Straight quotes and dashes turn typographic.
 
+Text is hyphenated by the rules of its language, which the browser picks from a block's `lang`. www tells each block's language from its commonest words, eg `och`, `att` and `inte` for Swedish, and marks every block that is not English. It knows English, Swedish, Danish, Norwegian, German, Dutch, French, Spanish, Italian and Portuguese.
+
+A block is a paragraph, heading, list, quote or table at the doc's top level. One too short to tell, such as a heading, takes the language of the doc as a whole. A doc in a language www does not know counts as English. Code and raw HTML are neither read nor marked.
+
 A quote whose first line is only `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` becomes an alert. The marker gives way to a small mono label that names its kind, and the alert keeps full strength where a plain quote fades. A marker with text after it on the same line stays a plain quote.
 
 Wiki links work as relative links do. `[[name]]` opens `name.md` in the doc's directory and `[[sub/name]]` opens `sub/name.md`. A name with an extension, eg `[[main.go]]`, keeps it. `[[name|label]]` shows the label and `[[name#heading]]` opens at the heading.

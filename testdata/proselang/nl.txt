@@ -1,0 +1,1 @@
+De server maakt elke pagina op het moment dat erom wordt gevraagd, dus er is geen bouwstap en er hoeft niets gepubliceerd te worden. Een wijziging in een bestand is in de browser te zien zodra het is opgeslagen.

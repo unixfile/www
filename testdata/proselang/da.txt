@@ -1,0 +1,1 @@
+Serveren gengiver hver side, når der bliver spurgt efter den, så der er ikke noget byggetrin og intet at udgive. En ændring af en fil ses i browseren, så snart den er blevet gemt.

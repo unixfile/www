@@ -1,0 +1,1 @@
+El servidor genera cada página cuando se le pide, así que no hay paso de compilación ni nada que publicar. Un cambio en un archivo se ve en el navegador en cuanto se guarda.
