@@ -784,6 +784,17 @@
 		location.href = crumbs[crumbs.length - 1].href;
 	};
 	document.addEventListener("keydown", (e) => {
+		// Alt with a sort flag's letter, or Alt+-, follows that flag's link
+		// over a details view, as a click would. A letter alone types in
+		// the box, so the sort takes a modifier.
+		if (e.altKey && !e.ctrlKey && !e.metaKey && !e.isComposing && !e.defaultPrevented) {
+			const flag = [...document.querySelectorAll("main li.flags a[data-key]")].find((a) => a.dataset.key === e.key.toLowerCase());
+			if (flag) {
+				e.preventDefault();
+				location.href = flag.href;
+			}
+			return;
+		}
 		if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing || e.defaultPrevented) return;
 		const b = box();
 		const inBox = !!b && e.target === b;

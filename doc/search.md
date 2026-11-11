@@ -29,7 +29,9 @@ Escape clears the query and brings the page back. Escape on an empty query goes 
 
 Up and Down move a highlight through a listing's entries, or through a search's matches and results, and Enter opens it. A match opens at its place in the whole page. The highlight survives a reload.
 
-Left and Right move the cursor in the box and never navigate. With nothing to walk, Up, Down and Space scroll the page.
+Left and Right move the cursor in the box and never navigate.
+
+Over a details view, Alt+S, Alt+T and Alt+- press the sort headers `-S`, `-t` and `-`, as a click would. A letter alone types in the box, so the sort takes Alt. Firefox with its menu bar in use may open a menu on Alt+S or Alt+T instead. With nothing to walk, Up, Down and Space scroll the page.
 
 Shift+Tab in the box enters the header at the crumb Escape goes to, and Tab goes on from there to raw on a doc and Delete lock. Escape on a focused link or button returns to the box.
 

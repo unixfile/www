@@ -3,6 +3,7 @@ package www
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +89,10 @@ func TestDetailsOfAVersion(t *testing.T) {
 	}
 }
 
+// keyAttrs matches the key a sort flag's link names, which the tests of
+// the links' order and targets leave out.
+var keyAttrs = regexp.MustCompile(` title="Alt\+[^"]*" data-key="[^"]*"`)
+
 // The flags over the details view's columns sort it as ls does: a first
 // click sorts, a second reverses, a third returns to name order. The
 // view's command names the flags, and directory links keep them.
@@ -122,7 +127,7 @@ func TestDetailsSort(t *testing.T) {
 		"?details=r":   {"ls -lr", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details">-r</a>`, []string{"small", "mid", "big", "d/"}, "d/?details=r"},
 		"?details=xyz": {"ls -l", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details=r">-</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
 	} {
-		body := get(h, "/s/"+q).Body.String()
+		body := keyAttrs.ReplaceAllString(get(h, "/s/"+q).Body.String(), "")
 		for _, w := range []string{"<span>" + want.cmd + "</span>", `<a href="./">ls</a>`,
 			`<li class="flags"><span class="lead num size">` + want.size + `</span> <span class="lead num age">` + want.age + `</span> <span>` + want.name + `</span></li>`,
 			`<a href="` + want.dirHref + `">d/</a>`} {
@@ -139,6 +144,18 @@ func TestDetailsSort(t *testing.T) {
 			at = i
 		}
 	}
+	// Each flag names its key, which the script reads from data-key.
+	body := get(h, "/s/?details=S").Body.String()
+	for _, w := range []string{`<a class="on" href="?details=Sr" title="Alt+S" data-key="s">-S</a>`,
+		`<a href="?details=t" title="Alt+T" data-key="t">-t</a>`, `<a href="?details" title="Alt+-" data-key="-">-</a>`} {
+		if !strings.Contains(body, w) {
+			t.Errorf("?details=S lacks %s:\n%s", w, body)
+		}
+	}
+	js, err := os.ReadFile("assets/live.js")
+	if err != nil || !strings.Contains(string(js), `querySelectorAll("main li.flags a[data-key]")`) {
+		t.Errorf("the script does not read the flags' keys: %v", err)
+	}
 	// The names view has no flags.
 	if body := get(h, "/s/").Body.String(); strings.Contains(body, `class="flags"`) {
 		t.Errorf("the names view has sort flags:\n%s", body)
@@ -153,7 +170,7 @@ func TestDetailsSortOfAVersion(t *testing.T) {
 	for rec.Code == 301 || rec.Code == 302 || rec.Code == 308 {
 		rec = get(h, rec.Header().Get("Location"))
 	}
-	body := rec.Body.String()
+	body := keyAttrs.ReplaceAllString(rec.Body.String(), "")
 	if !strings.Contains(body, `<li class="flags"><span class="lead num size"><a href="?details=S">-S</a></span> <span class="lead num age"></span> <span><a class="on" href="?details=r">-</a></span></li>`) ||
 		!strings.Contains(body, "<span>ls -l</span>") {
 		t.Errorf("version details sorted by time (%d):\n%s", rec.Code, body)
