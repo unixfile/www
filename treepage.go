@@ -2,11 +2,13 @@ package www
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
+	"math"
 	"net/http"
 	"net/url"
 	"path"
@@ -281,6 +283,7 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		info fs.FileInfo // nil when unknown or refused
 	}
 	details := r.URL.Query().Has("details")
+	sortKey, sortRev := detailSort(r.URL.Query().Get("details"), t.at != nil)
 	// Entries reached through a link out of the tree are checked one by
 	// one, since each may be refused. So is every entry of a shared tree.
 	// A version holds only what git stored, so nothing leads out of it.
@@ -321,6 +324,24 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 		}
 		return strings.Compare(a.name, b.name)
 	})
+	// A sorted details view orders by size or time as ls does, largest or
+	// newest first. An entry without the value goes last and keeps its
+	// name order: a directory under -S, a refused entry under either.
+	if sortKey != "" {
+		val := func(it item) int64 {
+			switch {
+			case it.info == nil, sortKey == "S" && it.dir:
+				return math.MinInt64
+			case sortKey == "S":
+				return it.info.Size()
+			}
+			return it.info.ModTime().UnixNano()
+		}
+		slices.SortStableFunc(items, func(a, b item) int { return cmp.Compare(val(b), val(a)) })
+		if sortRev {
+			slices.Reverse(items)
+		}
+	}
 
 	var body strings.Builder
 	if t.at != nil {
@@ -332,8 +353,9 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	// screen shows as text, the others as links. The details view stays on
 	// while the reader moves between directories, as a file manager's does.
 	view, lead := "", ""
+	flags := sortFlags(sortKey, sortRev)
 	if details {
-		view = "?details"
+		view = detailsQuery(flags)
 		lead = detailFields(nil, true, true, time.Time{})
 	}
 	cmd := func(label, href string, here bool) string {
@@ -344,11 +366,14 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 	}
 	// The history sits at the row's right end, apart from the two
 	// listing views.
-	body.WriteString("<li class=\"cmds\">" + cmd(namesLabel, "./", !details) + " " + cmd(detailsLabel, "?details", details))
+	body.WriteString("<li class=\"cmds\">" + cmd(namesLabel, "./", !details) + " " + cmd(detailsCmd(flags, details), "?details", details))
 	if t.lastCommit(r.Context(), name) != nil {
 		body.WriteString(" <a class=\"history\" href=\"?log\">" + template.HTMLEscapeString(logLabel) + "</a>")
 	}
 	body.WriteString("</li>\n")
+	if details {
+		body.WriteString(detailHeader(sortKey, sortRev, t.at != nil))
+	}
 	if name != "." {
 		body.WriteString("<li>" + lead + "<a href=\"../" + view + "\">../</a></li>\n")
 	}

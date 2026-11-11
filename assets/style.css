@@ -333,6 +333,9 @@ ul.listing .lead.age { min-width: 3ch; }
 ul.listing li.cmds { display: flex; flex-wrap: wrap; column-gap: 1ch; }
 ul.listing li.cmds > span { color: var(--page); background: var(--text); margin: 0 -0.4em; padding: 0 0.4em; }
 ul.listing li.cmds > .history { margin-left: auto; }
+/* The flags over a details view's columns are links; the one in force is
+   in reverse video, as the view on screen is. */
+ul.listing li.flags a.on { color: var(--page); background: var(--text); text-decoration: none; }
 table.locks td + td { text-align: right; }
 table.locks form { display: inline; }
 
@@ -402,7 +405,7 @@ html.calm :is(div.search, div.view) { background-color: transparent; pointer-eve
    which the text would count as breaks, and a 404's coin. Line numbers are generated
    content, which the text never holds. */
 body.copying main .own, body.copying main div.view, body.copying main div.backlinks,
-body.copying main li.log, body.copying main li.cmds, body.copying main li:has(> a[href="../"]), body.copying main li:has(> a[href="../?details"]), body.copying main i.scope, body.copying main a.web, body.copying main div.semantic, body.copying main p.coin { display: none; }
+body.copying main li.log, body.copying main li.cmds, body.copying main li.flags, body.copying main li:has(> a[href="../"]), body.copying main li:has(> a[href="../?details"]), body.copying main i.scope, body.copying main a.web, body.copying main div.semantic, body.copying main p.coin { display: none; }
 /* Search results: the path is the program's and mono, a matching line is
    the file's and stays mono too, in the muted colour. */
 div.found .line { color: var(--muted); font-size: 0.8em; hyphens: none; }

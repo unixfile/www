@@ -87,3 +87,74 @@ func TestDetailsOfAVersion(t *testing.T) {
 		t.Errorf("version details of a/ (%d):\n%s", rec.Code, body)
 	}
 }
+
+// The flags over the details view's columns sort it as ls does: a first
+// click sorts, a second reverses, a third returns to name order. The
+// view's command names the flags, and directory links keep them.
+func TestDetailsSort(t *testing.T) {
+	s, _, dir := serveTree(t)
+	os.MkdirAll(filepath.Join(dir, "s", "d"), 0o755)
+	now := time.Now()
+	for i, f := range []struct {
+		name string
+		size int
+		age  time.Duration
+	}{{"big", 300, 3 * time.Hour}, {"mid", 50, time.Hour}, {"small", 5, 2 * time.Hour}} {
+		p := filepath.Join(dir, "s", f.name)
+		if err := os.WriteFile(p, make([]byte, f.size), 0o644); err != nil {
+			t.Fatal(i, err)
+		}
+		os.Chtimes(p, now.Add(-f.age), now.Add(-f.age))
+	}
+	old := now.Add(-5 * time.Hour)
+	os.Chtimes(filepath.Join(dir, "s", "d"), old, old)
+	h := s.handler()
+	for q, want := range map[string]struct {
+		cmd, size, age string
+		order          []string
+		dirHref        string
+	}{
+		"?details":     {"&lt;(ls -l)", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
+		"?details=S":   {"&lt;(ls -lS)", `<a class="on" href="?details=Sr">-S</a>`, `<a href="?details=t">-t</a>`, []string{"big", "mid", "small", "d/"}, "d/?details=S"},
+		"?details=Sr":  {"&lt;(ls -lSr)", `<a class="on" href="?details">-Sr</a>`, `<a href="?details=t">-t</a>`, []string{"d/", "small", "mid", "big"}, "d/?details=Sr"},
+		"?details=t":   {"&lt;(ls -lt)", `<a href="?details=S">-S</a>`, `<a class="on" href="?details=tr">-t</a>`, []string{"mid", "small", "big", "d/"}, "d/?details=t"},
+		"?details=tr":  {"&lt;(ls -ltr)", `<a href="?details=S">-S</a>`, `<a class="on" href="?details">-tr</a>`, []string{"d/", "big", "small", "mid"}, "d/?details=tr"},
+		"?details=xyz": {"&lt;(ls -l)", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
+	} {
+		body := get(h, "/s/"+q).Body.String()
+		for _, w := range []string{"<span>" + want.cmd + "</span>", `<a href="./">&lt;(ls)</a>`,
+			`<li class="flags"><span class="lead num size">` + want.size + `</span> <span class="lead num age">` + want.age + `</span> </li>`,
+			`<a href="` + want.dirHref + `">d/</a>`} {
+			if !strings.Contains(body, w) {
+				t.Errorf("%s lacks %s:\n%s", q, w, body)
+			}
+		}
+		at := 0
+		for _, n := range want.order {
+			i := strings.Index(body, ">"+n+"</a></li>")
+			if i < at {
+				t.Errorf("%s: %s is out of order %v:\n%s", q, n, want.order, body)
+			}
+			at = i
+		}
+	}
+	// The names view has no flags.
+	if body := get(h, "/s/").Body.String(); strings.Contains(body, `class="flags"`) {
+		t.Errorf("the names view has sort flags:\n%s", body)
+	}
+}
+
+// A version has no ages, so no -t, and ?details=t there is name order.
+func TestDetailsSortOfAVersion(t *testing.T) {
+	s, dir := repoTree(t)
+	h := s.handler()
+	rec := get(h, "/@"+head(t, dir, "HEAD")[:7]+"/a/?details=t")
+	for rec.Code == 301 || rec.Code == 302 || rec.Code == 308 {
+		rec = get(h, rec.Header().Get("Location"))
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<li class="flags"><span class="lead num size"><a href="?details=S">-S</a></span> <span class="lead num age"></span> </li>`) ||
+		!strings.Contains(body, "<span>&lt;(ls -l)</span>") {
+		t.Errorf("version details sorted by time (%d):\n%s", rec.Code, body)
+	}
+}

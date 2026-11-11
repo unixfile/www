@@ -16,6 +16,71 @@ const (
 	detailsLabel = "<(ls -l)"
 )
 
+// A details view sorts by name, or by the flag in its query, eg
+// ?details=t or ?details=Sr: S for size, largest first, t for time,
+// newest first, and r after either to reverse it. detailSort reads the
+// query's value; any other value, or t in a version, which has no times,
+// is name order.
+func detailSort(v string, version bool) (key string, rev bool) {
+	switch v {
+	case "S", "Sr", "t", "tr":
+		if v[0] == 't' && version {
+			return "", false
+		}
+		return v[:1], len(v) == 2
+	}
+	return "", false
+}
+
+// sortFlags writes a sort as its query value, eg "tr".
+func sortFlags(key string, rev bool) string {
+	if rev && key != "" {
+		return key + "r"
+	}
+	return key
+}
+
+// detailsQuery is the query of a details view in a sort.
+func detailsQuery(flags string) string {
+	if flags == "" {
+		return "?details"
+	}
+	return "?details=" + flags
+}
+
+// detailHeader is the row over the details view's columns: -S over the
+// sizes and -t over the ages, each a link. A first click sorts by the
+// column as ls does, a second adds r and reverses, a third returns to
+// name order. The flag in force shows as the view's command has it, eg
+// -tr, in reverse video. A version has no ages and so no -t.
+func detailHeader(key string, rev, version bool) string {
+	cell := func(class, k string) string {
+		label, next, on := "-"+k, k, ""
+		if k == key {
+			label, on = "-"+sortFlags(key, rev), ` class="on"`
+			next = sortFlags(k, true)
+			if rev {
+				next = ""
+			}
+		}
+		return `<span class="lead num ` + class + `"><a` + on + ` href="` + detailsQuery(next) + `">` + label + `</a></span> `
+	}
+	age := `<span class="lead num age"></span> `
+	if !version {
+		age = cell("age", "t")
+	}
+	return `<li class="flags">` + cell("size", "S") + age + "</li>\n"
+}
+
+// detailsCmd is the label of the details view's entry: the command with
+// the sort's flags when that view is on screen, eg <(ls -ltr).
+func detailsCmd(flags string, here bool) string {
+	if !here || flags == "" {
+		return detailsLabel
+	}
+	return "<(ls -l" + flags + ")"
+}
+
 // detailFields is the lead of a row in the details view: size, then age,
 // each right-aligned in a column of fixed width. A directory has no size,
 // and a version has no age, since git keeps no modification times; a
