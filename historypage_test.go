@@ -277,7 +277,7 @@ func TestSlowHistoryNamesCommitGraph(t *testing.T) {
 func TestDirectoryHistoryKeepsTheCommands(t *testing.T) {
 	s, _ := repoTree(t)
 	h := s.handler()
-	row := `<ul class="listing">` + "\n" + `<li class="cmds"><a href="./">ls</a> <a href="?details">ls -l</a> <span class="history">&lt;(git log)</span></li>` + "\n</ul>"
+	row := `<ul class="listing row">` + "\n" + `<li class="cmds"><a href="./">ls</a> <a href="?details">ls -l</a> <span class="history">&lt;(git log)</span></li>` + "\n</ul>"
 	for _, p := range []string{"/?log", "/a/?log"} {
 		if body := get(h, p).Body.String(); !strings.Contains(body, row) {
 			t.Errorf("%s lacks the commands row:\n%s", p, body)
@@ -285,5 +285,18 @@ func TestDirectoryHistoryKeepsTheCommands(t *testing.T) {
 	}
 	if body := get(h, "/a/b.go?log").Body.String(); strings.Contains(body, `class="cmds"`) {
 		t.Errorf("a file's history has a commands row:\n%s", body)
+	}
+}
+
+// The arrow keys walk a listing's links. A history's commands row is
+// marked as a bare row and left out, or its two links would take the
+// arrows and the history could no longer be scrolled by key.
+func TestArrowsLeaveTheHistorysRow(t *testing.T) {
+	js, err := os.ReadFile("assets/live.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(js), `querySelectorAll("main ul.listing:not(.row) a")`) {
+		t.Error("the arrow keys walk every listing, a history's commands row included")
 	}
 }

@@ -773,7 +773,7 @@
 	// other focused control comes back to the box.
 	const openMenu = () => document.querySelector("details.latest[open]");
 	const walkable = () =>
-		openMenu() ? [...openMenu().querySelectorAll("ol.versions a")] : (searching() ? [...document.querySelectorAll("div.found ul.web a"), ...matches, ...document.querySelectorAll("div.found ul:not(.web) a")] : [...document.querySelectorAll("main ul.listing a")])
+		openMenu() ? [...openMenu().querySelectorAll("ol.versions a")] : (searching() ? [...document.querySelectorAll("div.found ul.web a"), ...matches, ...document.querySelectorAll("div.found ul:not(.web) a")] : [...document.querySelectorAll("main ul.listing:not(.row) a")])
 			.filter((el) => el.offsetParent !== null);
 	const up = () => {
 		const crumbs = document.querySelectorAll("header nav a");
