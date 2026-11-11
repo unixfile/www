@@ -52,7 +52,7 @@ Keys keep the file's order and values show as written. A file that is not valid 
 
 ## Formats
 
-A JSON, YAML or keyval file names all three formats at the left end of the row: json, yaml and keyval. The file's own format is plain text. The other two are links, `?json`, `?yaml` and `?keyval`, and each shows the same document written in that format. The files are those ending in `.json`, `.yaml`, `.yml` and `.kv`.
+A JSON, YAML or keyval file links the other two formats at the left end of the row, as `as json`, `as yaml` or `as keyval`. Each link, `?json`, `?yaml` or `?keyval`, shows the same document converted to that format. The row does not name the file's own format: flat already shows the file as written, and leads back to it from a converted view. The files are those ending in `.json`, `.yaml`, `.yml` and `.kv`.
 
 [kv](https://github.com/unixfile/kv) converts, through keyval's tree. A converted view is a reading aid, not the file: a line above the code says what changed. Keys are sorted. An empty list becomes an empty map. From YAML, comments are dropped and aliases are written out, and a stream of documents becomes a list.
 

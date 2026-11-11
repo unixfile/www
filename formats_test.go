@@ -103,17 +103,18 @@ func TestFormatViews(t *testing.T) {
 	write("bad.json", `{"a":}`)
 	body := func(p string) string { return get(s.handler(), p).Body.String() }
 
-	// A file's own format is plain text; the others are links.
+	// The row links the other two formats, each marked as a conversion,
+	// and does not name the file's own.
 	for p, want := range map[string][]string{
-		"/a.json": {`<a class="left" href="?gron">gron</a>`, `<span class="left">json</span>`, `<a class="left" href="?yaml">yaml</a>`, `<a class="left" href="?keyval">keyval</a>`, `<span>flat</span>`},
-		"/a.yaml": {`<a class="left" href="?json">json</a>`, `<span class="left">yaml</span>`, `<a class="left" href="?keyval">keyval</a>`},
-		"/A.YML":  {`<a class="left" href="?json">json</a>`, `<span class="left">yaml</span>`},
-		"/a.kv":   {`<a class="left" href="?json">json</a>`, `<a class="left" href="?yaml">yaml</a>`, `<span class="left">keyval</span>`},
+		"/a.json": {`<a class="left" href="?gron">gron</a>`, `<a class="left" href="?yaml">as yaml</a>`, `<a class="left" href="?keyval">as keyval</a>`, `<span>flat</span>`},
+		"/a.yaml": {`<a class="left" href="?json">as json</a>`, `<a class="left" href="?keyval">as keyval</a>`, `<span>flat</span>`},
+		"/A.YML":  {`<a class="left" href="?json">as json</a>`},
+		"/a.kv":   {`<a class="left" href="?json">as json</a>`, `<a class="left" href="?yaml">as yaml</a>`},
 		// A query for the file's own format shows the file.
-		"/a.json?json":   {`<span class="left">json</span>`, `<span>flat</span>`, `<span id="L1">`},
-		"/a.json?scopes": {`<span class="left">json</span>`, `<span>scopes</span>`},
-		// Gron is not the file as written, so json leads back to it.
-		"/a.json?gron": {`<span class="left">gron</span>`, `<a class="left" href="?">json</a>`},
+		"/a.json?json":   {`<span>flat</span>`, `<span id="L1">`},
+		"/a.json?scopes": {`<span>scopes</span>`},
+		// Flat leads back from gron to the file as written.
+		"/a.json?gron": {`<span class="left">gron</span>`, `<a href="?">flat</a>`},
 	} {
 		b := body(p)
 		for _, w := range want {
@@ -123,11 +124,18 @@ func TestFormatViews(t *testing.T) {
 		}
 	}
 
+	// No view of a file names the file's own format in the row.
+	for p, own := range map[string]string{"/a.json": "json", "/a.json?yaml": "json", "/a.yaml": "yaml", "/a.kv?json": "keyval"} {
+		if b := body(p); strings.Contains(b, ">"+own+"<") || strings.Contains(b, ">as "+own+"<") {
+			t.Errorf("%s names its own format %s: %s", p, own, b)
+		}
+	}
+
 	// A converted view shows the other format, numbered, under a note,
 	// with every other view a link.
 	b := body("/a.json?yaml")
-	for _, w := range []string{"a.json as YAML, converted from JSON: keys are sorted", `<span class="left">yaml</span>`,
-		`<a class="left" href="?">json</a>`, `<a href="?">flat</a>`, `<a href="?raw">raw</a>`, `<span id="L3">`} {
+	for _, w := range []string{"a.json as YAML, converted from JSON: keys are sorted", `<span class="left">as yaml</span>`,
+		`<a class="left" href="?keyval">as keyval</a>`, `<a href="?">flat</a>`, `<a href="?raw">raw</a>`, `<span id="L3">`} {
 		if !strings.Contains(b, w) {
 			t.Errorf("/a.json?yaml lacks %s: %s", w, b)
 		}
@@ -139,13 +147,13 @@ func TestFormatViews(t *testing.T) {
 		!strings.Contains(b, "b 1") || strings.Contains(b, "why") {
 		t.Errorf("/a.yaml?keyval: %s", b)
 	}
-	if b := body("/a.kv?json"); !strings.Contains(b, `<span class="left">json</span>`) || !strings.Contains(b, `<span id="L3">`) {
+	if b := body("/a.kv?json"); !strings.Contains(b, `<span class="left">as json</span>`) || !strings.Contains(b, `<span id="L3">`) {
 		t.Errorf("/a.kv?json: %s", b)
 	}
 
 	// A file that does not convert says why above the file as written.
 	if b := body("/bad.json?yaml"); !strings.Contains(b, "No YAML view, since this JSON does not convert: ") ||
-		!strings.Contains(b, `<span>flat</span>`) || !strings.Contains(b, `<span class="left">json</span>`) {
+		!strings.Contains(b, `<span>flat</span>`) || !strings.Contains(b, `<a class="left" href="?yaml">as yaml</a>`) {
 		t.Errorf("/bad.json?yaml: %s", b)
 	}
 

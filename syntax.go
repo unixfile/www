@@ -427,7 +427,7 @@ func writeExcerpt(b *strings.Builder, lines [][]byte, n synNode) {
 // codeViews are the links over a code page's top right corner: every
 // view, the one shown as plain text, then the raw file. A JSON file also
 // has the gron view, at the row's left end, and a JSON, YAML or keyval
-// file its formats.
+// file the other two formats.
 func codeViews(name, shown string) string {
 	var b strings.Builder
 	b.WriteString(`<div class="view">`)
@@ -443,18 +443,17 @@ func codeViews(name, shown string) string {
 	if isJSON(name) {
 		view("gron", "?gron", ` class="left"`)
 	}
-	// A structured file names its formats there too. Its own format is
-	// the file as written, so it is plain text on every view of the file.
+	// A structured file names the formats it converts to there too, each
+	// as "as yaml": the link shows a conversion, not the file. The file's
+	// own format has no link, since flat already shows the file.
 	if own := formatOf(name); own != nil {
-		native := shown == "flat" || shown == "scopes" || shown == "tree"
 		for _, f := range docFormats {
 			switch {
-			case f != own:
-				view(f.name, "?"+f.name, ` class="left"`)
-			case native:
-				b.WriteString(`<span class="left">` + f.name + `</span>`)
+			case f == own:
+			case f.name == shown:
+				b.WriteString(`<span class="left">as ` + f.name + `</span>`)
 			default:
-				view(f.name, "?", ` class="left"`)
+				b.WriteString(`<a class="left" href="?` + f.name + `">as ` + f.name + `</a>`)
 			}
 		}
 	}
