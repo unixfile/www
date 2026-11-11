@@ -271,3 +271,19 @@ func TestSlowHistoryNamesCommitGraph(t *testing.T) {
 		t.Errorf("hint for a split graph with filters:\n%s", body)
 	}
 }
+
+// A directory's history keeps the listing's commands row, with the
+// history as the view on screen. A file's history has no such row.
+func TestDirectoryHistoryKeepsTheCommands(t *testing.T) {
+	s, _ := repoTree(t)
+	h := s.handler()
+	row := `<ul class="listing">` + "\n" + `<li class="cmds"><a href="./">&lt;(ls)</a> <a href="?details">&lt;(ls -l)</a> <span class="history">&lt;(git log)</span></li>` + "\n</ul>"
+	for _, p := range []string{"/?log", "/a/?log"} {
+		if body := get(h, p).Body.String(); !strings.Contains(body, row) {
+			t.Errorf("%s lacks the commands row:\n%s", p, body)
+		}
+	}
+	if body := get(h, "/a/b.go?log").Body.String(); strings.Contains(body, `class="cmds"`) {
+		t.Errorf("a file's history has a commands row:\n%s", body)
+	}
+}

@@ -180,6 +180,13 @@ func (t *tree) serveLog(w http.ResponseWriter, r *http.Request, name string, dir
 	stars := t.starsFor(r.Context(), name)
 	esc := template.HTMLEscapeString
 	var body strings.Builder
+	// A directory's history keeps the listing's commands row, with the
+	// history as the view on screen, so the three views stay siblings
+	// and either listing is one click away.
+	if dir {
+		body.WriteString("<ul class=\"listing\">\n<li class=\"cmds\"><a href=\"./\">" + esc(namesLabel) + "</a> <a href=\"?details\">" +
+			esc(detailsLabel) + "</a> <span class=\"history\">" + esc(logLabel) + "</span></li>\n</ul>\n")
+	}
 	if len(log) == 0 {
 		shown := t.title(name)
 		if dir && name != "." {
