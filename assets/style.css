@@ -330,7 +330,7 @@ ul.listing .lead.age { min-width: 3ch; }
    the view on screen in reverse video, as a code page's view row has it.
    Its block reaches past the label on both sides without moving it. The
    history keeps to the right end. */
-ul.listing li.cmds { display: flex; flex-wrap: wrap; column-gap: 1ch; }
+ul.listing li.cmds { display: flex; flex-wrap: wrap; column-gap: 2ch; }
 ul.listing li.cmds > span { color: var(--page); background: var(--text); margin: 0 -0.4em; padding: 0 0.4em; }
 ul.listing li.cmds > .history { margin-left: auto; }
 /* The flags over a details view's columns are links; the one in force is

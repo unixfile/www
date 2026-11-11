@@ -37,7 +37,7 @@ func TestAgeOf(t *testing.T) {
 func TestListingLeadsToDetails(t *testing.T) {
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/a/").Body.String()
-	if !strings.Contains(body, `<li class="cmds"><span>&lt;(ls)</span> <a href="?details">&lt;(ls -l)</a></li>`) {
+	if !strings.Contains(body, `<li class="cmds"><span>ls</span> <a href="?details">ls -l</a></li>`) {
 		t.Errorf("no details entry:\n%s", body)
 	}
 	if strings.Contains(body, `class="lead`) || !strings.Contains(body, `<li><a href="../">../</a></li>`) {
@@ -56,7 +56,7 @@ func TestDetailsView(t *testing.T) {
 	h := s.handler()
 	body := get(h, "/a/?details").Body.String()
 	for _, want := range []string{
-		`<li class="cmds"><a href="./">&lt;(ls)</a> <span>&lt;(ls -l)</span></li>`,
+		`<li class="cmds"><a href="./">ls</a> <span>ls -l</span></li>`,
 		`<li><span class="lead num size"></span> <span class="lead num age"></span> <a href="../?details">../</a></li>`,
 		`<li><span class="lead num size">23</span> <span class="lead num age" title="` + exact(old) + `">3d</span> <a href="b.go">b.go</a></li>`,
 	} {
@@ -114,16 +114,16 @@ func TestDetailsSort(t *testing.T) {
 		order                []string
 		dirHref              string
 	}{
-		"?details":     {"&lt;(ls -l)", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details=r">-</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
-		"?details=S":   {"&lt;(ls -lS)", `<a class="on" href="?details=Sr">-S</a>`, `<a href="?details=t">-t</a>`, `<a href="?details">-</a>`, []string{"big", "mid", "small", "d/"}, "d/?details=S"},
-		"?details=Sr":  {"&lt;(ls -lSr)", `<a class="on" href="?details">-Sr</a>`, `<a href="?details=t">-t</a>`, `<a href="?details">-</a>`, []string{"d/", "small", "mid", "big"}, "d/?details=Sr"},
-		"?details=t":   {"&lt;(ls -lt)", `<a href="?details=S">-S</a>`, `<a class="on" href="?details=tr">-t</a>`, `<a href="?details">-</a>`, []string{"mid", "small", "big", "d/"}, "d/?details=t"},
-		"?details=tr":  {"&lt;(ls -ltr)", `<a href="?details=S">-S</a>`, `<a class="on" href="?details">-tr</a>`, `<a href="?details">-</a>`, []string{"d/", "big", "small", "mid"}, "d/?details=tr"},
-		"?details=r":   {"&lt;(ls -lr)", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details">-r</a>`, []string{"small", "mid", "big", "d/"}, "d/?details=r"},
-		"?details=xyz": {"&lt;(ls -l)", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details=r">-</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
+		"?details":     {"ls -l", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details=r">-</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
+		"?details=S":   {"ls -lS", `<a class="on" href="?details=Sr">-S</a>`, `<a href="?details=t">-t</a>`, `<a href="?details">-</a>`, []string{"big", "mid", "small", "d/"}, "d/?details=S"},
+		"?details=Sr":  {"ls -lSr", `<a class="on" href="?details">-Sr</a>`, `<a href="?details=t">-t</a>`, `<a href="?details">-</a>`, []string{"d/", "small", "mid", "big"}, "d/?details=Sr"},
+		"?details=t":   {"ls -lt", `<a href="?details=S">-S</a>`, `<a class="on" href="?details=tr">-t</a>`, `<a href="?details">-</a>`, []string{"mid", "small", "big", "d/"}, "d/?details=t"},
+		"?details=tr":  {"ls -ltr", `<a href="?details=S">-S</a>`, `<a class="on" href="?details">-tr</a>`, `<a href="?details">-</a>`, []string{"d/", "big", "small", "mid"}, "d/?details=tr"},
+		"?details=r":   {"ls -lr", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details">-r</a>`, []string{"small", "mid", "big", "d/"}, "d/?details=r"},
+		"?details=xyz": {"ls -l", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details=r">-</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
 	} {
 		body := get(h, "/s/"+q).Body.String()
-		for _, w := range []string{"<span>" + want.cmd + "</span>", `<a href="./">&lt;(ls)</a>`,
+		for _, w := range []string{"<span>" + want.cmd + "</span>", `<a href="./">ls</a>`,
 			`<li class="flags"><span class="lead num size">` + want.size + `</span> <span class="lead num age">` + want.age + `</span> <span>` + want.name + `</span></li>`,
 			`<a href="` + want.dirHref + `">d/</a>`} {
 			if !strings.Contains(body, w) {
@@ -155,7 +155,7 @@ func TestDetailsSortOfAVersion(t *testing.T) {
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, `<li class="flags"><span class="lead num size"><a href="?details=S">-S</a></span> <span class="lead num age"></span> <span><a class="on" href="?details=r">-</a></span></li>`) ||
-		!strings.Contains(body, "<span>&lt;(ls -l)</span>") {
+		!strings.Contains(body, "<span>ls -l</span>") {
 		t.Errorf("version details sorted by time (%d):\n%s", rec.Code, body)
 	}
 }

@@ -10,10 +10,13 @@ import (
 )
 
 // The labels of the entries that switch a listing between its views name
-// the command each view stands for, as the history entry does.
+// the command each view stands for. They are bare commands: a listing is
+// the directory itself, seen through ls. The history entry alone is
+// written as a process substitution, <(git log), since it is a page of
+// its own, made from a command's output, and also stands in the crumbs.
 const (
-	namesLabel   = "<(ls)"
-	detailsLabel = "<(ls -l)"
+	namesLabel   = "ls"
+	detailsLabel = "ls -l"
 )
 
 // A details view sorts by name, or by the flags in its query, eg
@@ -84,12 +87,12 @@ func detailHeader(key string, rev, version bool) string {
 }
 
 // detailsCmd is the label of the details view's entry: the command with
-// the sort's flags when that view is on screen, eg <(ls -ltr).
+// the sort's flags when that view is on screen, eg ls -ltr.
 func detailsCmd(flags string, here bool) string {
 	if !here || flags == "" {
 		return detailsLabel
 	}
-	return "<(ls -l" + flags + ")"
+	return detailsLabel + flags
 }
 
 // detailFields is the lead of a row in the details view: size, then age,

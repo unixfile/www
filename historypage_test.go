@@ -14,7 +14,7 @@ import (
 func TestListingLeadsToHistory(t *testing.T) {
 	s, _ := repoTree(t)
 	h := s.handler()
-	entry := `<ul class="listing">` + "\n" + `<li class="cmds"><span>&lt;(ls)</span> <a href="?details">&lt;(ls -l)</a> <a class="history" href="?log">&lt;(git log)</a></li>`
+	entry := `<ul class="listing">` + "\n" + `<li class="cmds"><span>ls</span> <a href="?details">ls -l</a> <a class="history" href="?log">&lt;(git log)</a></li>`
 	for _, p := range []string{"/", "/a/"} {
 		if body := get(h, p).Body.String(); !strings.Contains(body, entry) {
 			t.Errorf("%s: no history entry first:\n%s", p, body)
@@ -277,7 +277,7 @@ func TestSlowHistoryNamesCommitGraph(t *testing.T) {
 func TestDirectoryHistoryKeepsTheCommands(t *testing.T) {
 	s, _ := repoTree(t)
 	h := s.handler()
-	row := `<ul class="listing">` + "\n" + `<li class="cmds"><a href="./">&lt;(ls)</a> <a href="?details">&lt;(ls -l)</a> <span class="history">&lt;(git log)</span></li>` + "\n</ul>"
+	row := `<ul class="listing">` + "\n" + `<li class="cmds"><a href="./">ls</a> <a href="?details">ls -l</a> <span class="history">&lt;(git log)</span></li>` + "\n</ul>"
 	for _, p := range []string{"/?log", "/a/?log"} {
 		if body := get(h, p).Body.String(); !strings.Contains(body, row) {
 			t.Errorf("%s lacks the commands row:\n%s", p, body)
