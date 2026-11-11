@@ -290,13 +290,14 @@ func TestDirectoryHistoryKeepsTheCommands(t *testing.T) {
 
 // The arrow keys walk a listing's links. A history's commands row is
 // marked as a bare row and left out, or its two links would take the
-// arrows and the history could no longer be scrolled by key.
+// arrows and the history could no longer be scrolled by key. A details
+// view's sort flags are left out too, so Down reaches the entries sooner.
 func TestArrowsLeaveTheHistorysRow(t *testing.T) {
 	js, err := os.ReadFile("assets/live.js")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(js), `querySelectorAll("main ul.listing:not(.row) a")`) {
-		t.Error("the arrow keys walk every listing, a history's commands row included")
+	if !strings.Contains(string(js), `querySelectorAll("main ul.listing:not(.row) li:not(.flags) a")`) {
+		t.Error("the arrow keys walk a history's commands row or a details view's sort flags")
 	}
 }
