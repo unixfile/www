@@ -21,27 +21,30 @@ const (
 )
 
 // A details view sorts by name, or by the flags in its query, eg
-// ?details=t or ?details=Sr: S for size, largest first, t for time,
-// newest first, and r, alone or after either, to reverse the order.
+// ?details=t or ?details=rS: S for size, largest first, t for time,
+// newest first, and r, alone or before either, to reverse the order.
 // detailSort reads the query's value; any other value, or t in a version,
 // which has no times, is name order.
 func detailSort(v string, version bool) (key string, rev bool) {
 	switch v {
 	case "r":
 		return "", true
-	case "S", "Sr", "t", "tr":
-		if v[0] == 't' && version {
+	case "S", "rS", "t", "rt":
+		key = v[len(v)-1:]
+		if key == "t" && version {
 			return "", false
 		}
-		return v[:1], len(v) == 2
+		return key, len(v) == 2
 	}
 	return "", false
 }
 
-// sortFlags writes a sort as its query value, eg "tr".
+// sortFlags writes a sort as its query value, eg "rt". The r leads, so a
+// header's S or t keeps its place at the column's right edge when a
+// click adds the r.
 func sortFlags(key string, rev bool) string {
 	if rev {
-		return key + "r"
+		return "r" + key
 	}
 	return key
 }
@@ -59,7 +62,7 @@ func detailsQuery(flags string) string {
 // click sorts by the column as ls does, a second adds r and reverses, a
 // third returns to name order; on name, a click reverses and the next
 // returns. The order in force is in reverse video and shows its flags as
-// the view's command has them, eg -tr. ls has no flag for name order, so
+// the view's command has them, eg -rt. ls has no flag for name order, so
 // that header is a dash with no flag after it, and -r once reversed.
 // Each link names its key in its title: Alt+S, Alt+T and Alt+-. A version has no ages
 // and so no -t.
@@ -95,7 +98,7 @@ func detailHeader(key string, rev, version bool) string {
 }
 
 // detailsCmd is the label of the details view's entry: the command with
-// the sort's flags when that view is on screen, eg ls -ltr.
+// the sort's flags when that view is on screen, eg ls -lrt.
 func detailsCmd(flags string, here bool) string {
 	if !here || flags == "" {
 		return detailsLabel

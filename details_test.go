@@ -120,10 +120,10 @@ func TestDetailsSort(t *testing.T) {
 		dirHref              string
 	}{
 		"?details":     {"ls -l", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details=r">-</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
-		"?details=S":   {"ls -lS", `<a class="on" href="?details=Sr">-S</a>`, `<a href="?details=t">-t</a>`, `<a href="?details">-</a>`, []string{"big", "mid", "small", "d/"}, "d/?details=S"},
-		"?details=Sr":  {"ls -lSr", `<a class="on" href="?details">-Sr</a>`, `<a href="?details=t">-t</a>`, `<a href="?details">-</a>`, []string{"d/", "small", "mid", "big"}, "d/?details=Sr"},
-		"?details=t":   {"ls -lt", `<a href="?details=S">-S</a>`, `<a class="on" href="?details=tr">-t</a>`, `<a href="?details">-</a>`, []string{"mid", "small", "big", "d/"}, "d/?details=t"},
-		"?details=tr":  {"ls -ltr", `<a href="?details=S">-S</a>`, `<a class="on" href="?details">-tr</a>`, `<a href="?details">-</a>`, []string{"d/", "big", "small", "mid"}, "d/?details=tr"},
+		"?details=S":   {"ls -lS", `<a class="on" href="?details=rS">-S</a>`, `<a href="?details=t">-t</a>`, `<a href="?details">-</a>`, []string{"big", "mid", "small", "d/"}, "d/?details=S"},
+		"?details=rS":  {"ls -lrS", `<a class="on" href="?details">-rS</a>`, `<a href="?details=t">-t</a>`, `<a href="?details">-</a>`, []string{"d/", "small", "mid", "big"}, "d/?details=rS"},
+		"?details=t":   {"ls -lt", `<a href="?details=S">-S</a>`, `<a class="on" href="?details=rt">-t</a>`, `<a href="?details">-</a>`, []string{"mid", "small", "big", "d/"}, "d/?details=t"},
+		"?details=rt":  {"ls -lrt", `<a href="?details=S">-S</a>`, `<a class="on" href="?details">-rt</a>`, `<a href="?details">-</a>`, []string{"d/", "big", "small", "mid"}, "d/?details=rt"},
 		"?details=r":   {"ls -lr", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details">-r</a>`, []string{"small", "mid", "big", "d/"}, "d/?details=r"},
 		"?details=xyz": {"ls -l", `<a href="?details=S">-S</a>`, `<a href="?details=t">-t</a>`, `<a class="on" href="?details=r">-</a>`, []string{"d/", "big", "mid", "small"}, "d/?details"},
 	} {
@@ -146,7 +146,7 @@ func TestDetailsSort(t *testing.T) {
 	}
 	// Each flag names its key, which the script reads from data-key.
 	body := get(h, "/s/?details=S").Body.String()
-	for _, w := range []string{`<a class="on" href="?details=Sr" title="Alt+S" data-key="s">-S</a>`,
+	for _, w := range []string{`<a class="on" href="?details=rS" title="Alt+S" data-key="s">-S</a>`,
 		`<a href="?details=t" title="Alt+T" data-key="t">-t</a>`, `<a href="?details" title="Alt+-" data-key="-">-</a>`} {
 		if !strings.Contains(body, w) {
 			t.Errorf("?details=S lacks %s:\n%s", w, body)
