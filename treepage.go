@@ -338,9 +338,10 @@ func (t *tree) serveDir(w http.ResponseWriter, r *http.Request, name string) {
 			return it.info.ModTime().UnixNano()
 		}
 		slices.SortStableFunc(items, func(a, b item) int { return cmp.Compare(val(b), val(a)) })
-		if sortRev {
-			slices.Reverse(items)
-		}
+	}
+	// -r reverses the whole order, name order included.
+	if details && sortRev {
+		slices.Reverse(items)
 	}
 
 	var body strings.Builder

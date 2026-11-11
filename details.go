@@ -16,13 +16,15 @@ const (
 	detailsLabel = "<(ls -l)"
 )
 
-// A details view sorts by name, or by the flag in its query, eg
+// A details view sorts by name, or by the flags in its query, eg
 // ?details=t or ?details=Sr: S for size, largest first, t for time,
-// newest first, and r after either to reverse it. detailSort reads the
-// query's value; any other value, or t in a version, which has no times,
-// is name order.
+// newest first, and r, alone or after either, to reverse the order.
+// detailSort reads the query's value; any other value, or t in a version,
+// which has no times, is name order.
 func detailSort(v string, version bool) (key string, rev bool) {
 	switch v {
+	case "r":
+		return "", true
 	case "S", "Sr", "t", "tr":
 		if v[0] == 't' && version {
 			return "", false
@@ -34,7 +36,7 @@ func detailSort(v string, version bool) (key string, rev bool) {
 
 // sortFlags writes a sort as its query value, eg "tr".
 func sortFlags(key string, rev bool) string {
-	if rev && key != "" {
+	if rev {
 		return key + "r"
 	}
 	return key
@@ -49,27 +51,36 @@ func detailsQuery(flags string) string {
 }
 
 // detailHeader is the row over the details view's columns: -S over the
-// sizes and -t over the ages, each a link. A first click sorts by the
-// column as ls does, a second adds r and reverses, a third returns to
-// name order. The flag in force shows as the view's command has it, eg
-// -tr, in reverse video. A version has no ages and so no -t.
+// sizes, -t over the ages and name over the names, each a link. A first
+// click sorts by the column as ls does, a second adds r and reverses, a
+// third returns to name order; on name, a click reverses and the next
+// returns. The order in force is in reverse video and shows its flags as
+// the view's command has them, eg -tr. ls has no flag for name order, so
+// that header is the word, and -r once reversed. A version has no ages
+// and so no -t.
 func detailHeader(key string, rev, version bool) string {
-	cell := func(class, k string) string {
-		label, next, on := "-"+k, k, ""
+	link := func(k, off string) string {
+		label, next, on := off, k, ""
 		if k == key {
-			label, on = "-"+sortFlags(key, rev), ` class="on"`
-			next = sortFlags(k, true)
+			on = ` class="on"`
+			next = sortFlags(k, !rev)
 			if rev {
-				next = ""
+				label = "-" + sortFlags(k, true)
+				if k != "" {
+					next = ""
+				}
 			}
 		}
-		return `<span class="lead num ` + class + `"><a` + on + ` href="` + detailsQuery(next) + `">` + label + `</a></span> `
+		return `<a` + on + ` href="` + detailsQuery(next) + `">` + label + `</a>`
 	}
-	age := `<span class="lead num age"></span> `
+	age := ""
 	if !version {
-		age = cell("age", "t")
+		age = link("t", "-t")
 	}
-	return `<li class="flags">` + cell("size", "S") + age + "</li>\n"
+	// The name's link sits in a span, so the listing's rule that
+	// stretches a row's first link over the row leaves this row alone.
+	return `<li class="flags"><span class="lead num size">` + link("S", "-S") + `</span> <span class="lead num age">` + age +
+		`</span> <span>` + link("", "name") + "</span></li>\n"
 }
 
 // detailsCmd is the label of the details view's entry: the command with
