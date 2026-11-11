@@ -1,7 +1,7 @@
 (() => {
 	let url = document.currentScript.dataset.live;
 	// The colour mode is the system's unless the reader chose dark or
-	// light in the header. The choice lives in this browser, per server
+	// light in the header's menu. The choice lives in this browser, per server
 	// address, and goes on the root before the body is read, so no page
 	// shows in the other mode first. The stylesheet does the rest.
 	const themeKey = "theme";
@@ -17,7 +17,10 @@
 		if (e.key === themeKey) theme(e.newValue);
 	});
 	document.addEventListener("click", (e) => {
-		const b = e.target.closest && e.target.closest("span.theme button");
+		// A click outside the open menu closes it.
+		const menu = document.querySelector("details.theme[open]");
+		if (menu && !(e.target.closest && e.target.closest("details.theme"))) menu.open = false;
+		const b = e.target.closest && e.target.closest("details.theme button");
 		if (!b) return;
 		const t = b.dataset.theme;
 		theme(t);
@@ -860,7 +863,8 @@
 				break;
 			}
 			case "Escape":
-				if (openMenu()) openMenu().open = false;
+				if (document.querySelector("details.theme[open]")) document.querySelector("details.theme[open]").open = false;
+				else if (openMenu()) openMenu().open = false;
 				else if (b && !inBox && document.activeElement !== document.body) b.focus({ preventScroll: true });
 				else if (q) clearSearch();
 				else up();

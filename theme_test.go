@@ -6,13 +6,13 @@ import (
 	"testing"
 )
 
-// A page's header offers the three colour modes, and the stylesheet and
+// A page's header offers the three colour modes in a menu, and the stylesheet and
 // the script hold what makes them work: every colour has both sides, the
 // root's data-theme picks one, and the script keeps the reader's choice.
 func TestColourMode(t *testing.T) {
 	s, _, _ := serveTree(t)
 	body := get(s.handler(), "/a/").Body.String()
-	want := `<span class="theme"><button data-theme="dark" title="dark pages">dark</button><button data-theme="light" title="light pages">light</button><button data-theme="system" title="pages follow the system">system</button></span>`
+	want := `<details class="theme"><summary title="dark or light pages" aria-label="dark or light pages"></summary><span><button data-theme="dark" title="dark pages">dark</button><button data-theme="light" title="light pages">light</button><button data-theme="system" title="pages follow the system">system</button></span></details>`
 	if !strings.Contains(body, want) {
 		t.Errorf("the header lacks the colour modes:\n%s", body)
 	}
@@ -35,7 +35,7 @@ func TestColourMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, w := range []string{`localStorage.getItem(themeKey)`, `document.documentElement.dataset.theme = t`, `closest("span.theme button")`} {
+	for _, w := range []string{`localStorage.getItem(themeKey)`, `document.documentElement.dataset.theme = t`, `closest("details.theme button")`} {
 		if !strings.Contains(string(js), w) {
 			t.Errorf("the script lacks %s", w)
 		}

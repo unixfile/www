@@ -7,7 +7,7 @@
    long read does not glare, and each tint keeps the role it has in the
    light palette. The syntax colours below are pandoc's.
    color-scheme picks the side: the system's by default, or the one the
-   reader set with the header's dark, light and system, which the script
+   reader set in the header's menu, dark, light or system, which the script
    keeps in data-theme on the root. */
 :root {
   color-scheme: light dark;
@@ -116,12 +116,23 @@ header nav > *, .seg { display: inline-block; max-width: 100%; overflow-wrap: an
 }
 header > span { display: inline-flex; gap: 1em; align-items: baseline; flex: none; margin-left: auto; }
 header form { display: inline; }
-/* The colour mode's three words are small and quiet, the size of the
-   build stamp. They are buttons, since they change a setting, drawn as
-   text; the mode in force is in reverse video. */
-header span.theme { display: inline-flex; gap: 0.4em; font-family: "Iosevka", "Iosevka web", monospace; font-size: 0.5625em; color: var(--muted); font-variant-ligatures: none; }
-header span.theme button { all: unset; cursor: pointer; padding: 0 0.3em; }
-header span.theme button:focus-visible { outline: 1px solid var(--muted); }
+/* The colour mode sits behind three bars, drawn here so no font has to
+   carry the sign. A click opens its three words in a box like the menu
+   of versions: the page's colour inside one border, under the bars and
+   flush with their right edge. The words are buttons, since they change
+   a setting, drawn as text; the mode in force is in reverse video. */
+header details.theme { position: relative; align-self: center; color: var(--muted); }
+header details.theme > summary { list-style: none; cursor: pointer; width: 0.8em; height: 0.6em;
+  background: linear-gradient(currentColor, currentColor) top / 100% 1px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 100% 1px no-repeat,
+    linear-gradient(currentColor, currentColor) bottom / 100% 1px no-repeat; }
+header details.theme > summary::-webkit-details-marker { display: none; }
+header details.theme > summary:hover, header details.theme[open] > summary { color: var(--text); }
+header details.theme > span { position: absolute; z-index: 2; top: calc(100% + 0.4em); right: 0; display: flex; flex-direction: column;
+  padding: 0.3em 0.4em; background: var(--page); border: 1px solid var(--text);
+  font-family: "Iosevka", "Iosevka web", monospace; font-size: max(0.625em, 11px); font-variant-ligatures: none; }
+header details.theme button { all: unset; cursor: pointer; padding: 0 0.4em; }
+header details.theme button:focus-visible, header details.theme > summary:focus-visible { outline: 1px solid var(--muted); outline-offset: 0.15em; }
 :root[data-theme="dark"] button[data-theme="dark"], :root[data-theme="light"] button[data-theme="light"],
   :root:not([data-theme]) button[data-theme="system"] { color: var(--page); background: var(--text); }
 /* Buttons are flat, as on printed paper: one border in the text's
@@ -387,12 +398,12 @@ button.copy:focus-visible, button.share:focus-visible { outline: none; }
    control takes no pointer, so nothing presses it unseen. The box keeps
    the keyboard. The sticky rows turn clear too, so text scrolls through
    them unhidden. */
-input.search, span.tools, header > span > a, header span.theme, header form, div.view > * { transition: opacity 0.3s; }
+input.search, span.tools, header > span > a, header details.theme, header form, div.view > * { transition: opacity 0.3s; }
 div.search, div.view { transition: background-color 0.3s; }
-html.calm :is(input.search, span.tools, header > span > a, header span.theme, header form, div.view > *) { opacity: 0; pointer-events: none; }
+html.calm :is(input.search, span.tools, header > span > a, header details.theme, header form, div.view > *) { opacity: 0; pointer-events: none; }
 html.calm :is(div.search, div.view) { background-color: transparent; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
-  input.search, span.tools, header > span > a, header span.theme, header form, div.view > *, div.search, div.view { transition: none; }
+  input.search, span.tools, header > span > a, header details.theme, header form, div.view > *, div.search, div.view { transition: none; }
 }
 /* While the copy button reads the page's text, the program's own lines and links
    leave the layout, so only the page's content is copied: a listing's
